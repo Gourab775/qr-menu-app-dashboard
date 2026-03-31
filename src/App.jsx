@@ -4,11 +4,11 @@ import MenuItemCard from './components/MenuItemCard'
 import AddItemModal from './components/AddItemModal'
 import Toast from './components/Toast'
 import Login from './components/Login'
-import Analytics from './components/Analytics'
 import BillModal from './components/BillModal'
 import OfflineBanner from './components/OfflineBanner'
 import FeaturedItemsPanel from './components/FeaturedItemsPanel'
 import CategoriesPage from './pages/CategoriesPage'
+import OverviewPage from './pages/OverviewPage'
 import { formatDateTime } from './utils/formatDateTime'
 import './App.css'
 
@@ -65,24 +65,33 @@ function App() {
     }
   }, [])
 
+  const [restaurantName, setRestaurantName] = useState('')
+
   const loadOrders = async () => {
     try {
+      const { data: restaurantData } = await supabase
+        .from('restaurants')
+        .select('name')
+        .eq('id', RESTAURANT_ID)
+        .single()
+      
+      if (restaurantData?.name) {
+        setRestaurantName(restaurantData.name)
+      }
+
       const { data, error } = await supabase
         .from('live_orders')
-        .select('id, restaurant_id, total_price, payment_mode, status, items, created_at, order_code')
+        .select('id, restaurant_id, total_price, payment_mode, status, items, created_at, order_code, table, note')
+        .eq('restaurant_id', RESTAURANT_ID)
         .order('created_at', { ascending: false })
         .limit(50)
 
       if (error) throw error
-      
-      localStorage.setItem(ORDER_CACHE_KEY, JSON.stringify(data || []))
+       
+      console.log('Fetched orders:', data)
       setOrders(data || [])
     } catch (err) {
-      const cached = localStorage.getItem(ORDER_CACHE_KEY)
-      if (cached) {
-        setOrders(JSON.parse(cached))
-        showToast('Showing cached data', 'error')
-      }
+      showToast('Failed to load orders', 'error')
     } finally {
       setLoading(false)
     }
@@ -137,13 +146,17 @@ function App() {
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'live_orders' },
         (payload) => {
-          if (orders.length > prevOrderCount.current || prevOrderCount.current === 0) {
-            if (prevOrderCount.current > 0 && audioRef.current) {
+          setOrders(prev => {
+            const exists = prev.some(o => o.id === payload.new.id)
+            if (exists) return prev
+            if (audioRef.current) {
               audioRef.current.play().catch(() => {})
             }
-          }
-          prevOrderCount.current = orders.length + 1
-          setOrders(prev => [payload.new, ...prev])
+            const newOrders = [payload.new, ...prev]
+            return newOrders.sort((a, b) => 
+              new Date(b.created_at) - new Date(a.created_at)
+            )
+          })
         }
       )
       .on(
@@ -157,14 +170,54 @@ function App() {
           )
         }
       )
+      .on(
+        'postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'live_orders' },
+        (payload) => {
+          setOrders(prev =>
+            prev.filter(order => order.id !== payload.old.id)
+          )
+        }
+      )
       .subscribe()
-
-    prevOrderCount.current = orders.length
 
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [isLoggedIn, orders.length])
+  }, [isLoggedIn])
+
+  useEffect(() => {
+    if (!isLoggedIn || orders.length === 0) return
+
+    const checkPendingOrders = async () => {
+      const now = new Date()
+      const tenMinutesAgo = new Date(now.getTime() - 10 * 60 * 1000)
+
+      const pendingOrders = orders.filter(order => {
+        if (order.status === 'accepted' || order.status === 'rejected') return false
+        const orderTime = new Date(order.created_at)
+        return orderTime < tenMinutesAgo
+      })
+
+      for (const order of pendingOrders) {
+        try {
+          await supabase
+            .from('live_orders')
+            .delete()
+            .eq('id', order.id)
+          
+          setOrders(prev => prev.filter(o => o.id !== order.id))
+          showToast(`Order #${order.order_code || order.id.slice(0, 8)} auto-declined (timeout)`)
+        } catch (err) {
+          console.error('Failed to auto-decline order:', err)
+        }
+      }
+    }
+
+    const interval = setInterval(checkPendingOrders, 60000)
+
+    return () => clearInterval(interval)
+  }, [isLoggedIn, orders])
 
   const handleAccept = async (orderId) => {
     setOrders(prev =>
@@ -308,6 +361,7 @@ function App() {
       <header className="header">
         <button className="menu-btn" onClick={() => setSidebarOpen(true)}>☰</button>
         <h2 className="header-title">
+          {activeTab === 'overview' && '📊 Overview'}
           {activeTab === 'live_orders' && '📦 Live Orders'}
           {activeTab === 'menu_items' && '🍽️ Menu Items'}
           {activeTab === 'categories' && '📂 Categories'}
@@ -331,50 +385,25 @@ function App() {
       </header>
       
       <main className="main-content">
-        <div className="tab-bar">
-          <button 
-            className={`tab-btn ${activeTab === 'live_orders' ? 'active' : ''}`}
-            onClick={() => setActiveTab('live_orders')}
-          >
-            📦 Orders ({orders.length})
-          </button>
-          <button 
-            className={`tab-btn ${activeTab === 'menu_items' ? 'active' : ''}`}
-            onClick={() => setActiveTab('menu_items')}
-          >
-            🍽️ Menu ({menuItems.length})
-          </button>
-          <button 
-            className={`tab-btn ${activeTab === 'categories' ? 'active' : ''}`}
-            onClick={() => setActiveTab('categories')}
-          >
-            📂 Categories ({categories.length})
-          </button>
-          <button 
-            className={`tab-btn ${activeTab === 'featured' ? 'active' : ''}`}
-            onClick={() => setActiveTab('featured')}
-          >
-            🎯 Featured
-          </button>
-        </div>
+        {activeTab === 'overview' && <OverviewPage />}
 
         {activeTab === 'live_orders' && (
           <div className="orders-section">
-            <Analytics />
-            
-            <div className="orders-controls">
-              <div className="order-search-box">
-                <span className="search-icon">🔍</span>
-                <input
-                  type="text"
-                  placeholder="Search by Order ID..."
-                  value={orderSearch}
-                  onChange={(e) => setOrderSearch(e.target.value)}
-                />
+            <div className="sticky-header">
+              <div className="orders-controls">
+                <div className="order-search-box">
+                  <span className="search-icon">🔍</span>
+                  <input
+                    type="text"
+                    placeholder="Search by Order ID..."
+                    value={orderSearch}
+                    onChange={(e) => setOrderSearch(e.target.value)}
+                  />
+                </div>
+                <button onClick={loadOrders} className="refresh-btn">
+                  🔄 Refresh
+                </button>
               </div>
-              <button onClick={loadOrders} className="refresh-btn">
-                🔄 Refresh
-              </button>
             </div>
             
             {orders.length === 0 ? (
@@ -391,21 +420,80 @@ function App() {
                   </div>
                 )}
                 <div className="orders-grid">
-                  {filteredOrders.map(order => (
-                    <div key={order.id} className="order-card">
+                  {filteredOrders.map(order => {
+                    const paymentMode = order.payment_mode?.toLowerCase()
+                    const isCounter = paymentMode === 'counter'
+                    const isOnline = paymentMode === 'online'
+                    
+                    const orderTime = new Date(order.created_at)
+                    const now = new Date()
+                    const minutesOld = Math.floor((now - orderTime) / 60000)
+                    const isTimeout = minutesOld >= 10 && order.status !== 'accepted'
+                    const isWarning = minutesOld >= 8 && minutesOld < 10 && order.status !== 'accepted'
+                    
+                    console.log('Payment mode:', order.payment_mode)
+                    
+                    return (
+                    <div 
+                      key={order.id} 
+                      className={`order-card ${order.status === 'accepted' ? 'accepted' : ''} ${isTimeout ? 'timeout' : ''} ${isWarning ? 'warning' : ''}`}
+                      style={{
+                        background: order.status === 'accepted'
+                          ? 'linear-gradient(135deg, rgba(34, 197, 94, 0.1), var(--card))'
+                          : isTimeout
+                          ? 'linear-gradient(135deg, rgba(239, 68, 68, 0.15), var(--card))'
+                          : isWarning
+                          ? 'linear-gradient(135deg, rgba(249, 115, 22, 0.15), var(--card))'
+                          : isCounter
+                          ? 'linear-gradient(135deg, rgba(139, 90, 43, 0.15), var(--card))'
+                          : isOnline
+                          ? 'linear-gradient(135deg, rgba(59, 130, 246, 0.1), var(--card))'
+                          : undefined
+                      }}
+                    >
                       <div className="order-header">
-                        <span className="order-code">#{order.order_code || order.id.slice(0, 8).toUpperCase()}</span>
+                        <div className="order-header-left">
+                          <span className="order-code">#{order.order_code || order.id.slice(0, 8).toUpperCase()}</span>
+                          {order.table && (
+                            <span className="order-table">Table {order.table}</span>
+                          )}
+                          {isCounter && (
+                            <span className="payment-badge">💵 Pay at Counter</span>
+                          )}
+                          {isOnline && (
+                            <span className="payment-badge online">💳 Online Paid</span>
+                          )}
+                          {order.status !== 'accepted' && (
+                            <span className={`time-badge ${minutesOld >= 8 ? 'urgent' : ''}`}>
+                              {minutesOld}m ago
+                            </span>
+                          )}
+                        </div>
                         <div className="order-datetime">
                           {formatDateTime(order.created_at)}
                         </div>
                       </div>
+
+                      {order.note && (
+                        <div className="order-note">
+                          Note: {order.note}
+                        </div>
+                      )}
                       
                       <div className="order-items">
                         {order.items?.map((item, i) => (
                           <div key={i} className="order-item">
-                            <span>{item.is_veg ? '🟢' : '🔴'}</span>
-                            <span className="item-name">{item.name}</span>
-                            <span className="item-qty">× {item.quantity}</span>
+                            <div className="item-row">
+                              <span>{item.is_veg ? '🟢' : '🔴'}</span>
+                              <span className="item-name">{item.name}</span>
+                              <span className="item-qty">× {item.quantity}</span>
+                            </div>
+                            {item.note && (
+                              <span className="item-note">Note: {item.note}</span>
+                            )}
+                            {item.table && (
+                              <span className="item-table">Table {item.table}</span>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -417,12 +505,21 @@ function App() {
                           <button className="bill-btn" onClick={() => setSelectedOrder(order)}>
                             🧾
                           </button>
-                          <button className="decline-btn" onClick={() => handleDecline(order.id, order.order_code)}>Decline</button>
-                          <button className="accept-btn" onClick={() => handleAccept(order.id)}>Accept</button>
+                          
+                          {order.status === 'accepted' ? (
+                            <div className="accepted-label">
+                              ✓ Accepted
+                            </div>
+                          ) : (
+                            <>
+                              <button className="decline-btn" onClick={() => handleDecline(order.id, order.order_code)}>Decline</button>
+                              <button className="accept-btn" onClick={() => handleAccept(order.id)}>Accept</button>
+                            </>
+                          )}
                         </div>
                       </div>
                     </div>
-                  ))}
+                    )})}
                 </div>
               </>
             )}
@@ -526,7 +623,7 @@ function App() {
 
       {selectedOrder && (
         <BillModal
-          order={selectedOrder}
+          order={{...selectedOrder, restaurants: { name: restaurantName }}}
           isOpen={!!selectedOrder}
           onClose={() => setSelectedOrder(null)}
         />
@@ -545,6 +642,12 @@ function Sidebar({ isOpen, onClose, activeTab, setActiveTab }) {
           <button className="close-btn" onClick={onClose}>×</button>
         </div>
         <nav className="sidebar-nav">
+          <button 
+            className={`nav-item ${activeTab === 'overview' ? 'active' : ''}`}
+            onClick={() => { setActiveTab('overview'); onClose(); }}
+          >
+            📊 Overview
+          </button>
           <button 
             className={`nav-item ${activeTab === 'live_orders' ? 'active' : ''}`}
             onClick={() => { setActiveTab('live_orders'); onClose(); }}

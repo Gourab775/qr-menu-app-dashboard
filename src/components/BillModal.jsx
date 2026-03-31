@@ -16,6 +16,14 @@ export default function BillModal({ order, isOpen, onClose }) {
 
   if (!isOpen || !order) return null
 
+  const GST_RATE = 0.05
+  const subtotal = (order.items || []).reduce(
+    (sum, item) => sum + (item.price || 0) * (item.quantity || 1), 
+    0
+  )
+  const gstAmount = Math.round(subtotal * GST_RATE)
+  const total = subtotal + gstAmount
+
   const handlePrint = () => {
     const printContent = printRef.current
     const WinPrint = window.open('', '', 'width=600,height=700')
@@ -42,7 +50,7 @@ export default function BillModal({ order, isOpen, onClose }) {
         </head>
         <body>
           <div class="header">
-            <h1>RESTAURANT BILL</h1>
+            <h1>{order.restaurants?.name || 'RESTAURANT'} BILL</h1>
             <p>Thank you for dining with us!</p>
           </div>
           
@@ -68,8 +76,16 @@ export default function BillModal({ order, isOpen, onClose }) {
           
           <div class="total">
             <div class="item">
+              <span>Subtotal</span>
+              <span>₹${subtotal}</span>
+            </div>
+            <div class="item">
+              <span>GST (5%)</span>
+              <span>₹${gstAmount}</span>
+            </div>
+            <div class="item" style="font-weight: bold; font-size: 16px; margin-top: 8px;">
               <span>TOTAL</span>
-              <span>₹${order.total_price || 0}</span>
+              <span>₹${total}</span>
             </div>
           </div>
           
@@ -97,7 +113,7 @@ export default function BillModal({ order, isOpen, onClose }) {
 
         <div className="bill-preview" ref={printRef}>
           <div className="bill-header">
-            <h1>RESTAURANT</h1>
+            <h1>{order.restaurants?.name || 'RESTAURANT'}</h1>
             <p>Thank you for dining with us!</p>
           </div>
 
@@ -128,8 +144,18 @@ export default function BillModal({ order, isOpen, onClose }) {
           </div>
 
           <div className="bill-total">
-            <span>TOTAL</span>
-            <span>₹{order.total_price?.toLocaleString() || 0}</span>
+            <div className="bill-subtotal">
+              <span>Subtotal</span>
+              <span>₹{subtotal.toLocaleString()}</span>
+            </div>
+            <div className="bill-gst">
+              <span>GST (5%)</span>
+              <span>₹{gstAmount.toLocaleString()}</span>
+            </div>
+            <div className="bill-final-total">
+              <span>Total</span>
+              <span>₹{total.toLocaleString()}</span>
+            </div>
           </div>
         </div>
 
