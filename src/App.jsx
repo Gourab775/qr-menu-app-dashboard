@@ -240,7 +240,7 @@ function App() {
     }
   }, [isLoggedIn, initAudio])
 
-  const loadOrders = async () => {
+  const loadOrders = async (isInitialLoad = false) => {
     const restId = restaurantId || RESTAURANT_ID
     console.log('[LOAD] Using restaurant ID:', restId)
     
@@ -262,7 +262,7 @@ function App() {
         .select('id, restaurant_id, total_price, payment_mode, status, items, created_at, order_code, table, note')
         .eq('restaurant_id', restId)
         .order('created_at', { ascending: false })
-        .limit(50)
+        .limit(200)
 
       if (error) {
         console.error('[LOAD] Orders fetch error:', error)
@@ -273,16 +273,33 @@ function App() {
         } else {
           showToast('Failed to load orders', 'error')
         }
-        setOrders([])
+        if (isInitialLoad) {
+          setOrders([])
+        }
         setLoading(false)
         return
       }
        
-      console.log('Fetched orders:', data)
+      console.log('Fetched orders:', data?.length || 0)
       if (data?.length) {
-        console.log('Payment modes:', data.map(o => ({ id: o.id, payment_mode: o.payment_mode })))
+        console.log('Payment modes:', data.map(o => ({ id: o.id, payment_mode: o.payment_mode, status: o.status })))
       }
-      setOrders(data || [])
+      
+      if (isInitialLoad) {
+        setOrders(data || [])
+      } else {
+        setOrders(prev => {
+          const existingIds = new Set(prev.map(o => o.id))
+          const newOrders = (data || []).filter(o => !existingIds.has(o.id))
+          const updatedOrders = prev.map(existing => {
+            const updated = data?.find(d => d.id === existing.id)
+            return updated ? { ...existing, ...updated } : existing
+          })
+          return [...updatedOrders, ...newOrders].sort((a, b) => 
+            new Date(b.created_at) - new Date(a.created_at)
+          )
+        })
+      }
     } catch (err) {
       console.error('[LOAD] Orders load exception:', err)
       showToast('Failed to load orders', 'error')
@@ -329,7 +346,7 @@ function App() {
     if (!isLoggedIn) return
 
     const restId = restaurantId || RESTAURANT_ID
-    loadOrders()
+    loadOrders(true)
     loadCategories()
     loadMenuItems()
   }, [isLoggedIn, restaurantId])
@@ -400,48 +417,50 @@ function App() {
   }, [isLoggedIn, preferences.soundEnabled, preferences.orderNotifications, playNotificationSound])
 
   useEffect(() => {
-    if (!isLoggedIn || orders.length === 0) return
+    if (!isLoggedIn) return
+
+    let mounted = true
+    let intervalId = null
 
     const checkPendingOrders = async () => {
-      const timeoutMs = (preferences.autoDeclineTimeout || 10) * 60 * 1000
-      const thresholdTime = new Date(Date.now() - timeoutMs)
+      if (!mounted) return
+      
+      setOrders(prev => {
+        const timeoutMs = (preferences.autoDeclineTimeout || 10) * 60 * 1000
+        const thresholdTime = new Date(Date.now() - timeoutMs)
 
-      const pendingOrders = orders.filter(order => {
-        if (order.status === 'accepted' || order.status === 'rejected') return false
-        const orderTime = new Date(order.created_at)
-        return orderTime < thresholdTime
-      })
+        const pendingOrders = prev.filter(order => {
+          if (order.status === 'accepted' || order.status === 'rejected') return false
+          const orderTime = new Date(order.created_at)
+          return orderTime < thresholdTime
+        })
 
-      const declinedIds = new Set()
+        if (pendingOrders.length === 0) return prev
 
-      for (const order of pendingOrders) {
-        if (declinedIds.has(order.id)) continue
-        
-        try {
-          const { error } = await supabase
+        pendingOrders.forEach(order => {
+          supabase
             .from('live_orders')
             .delete()
             .eq('id', order.id)
+            .then(({ error }) => {
+              if (!error) {
+                showToast(`Order #${order.order_code || order.id.slice(0, 8)} auto-declined (timeout)`)
+              }
+            })
+        })
 
-          if (error) {
-            console.error('Failed to delete order:', error)
-            continue
-          }
-          
-          declinedIds.add(order.id)
-          setOrders(prev => prev.filter(o => o.id !== order.id))
-          showToast(`Order #${order.order_code || order.id.slice(0, 8)} auto-declined (timeout)`)
-        } catch (err) {
-          console.error('Failed to auto-decline order:', err)
-        }
-      }
+        const declinedIds = new Set(pendingOrders.map(o => o.id))
+        return prev.filter(o => !declinedIds.has(o.id))
+      })
     }
 
-    const checkInterval = 30000
-    const interval = setInterval(checkPendingOrders, checkInterval)
+    intervalId = setInterval(checkPendingOrders, 30000)
 
-    return () => clearInterval(interval)
-  }, [isLoggedIn, orders, preferences.autoDeclineTimeout])
+    return () => {
+      mounted = false
+      if (intervalId) clearInterval(intervalId)
+    }
+  }, [isLoggedIn, preferences.autoDeclineTimeout])
 
   const handleAccept = async (orderId) => {
     setOrders(prev =>
