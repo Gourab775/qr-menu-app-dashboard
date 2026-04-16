@@ -269,10 +269,12 @@ function App() {
   const getDateFilter = (filter) => {
     const now = new Date()
     let startDate = null
+    let endDate = null
     
     switch (filter) {
       case 'today':
         startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0)
+        endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999)
         break
       case '7days':
         startDate = new Date(Date.now() - (7 * 24 * 60 * 60 * 1000))
@@ -286,16 +288,20 @@ function App() {
     }
     
     if (startDate && !isNaN(startDate.getTime())) {
-      return startDate.toISOString()
+      const result = { start: startDate.toISOString() }
+      if (endDate && !isNaN(endDate.getTime())) {
+        result.end = endDate.toISOString()
+      }
+      return result
     }
     return null
   }
 
   const loadOrders = async (isInitialLoad = false) => {
-    const restId = restaurantId || RESTAURANT_ID
+    const restId = restaurantId
     
     if (!restId) {
-      console.warn('[LOAD] No restaurant ID')
+      console.warn('[LOAD] No restaurant ID defined')
       setLoading(false)
       return
     }
@@ -303,16 +309,18 @@ function App() {
     console.log('[LOAD] Using restaurant ID:', restId, 'Filter:', orderFilter)
     
     try {
-      const { data: restaurantData } = await supabase
+      const { data: restaurantData, error: restError } = await supabase
         .from('restaurants')
         .select('name')
         .eq('id', restId)
         .single()
       
+      if (restError) {
+        console.error('[LOAD] Restaurant error:', restError)
+      }
+      
       if (restaurantData?.name) {
         setRestaurantName(restaurantData.name)
-      } else {
-        console.warn('[LOAD] Restaurant not found for ID:', restId)
       }
 
       let query = supabase
@@ -324,19 +332,35 @@ function App() {
 
       const dateFilter = getDateFilter(orderFilter)
       if (dateFilter) {
-        query = query.gte('created_at', dateFilter)
+        if (dateFilter.start) {
+          query = query.gte('created_at', dateFilter.start)
+        }
+        if (dateFilter.end) {
+          query = query.lte('created_at', dateFilter.end)
+        }
       }
 
+      console.log('[LOAD] Executing query with restId:', restId)
       const { data, error } = await query
 
       if (error) {
-        console.error('[LOAD] Orders fetch error:', error)
+        console.error('[LOAD] Orders fetch error:', {
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint
+        })
+        
         if (error.code === 'PGRST116') {
           showToast('No orders found for this restaurant', 'info')
+        } else if (error.code === '42P01') {
+          showToast('Table live_orders does not exist. Check Supabase setup.', 'error')
+        } else if (error.code === '42703') {
+          showToast('Column not found. Check table schema.', 'error')
         } else if (error.message?.includes('network') || error.code === 'UNAVAILABLE') {
           showToast('Network issue. Please check your connection.', 'error')
         } else {
-          showToast('Failed to load orders', 'error')
+          showToast('Failed to load orders: ' + error.message, 'error')
         }
         if (isInitialLoad) {
           setOrders([])
