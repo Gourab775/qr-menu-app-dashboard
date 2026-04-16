@@ -315,7 +315,7 @@ function App() {
 
       let query = supabase
         .from('live_orders')
-        .select('id, restaurant_id, total_price, payment_mode, status, items, created_at, order_code, table, note')
+        .select('id, restaurant_id, total_price, payment_mode, status, items, created_at, order_code, table_id, note')
         .eq('restaurant_id', restId)
         .order('created_at', { ascending: false })
         .limit(200)
@@ -861,8 +861,8 @@ function App() {
                       <div className="order-header">
                         <div className="order-header-left">
                           <span className="order-code">#{order.order_code || order.id.slice(0, 8).toUpperCase()}</span>
-                          {order.table && (
-                            <span className="order-table">Table {order.table}</span>
+                          {order.table_id && (
+                            <span className="order-table">Table {order.table_id}</span>
                           )}
                           {isCounter && (
                             <span className="payment-badge">💵 Pay at Counter</span>
