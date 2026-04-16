@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase, RESTAURANT_ID } from './lib/supabase'
 import { useAuth } from './contexts/AuthContext'
+import { initializePaymentTokens } from './lib/tables'
 import MenuItemCard from './components/MenuItemCard'
 import AddItemModal from './components/AddItemModal'
 import Toast from './components/Toast'
@@ -119,6 +120,11 @@ function App() {
     }
     
     setRestaurantId(restaurantIdValue)
+    
+    const paymentInit = await initializePaymentTokens()
+    if (!paymentInit.success) {
+      console.warn('Payment tokens not available:', paymentInit.error)
+    }
   }, [])
 
   useEffect(() => {
