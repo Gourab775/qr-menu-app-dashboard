@@ -153,11 +153,11 @@ function App() {
   useEffect(() => {
     const initTimeout = setTimeout(() => {
       if (initializingRef.current) {
-        console.warn('[INIT] Timeout reached, proceeding anyway')
+        console.warn('[INIT] Timeout - proceeding anyway')
         setIsInitializing(false)
         initializingRef.current = false
       }
-    }, 10000)
+    }, 8000)
     
     if (session?.user) {
       initializeApp(session.user).finally(() => {
@@ -167,6 +167,7 @@ function App() {
     } else if (!session && !authLoading) {
       clearTimeout(initTimeout)
       initializingRef.current = false
+      setIsInitializing(false)
     }
     
     return () => {
@@ -672,6 +673,10 @@ function App() {
     return <ResetPassword onDone={() => { setResetMode(false); window.location.hash = ''; }} />
   }
 
+  if (!isLoggedIn) {
+    return <Login />
+  }
+
   if (authLoading || isInitializing) {
     return (
       <div className="app">
@@ -679,16 +684,12 @@ function App() {
           <div className="login-card">
             <div className="loading-state">
               <div className="loading-spinner"></div>
-              <p>Initializing...</p>
+              <p>Loading...</p>
             </div>
           </div>
         </div>
       </div>
     )
-  }
-
-  if (!isLoggedIn) {
-    return <Login />
   }
 
   if (initError) {
