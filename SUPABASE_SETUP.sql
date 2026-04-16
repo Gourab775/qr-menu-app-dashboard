@@ -64,4 +64,4 @@ ON CONFLICT DO NOTHING;
 SELECT EXISTS (
   SELECT 1 FROM information_schema.tables 
   WHERE table_schema = 'public' AND table_name = 'live_orders'
-) AS exists\ \gA
+) AS exists;
