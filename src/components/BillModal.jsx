@@ -50,7 +50,7 @@ export default function BillModal({ order, isOpen, onClose }) {
         </head>
         <body>
           <div class="header">
-            <h1>{order.restaurants?.name || 'RESTAURANT'} BILL</h1>
+            <h1>${order.restaurants?.name || 'RESTAURANT'} BILL</h1>
             <p>Thank you for dining with us!</p>
           </div>
           

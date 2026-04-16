@@ -1,28 +1,37 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase, RESTAURANT_ID } from './lib/supabase'
+import { useAuth } from './contexts/AuthContext'
 import MenuItemCard from './components/MenuItemCard'
 import AddItemModal from './components/AddItemModal'
 import Toast from './components/Toast'
 import Login from './components/Login'
+import ResetPassword from './components/ResetPassword'
 import BillModal from './components/BillModal'
 import OfflineBanner from './components/OfflineBanner'
 import FeaturedItemsPanel from './components/FeaturedItemsPanel'
 import CategoriesPage from './pages/CategoriesPage'
 import OverviewPage from './pages/OverviewPage'
+import SettingsPage from './pages/SettingsPage'
 import { formatDateTime } from './utils/formatDateTime'
 import './App.css'
 
 const ORDER_CACHE_KEY = 'dashboard_orders'
 
 function App() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const { session, loading: authLoading } = useAuth()
+  const isLoggedIn = !!session
+  const [resetMode, setResetMode] = useState(() => {
+    return window.location.hash === '#reset-password'
+  })
+  const [currentUser, setCurrentUser] = useState(null)
+  const [restaurantId, setRestaurantId] = useState(null)
   const [orders, setOrders] = useState([])
   const [menuItems, setMenuItems] = useState([])
   const [categories, setCategories] = useState([])
   const [loading, setLoading] = useState(true)
   const [menuLoading, setMenuLoading] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [activeTab, setActiveTab] = useState('live_orders')
+  const [activeTab, setActiveTab] = useState('analytics')
   const [showProfile, setShowProfile] = useState(false)
   const [showAddModal, setShowAddModal] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -31,6 +40,24 @@ function App() {
   const [toast, setToast] = useState(null)
   const [selectedOrder, setSelectedOrder] = useState(null)
   const [isOnline, setIsOnline] = useState(navigator.onLine)
+  const [preferences, setPreferences] = useState(() => {
+    try {
+      const saved = localStorage.getItem('dashboard_preferences')
+      return saved ? JSON.parse(saved) : {
+        soundEnabled: true,
+        orderNotifications: true,
+        autoDeclineTimeout: 10,
+        theme: 'dark'
+      }
+    } catch (e) {
+      return {
+        soundEnabled: true,
+        orderNotifications: true,
+        autoDeclineTimeout: 10,
+        theme: 'dark'
+      }
+    }
+  })
   const profileRef = useRef(null)
   const prevOrderCount = useRef(0)
   const audioRef = useRef(null)
@@ -39,10 +66,6 @@ function App() {
     setToast({ message, type })
     setTimeout(() => setToast(null), 3000)
   }
-
-  useEffect(() => {
-    audioRef.current = new Audio('/sounds/notification.mp3')
-  }, [])
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -55,7 +78,9 @@ function App() {
   }, [])
 
   useEffect(() => {
-    const handleOnline = () => setIsOnline(true)
+    const handleOnline = () => {
+      setIsOnline(true)
+    }
     const handleOffline = () => setIsOnline(false)
     window.addEventListener('online', handleOnline)
     window.addEventListener('offline', handleOffline)
@@ -63,34 +88,197 @@ function App() {
       window.removeEventListener('online', handleOnline)
       window.removeEventListener('offline', handleOffline)
     }
+}, [])
+
+  const initializeApp = useCallback(async (user) => {
+    if (!user) return
+    
+    setCurrentUser(user)
+    
+    const { data: restaurantData } = await supabase
+      .from('restaurants')
+      .select('id')
+      .eq('user_id', user.id)
+      .maybeSingle()
+    
+    let restaurantIdValue = restaurantData?.id
+    
+    if (!restaurantIdValue) {
+      const { data: newRest } = await supabase
+        .from('restaurants')
+        .insert({ name: user.email.split('@')[0] + "'s Restaurant", user_id: user.id })
+        .select()
+        .maybeSingle()
+      
+      restaurantIdValue = newRest?.id
+    }
+    
+    if (!restaurantIdValue) {
+      const { data: fallback } = await supabase.from('restaurants').select('id').limit(1).maybeSingle()
+      restaurantIdValue = fallback?.id
+    }
+    
+    setRestaurantId(restaurantIdValue)
   }, [])
 
+  useEffect(() => {
+    if (session?.user) {
+      initializeApp(session.user)
+    }
+  }, [session, initializeApp])
+
   const [restaurantName, setRestaurantName] = useState('')
+  const [soundReady, setSoundReady] = useState(false)
+  const [newOrderToast, setNewOrderToast] = useState(null)
+  const lastPlayedOrderRef = useRef(null)
+  const audioContextRef = useRef(null)
+
+  const SOUND_OPTIONS = [
+    { id: 'beep', name: 'Default Beep', freq: [800, 1000], duration: 0.3 },
+    { id: 'chime', name: 'Soft Chime', freq: [600, 800, 1000], duration: 0.5 },
+    { id: 'bell', name: 'Bell Ring', freq: [500, 700], duration: 0.6 },
+    { id: 'alert', name: 'Alert Tone', freq: [1000, 1200, 800], duration: 0.4 },
+    { id: 'digital', name: 'Digital Ping', freq: [1500, 2000], duration: 0.2 },
+    { id: 'pop', name: 'Notification Pop', freq: [400, 600], duration: 0.25 },
+    { id: 'ding', name: 'Classic Ding', freq: [700, 900], duration: 0.35 },
+    { id: 'subtle', name: 'Subtle Click', freq: [300], duration: 0.15 },
+    { id: 'triple', name: 'Triple Alert', freq: [800, 800, 800], duration: 0.45 },
+    { id: 'ascend', name: 'Ascending Tone', freq: [400, 600, 800], duration: 0.4 }
+  ]
+
+  const createNotificationSound = useCallback(() => {
+    try {
+      const AudioContext = window.AudioContext || window.webkitAudioContext
+      if (!AudioContext) return null
+      
+      const ctx = new AudioContext()
+      audioContextRef.current = ctx
+      
+      const selectedSound = SOUND_OPTIONS.find(s => s.id === preferences.notificationSound) || SOUND_OPTIONS[0]
+      
+      const playTone = () => {
+        if (ctx.state === 'suspended') {
+          ctx.resume()
+        }
+        
+        let delay = 0
+        selectedSound.freq.forEach((freq, i) => {
+          setTimeout(() => {
+            const oscillator = ctx.createOscillator()
+            const gainNode = ctx.createGain()
+            
+            oscillator.connect(gainNode)
+            gainNode.connect(ctx.destination)
+            
+            oscillator.frequency.value = freq
+            oscillator.type = 'sine'
+            
+            const toneDuration = selectedSound.duration / selectedSound.freq.length
+            gainNode.gain.setValueAtTime(0.25, ctx.currentTime)
+            gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + toneDuration)
+            
+            oscillator.start(ctx.currentTime)
+            oscillator.stop(ctx.currentTime + toneDuration)
+          }, delay)
+          delay += (selectedSound.duration * 1000) / selectedSound.freq.length
+        })
+      }
+      
+      return playTone
+    } catch (err) {
+      console.warn('Web Audio API not supported:', err)
+      return null
+    }
+  }, [preferences.notificationSound])
+
+  const playNotificationToneRef = useRef(null)
+
+  const initAudio = useCallback(() => {
+    if (soundReady) return
+    
+    try {
+      playNotificationToneRef.current = createNotificationSound()
+      setSoundReady(true)
+    } catch (err) {
+      console.warn('Failed to initialize audio:', err)
+    }
+  }, [soundReady, createNotificationSound, preferences.notificationSound])
+
+  const playNotificationSound = useCallback(() => {
+    if (!preferences.soundEnabled) return
+    
+    try {
+      if (playNotificationToneRef.current) {
+        playNotificationToneRef.current()
+      }
+    } catch (err) {
+      console.warn('Sound play error:', err)
+    }
+  }, [preferences.soundEnabled])
+
+  useEffect(() => {
+    if (!isLoggedIn) return
+
+    const handleUserGesture = () => {
+      initAudio()
+      document.removeEventListener('click', handleUserGesture)
+      document.removeEventListener('keydown', handleUserGesture)
+    }
+
+    document.addEventListener('click', handleUserGesture)
+    document.addEventListener('keydown', handleUserGesture)
+
+    return () => {
+      document.removeEventListener('click', handleUserGesture)
+      document.removeEventListener('keydown', handleUserGesture)
+    }
+  }, [isLoggedIn, initAudio])
 
   const loadOrders = async () => {
+    const restId = restaurantId || RESTAURANT_ID
+    console.log('[LOAD] Using restaurant ID:', restId)
+    
     try {
       const { data: restaurantData } = await supabase
         .from('restaurants')
         .select('name')
-        .eq('id', RESTAURANT_ID)
+        .eq('id', restId)
         .single()
       
       if (restaurantData?.name) {
         setRestaurantName(restaurantData.name)
+      } else {
+        console.warn('[LOAD] Restaurant not found for ID:', restId)
       }
 
       const { data, error } = await supabase
         .from('live_orders')
         .select('id, restaurant_id, total_price, payment_mode, status, items, created_at, order_code, table, note')
-        .eq('restaurant_id', RESTAURANT_ID)
+        .eq('restaurant_id', restId)
         .order('created_at', { ascending: false })
         .limit(50)
 
-      if (error) throw error
+      if (error) {
+        console.error('[LOAD] Orders fetch error:', error)
+        if (error.code === 'PGRST116') {
+          showToast('No orders found for this restaurant', 'info')
+        } else if (error.message?.includes('network') || error.code === 'UNAVAILABLE') {
+          showToast('Network issue. Please check your connection.', 'error')
+        } else {
+          showToast('Failed to load orders', 'error')
+        }
+        setOrders([])
+        setLoading(false)
+        return
+      }
        
       console.log('Fetched orders:', data)
+      if (data?.length) {
+        console.log('Payment modes:', data.map(o => ({ id: o.id, payment_mode: o.payment_mode })))
+      }
       setOrders(data || [])
     } catch (err) {
+      console.error('[LOAD] Orders load exception:', err)
       showToast('Failed to load orders', 'error')
     } finally {
       setLoading(false)
@@ -98,11 +286,12 @@ function App() {
   }
 
   const loadCategories = async () => {
+    const restId = restaurantId || RESTAURANT_ID
     try {
       const { data, error } = await supabase
         .from('categories')
         .select('id, name, image, sort_order')
-        .eq('restaurant_id', RESTAURANT_ID)
+        .eq('restaurant_id', restId)
         .order('sort_order', { ascending: true })
 
       if (!error) setCategories(data || [])
@@ -112,12 +301,13 @@ function App() {
 
   const loadMenuItems = async () => {
     setMenuLoading(true)
+    const restId = restaurantId || RESTAURANT_ID
     
     try {
       const { data, error } = await supabase
         .from('menu_items')
         .select('id, name, price, description, is_veg, is_available, category_id, image_url')
-        .eq('restaurant_id', RESTAURANT_ID)
+        .eq('restaurant_id', restId)
         .order('name', { ascending: true })
 
       if (error) throw error
@@ -130,12 +320,13 @@ function App() {
   }
 
   useEffect(() => {
-    if (isLoggedIn) {
-      loadOrders()
-      loadCategories()
-      loadMenuItems()
-    }
-  }, [isLoggedIn])
+    if (!isLoggedIn) return
+
+    const restId = restaurantId || RESTAURANT_ID
+    loadOrders()
+    loadCategories()
+    loadMenuItems()
+  }, [isLoggedIn, restaurantId])
 
   useEffect(() => {
     if (!isLoggedIn) return
@@ -146,12 +337,28 @@ function App() {
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'live_orders' },
         (payload) => {
+          const newOrderId = payload.new.id
+          console.log('New order received:', { id: newOrderId, payment_mode: payload.new.payment_mode })
+          
+          if (lastPlayedOrderRef.current === newOrderId) {
+            return
+          }
+          lastPlayedOrderRef.current = newOrderId
+          
           setOrders(prev => {
-            const exists = prev.some(o => o.id === payload.new.id)
+            const exists = prev.some(o => o.id === newOrderId)
             if (exists) return prev
-            if (audioRef.current) {
-              audioRef.current.play().catch(() => {})
+            
+            if (preferences.soundEnabled) {
+              playNotificationSound()
             }
+            
+            if (preferences.orderNotifications) {
+              const orderCode = payload.new.order_code || newOrderId.slice(0, 8).toUpperCase()
+              setNewOrderToast(`📦 New Order #${orderCode}`)
+              setTimeout(() => setNewOrderToast(null), 4000)
+            }
+            
             const newOrders = [payload.new, ...prev]
             return newOrders.sort((a, b) => 
               new Date(b.created_at) - new Date(a.created_at)
@@ -184,28 +391,38 @@ function App() {
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [isLoggedIn])
+  }, [isLoggedIn, preferences.soundEnabled, preferences.orderNotifications, playNotificationSound])
 
   useEffect(() => {
     if (!isLoggedIn || orders.length === 0) return
 
     const checkPendingOrders = async () => {
-      const now = new Date()
-      const tenMinutesAgo = new Date(now.getTime() - 10 * 60 * 1000)
+      const timeoutMs = (preferences.autoDeclineTimeout || 10) * 60 * 1000
+      const thresholdTime = new Date(Date.now() - timeoutMs)
 
       const pendingOrders = orders.filter(order => {
         if (order.status === 'accepted' || order.status === 'rejected') return false
         const orderTime = new Date(order.created_at)
-        return orderTime < tenMinutesAgo
+        return orderTime < thresholdTime
       })
 
+      const declinedIds = new Set()
+
       for (const order of pendingOrders) {
+        if (declinedIds.has(order.id)) continue
+        
         try {
-          await supabase
+          const { error } = await supabase
             .from('live_orders')
             .delete()
             .eq('id', order.id)
+
+          if (error) {
+            console.error('Failed to delete order:', error)
+            continue
+          }
           
+          declinedIds.add(order.id)
           setOrders(prev => prev.filter(o => o.id !== order.id))
           showToast(`Order #${order.order_code || order.id.slice(0, 8)} auto-declined (timeout)`)
         } catch (err) {
@@ -214,10 +431,11 @@ function App() {
       }
     }
 
-    const interval = setInterval(checkPendingOrders, 60000)
+    const checkInterval = 30000
+    const interval = setInterval(checkPendingOrders, checkInterval)
 
     return () => clearInterval(interval)
-  }, [isLoggedIn, orders])
+  }, [isLoggedIn, orders, preferences.autoDeclineTimeout])
 
   const handleAccept = async (orderId) => {
     setOrders(prev =>
@@ -298,7 +516,7 @@ function App() {
           is_veg: itemData.is_veg,
           is_available: itemData.is_available,
           category_id: itemData.category_id || null,
-          restaurant_id: RESTAURANT_ID
+          restaurant_id: restaurantId || RESTAURANT_ID
         })
         .select()
         .single()
@@ -334,8 +552,46 @@ function App() {
     )
   })
 
+  if (resetMode) {
+    return <ResetPassword onDone={() => { setResetMode(false); window.location.hash = ''; }} />
+  }
+
+  if (authLoading) {
+    return (
+      <div className="app">
+        <div className="login-page">
+          <div className="login-card">
+            <div className="loading-state">
+              <div className="loading-spinner"></div>
+              <p>Loading...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   if (!isLoggedIn) {
-    return <Login onLogin={() => setIsLoggedIn(true)} />
+    return <Login />
+  }
+
+  if (!restaurantId) {
+    return (
+      <div className="app">
+        <div className="login-page">
+          <div className="login-card">
+            <div className="login-icon">🏪</div>
+            <h1 className="login-title">No Restaurant Found</h1>
+            <p className="login-subtitle">No restaurant available</p>
+            <button className="login-btn" onClick={async () => {
+              await supabase.auth.signOut()
+            }}>
+              Logout
+            </button>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   if (loading) {
@@ -347,7 +603,10 @@ function App() {
           <div className="profile-icon">👤</div>
         </header>
         <main className="main-content">
-          <div className="loading">Loading...</div>
+          <div className="loading-state">
+            <div className="loading-spinner"></div>
+            <p>Loading dashboard...</p>
+          </div>
         </main>
       </div>
     )
@@ -356,15 +615,21 @@ function App() {
   return (
     <div className="app">
       {toast && <Toast message={toast.message} type={toast.type} />}
+      {newOrderToast && (
+        <div className="new-order-toast">
+          {newOrderToast}
+        </div>
+      )}
       <OfflineBanner />
       
       <header className="header">
         <button className="menu-btn" onClick={() => setSidebarOpen(true)}>☰</button>
         <h2 className="header-title">
-          {activeTab === 'overview' && '📊 Overview'}
+          {activeTab === 'analytics' && '📊 Analytics'}
           {activeTab === 'live_orders' && '📦 Live Orders'}
           {activeTab === 'menu_items' && '🍽️ Menu Items'}
           {activeTab === 'categories' && '📂 Categories'}
+          {activeTab === 'settings' && '⚙️ Settings'}
         </h2>
         <div className="profile-wrapper" ref={profileRef}>
           <div className="profile-icon" onClick={() => setShowProfile(!showProfile)}>👤</div>
@@ -372,12 +637,18 @@ function App() {
             <div className="profile-dropdown">
               <div className="profile-info">
                 <p className="profile-name"><strong>Restaurant</strong></p>
-                <p className="profile-id">ID: {RESTAURANT_ID.slice(0, 8)}...</p>
+                <p className="profile-id">ID: {(restaurantId || RESTAURANT_ID).slice(0, 8)}...</p>
               </div>
               <div className="profile-divider"></div>
-              <button className="profile-btn" onClick={() => {
-                localStorage.removeItem('dashboard_auth')
-                setIsLoggedIn(false)
+              <button className="profile-btn" onClick={async () => {
+                try {
+                  await supabase.auth.signOut()
+                } catch (e) {
+                  console.warn('SignOut error:', e.message)
+                }
+                
+                localStorage.removeItem('dashboard_preferences')
+                setShowProfile(false)
               }}>Logout</button>
             </div>
           )}
@@ -385,7 +656,7 @@ function App() {
       </header>
       
       <main className="main-content">
-        {activeTab === 'overview' && <OverviewPage />}
+        {activeTab === 'analytics' && <OverviewPage restaurantId={restaurantId} />}
 
         {activeTab === 'live_orders' && (
           <div className="orders-section">
@@ -430,8 +701,6 @@ function App() {
                     const minutesOld = Math.floor((now - orderTime) / 60000)
                     const isTimeout = minutesOld >= 10 && order.status !== 'accepted'
                     const isWarning = minutesOld >= 8 && minutesOld < 10 && order.status !== 'accepted'
-                    
-                    console.log('Payment mode:', order.payment_mode)
                     
                     return (
                     <div 
@@ -606,9 +875,11 @@ function App() {
           </div>
         )}
 
-        {activeTab === 'categories' && <CategoriesPage />}
+        {activeTab === 'categories' && <CategoriesPage restaurantId={restaurantId} />}
 
-        {activeTab === 'featured' && <FeaturedItemsPanel />}
+        {activeTab === 'settings' && <SettingsPage preferences={preferences} setPreferences={setPreferences} onToast={showToast} restaurantId={restaurantId} />}
+
+        {activeTab === 'featured' && <FeaturedItemsPanel restaurantId={restaurantId} />}
       </main>
       
       <Sidebar isOpen={sidebarOpen} onClose={closeSidebar} activeTab={activeTab} setActiveTab={setActiveTab} />
@@ -643,10 +914,10 @@ function Sidebar({ isOpen, onClose, activeTab, setActiveTab }) {
         </div>
         <nav className="sidebar-nav">
           <button 
-            className={`nav-item ${activeTab === 'overview' ? 'active' : ''}`}
-            onClick={() => { setActiveTab('overview'); onClose(); }}
+            className={`nav-item ${activeTab === 'analytics' ? 'active' : ''}`}
+            onClick={() => { setActiveTab('analytics'); onClose(); }}
           >
-            📊 Overview
+            📊 Analytics
           </button>
           <button 
             className={`nav-item ${activeTab === 'live_orders' ? 'active' : ''}`}
@@ -671,6 +942,12 @@ function Sidebar({ isOpen, onClose, activeTab, setActiveTab }) {
             onClick={() => { setActiveTab('featured'); onClose(); }}
           >
             🎯 Featured
+          </button>
+          <button 
+            className={`nav-item ${activeTab === 'settings' ? 'active' : ''}`}
+            onClick={() => { setActiveTab('settings'); onClose(); }}
+          >
+            ⚙️ Settings
           </button>
         </nav>
       </aside>

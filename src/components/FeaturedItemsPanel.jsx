@@ -8,11 +8,13 @@ const generateSlug = (text) => {
     .replace(/\s+/g, '-')
 }
 
-export default function FeaturedItemsPanel() {
+export default function FeaturedItemsPanel({ restaurantId }) {
   const [featuredItems, setFeaturedItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [toast, setToast] = useState(null)
+
+  const currentRestId = restaurantId || RESTAURANT_ID
 
   const showToast = (message, type = 'success') => {
     setToast({ message, type })
@@ -20,7 +22,7 @@ export default function FeaturedItemsPanel() {
   }
 
   const loadData = async () => {
-    if (!RESTAURANT_ID) {
+    if (!currentRestId) {
       setError('Restaurant ID not available')
       setLoading(false)
       return
@@ -33,7 +35,7 @@ export default function FeaturedItemsPanel() {
       const { data: featuredData, error: featuredError } = await supabase
         .from('featured_items')
         .select('*')
-        .eq('restaurant_id', RESTAURANT_ID)
+        .eq('restaurant_id', currentRestId)
         .eq('is_active', true)
         .order('display_order', { ascending: true })
 
@@ -65,7 +67,7 @@ export default function FeaturedItemsPanel() {
       const { data, error } = await supabase
         .from('featured_items')
         .insert({
-          restaurant_id: RESTAURANT_ID,
+          restaurant_id: currentRestId,
           image_url: '',
           redirect_url: '',
           display_order: maxOrder + 1,

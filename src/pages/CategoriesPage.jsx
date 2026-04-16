@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase, RESTAURANT_ID } from '../lib/supabase'
 import ConfirmModal from '../components/ConfirmModal'
 
-export default function CategoriesPage() {
+export default function CategoriesPage({ restaurantId }) {
   const [categories, setCategories] = useState([])
   const [loading, setLoading] = useState(true)
   const [showAddModal, setShowAddModal] = useState(false)
@@ -11,6 +11,8 @@ export default function CategoriesPage() {
   const [showToast, setShowToast] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [deleting, setDeleting] = useState(false)
+
+  const currentRestId = restaurantId || RESTAURANT_ID
 
   const showToastMsg = (message, type = 'success') => {
     setShowToast({ message, type })
@@ -23,7 +25,7 @@ export default function CategoriesPage() {
       const { data, error } = await supabase
         .from('categories')
         .select('*')
-        .eq('restaurant_id', RESTAURANT_ID)
+        .eq('restaurant_id', currentRestId)
         .order('sort_order', { ascending: true })
 
       if (error) throw error
