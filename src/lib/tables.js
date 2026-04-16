@@ -1,4 +1,4 @@
-import { supabase } from './supabase'
+import { supabase } from './supabase.js'
 
 export async function ensureTableExists(tableName, columns) {
   try {
@@ -31,7 +31,7 @@ export async function initializePaymentTokens() {
 
     if (error) {
       if (error.code === 'PGRST116' || error.code === '42P01') {
-        console.warn('payment_tokens table does not exist. Please create it in Supabase dashboard.')
+        console.warn('payment_tokens table does not exist. Please run SUPABASE_SETUP.sql in Supabase dashboard.')
         return { success: false, error: 'Table not found' }
       }
       console.error('payment_tokens error:', error)
@@ -40,6 +40,7 @@ export async function initializePaymentTokens() {
 
     return { success: true, data }
   } catch (err) {
+    console.warn('Payment tokens initialization failed:', err.message)
     return { success: false, error: err.message }
   }
 }

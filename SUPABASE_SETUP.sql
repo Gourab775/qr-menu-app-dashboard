@@ -24,11 +24,11 @@ CREATE POLICY "Users can insert payment_tokens" ON payment_tokens
   TO authenticated
   WITH CHECK (auth.uid() IS NOT NULL);
 
--- Policy: Allow authenticated users to select tokens
-CREATE POLICY "Users can select payment_tokens" ON payment_tokens
+-- Policy: Allow all users (including anon) to select tokens
+CREATE POLICY "Anyone can select payment_tokens" ON payment_tokens
   FOR SELECT
-  TO authenticated
-  USING (auth.uid() IS NOT NULL);
+  TO public
+  USING (true);
 
 -- Policy: Allow authenticated users to update their own tokens
 CREATE POLICY "Users can update payment_tokens" ON payment_tokens

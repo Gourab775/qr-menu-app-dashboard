@@ -272,20 +272,23 @@ function App() {
     
     switch (filter) {
       case 'today':
-        startDate = new Date(now.setHours(0, 0, 0, 0))
+        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0)
         break
       case '7days':
-        startDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+        startDate = new Date(Date.now() - (7 * 24 * 60 * 60 * 1000))
         break
       case '30days':
-        startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+        startDate = new Date(Date.now() - (30 * 24 * 60 * 60 * 1000))
         break
       case 'all':
       default:
         return null
     }
     
-    return startDate
+    if (startDate && !isNaN(startDate.getTime())) {
+      return startDate.toISOString()
+    }
+    return null
   }
 
   const loadOrders = async (isInitialLoad = false) => {
@@ -321,7 +324,7 @@ function App() {
 
       const dateFilter = getDateFilter(orderFilter)
       if (dateFilter) {
-        query = query.gte('created_at', dateFilter.toISOString())
+        query = query.gte('created_at', dateFilter)
       }
 
       const { data, error } = await query
