@@ -266,6 +266,9 @@ function App() {
     let endDate = null
     
     switch (filter) {
+      case 'live':
+        startDate = new Date(Date.now() - (24 * 60 * 60 * 1000))
+        break
       case 'today':
         startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0)
         endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999)
@@ -788,6 +791,13 @@ function App() {
                 </button>
               </div>
               <div className="order-filters">
+                <button 
+                  className={`filter-btn ${orderFilter === 'live' ? 'active' : ''}`}
+                  onClick={() => setOrderFilter('live')}
+                >
+                  <span className="live-dot"></span>
+                  Live
+                </button>
                 <button 
                   className={`filter-btn ${orderFilter === 'all' ? 'active' : ''}`}
                   onClick={() => setOrderFilter('all')}

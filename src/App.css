@@ -307,6 +307,25 @@ body {
   color: #fff;
 }
 
+.filter-btn .live-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ef4444;
+  margin-right: 6px;
+  animation: live-pulse 1.5s ease-in-out infinite;
+}
+
+.filter-btn.active .live-dot {
+  background: #fff;
+}
+
+@keyframes live-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(0.9); }
+}
+
 .order-search-box {
   flex: 1;
   min-width: 0;
@@ -3265,10 +3284,21 @@ body {
   align-items: flex-end;
   gap: 3px;
   height: 80px;
+  padding: 10px 0;
+}
+
+.mini-chart-labels {
+  display: flex;
+  justify-content: space-between;
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.revenue-chart {
   background: var(--card);
-  border: 1px solid var(--border);
   border-radius: 12px;
-  padding: 16px 16px 0;
+  padding: 16px;
+  margin-top: 12px;
 }
 
 .mini-bar {

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts'
 import { supabase, RESTAURANT_ID } from '../lib/supabase'
 
 export default function OverviewPage({ restaurantId }) {
@@ -291,6 +292,68 @@ export default function OverviewPage({ restaurantId }) {
               </div>
             </div>
           </div>
+
+          {data.hourlyData && data.hourlyData.length > 0 && (
+            <div className="analytics-section">
+              <h3 className="section-title">Revenue Trend</h3>
+              <div className="revenue-chart">
+                <ResponsiveContainer width="100%" height={200}>
+                  <LineChart data={data.hourlyData}>
+                    <XAxis 
+                      dataKey="hour" 
+                      stroke="#888" 
+                      fontSize={12}
+                      tickFormatter={(val) => val}
+                    />
+                    <YAxis 
+                      stroke="#888" 
+                      fontSize={12}
+                      tickFormatter={(val) => `₹${val}`}
+                    />
+                    <Tooltip 
+                      contentStyle={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: '8px' }}
+                      labelStyle={{ color: '#fff' }}
+                      formatter={(value) => [`₹${value.toLocaleString()}`, 'Revenue']}
+                    />
+                    <Line 
+                      type="monotone" 
+                      dataKey="revenue" 
+                      stroke="#22c55e" 
+                      strokeWidth={2}
+                      dot={false}
+                      activeDot={{ r: 4 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
+
+          {data.dailyData && data.dailyData.length > 0 && isMonth && (
+            <div className="analytics-section">
+              <h3 className="section-title">Daily Orders</h3>
+              <div className="revenue-chart">
+                <ResponsiveContainer width="100%" height={200}>
+                  <BarChart data={data.dailyData}>
+                    <XAxis 
+                      dataKey="day" 
+                      stroke="#888" 
+                      fontSize={12}
+                    />
+                    <YAxis 
+                      stroke="#888" 
+                      fontSize={12}
+                    />
+                    <Tooltip 
+                      contentStyle={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: '8px' }}
+                      labelStyle={{ color: '#fff' }}
+                    />
+                    <Bar dataKey="orders" fill="#22c55e" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
 
           {(isWeek || isMonth) && (
             <div className="analytics-section">
