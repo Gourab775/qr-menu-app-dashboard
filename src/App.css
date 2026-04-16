@@ -270,9 +270,41 @@ body {
 .orders-controls {
   display: flex;
   gap: 12px;
-  margin-bottom: 20px;
+  margin-bottom: 12px;
   align-items: center;
   width: 100%;
+}
+
+.order-filters {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.filter-btn {
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--card);
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.filter-btn:hover {
+  border-color: var(--text);
+  color: var(--text);
+}
+
+.filter-btn.active {
+  background: var(--green);
+  border-color: var(--green);
+  color: #fff;
 }
 
 .order-search-box {
@@ -629,9 +661,9 @@ body {
 }
 
 .nav-item.active {
-  color: var(--blue);
-  background: rgba(59, 130, 246, 0.1);
-  border-left: 3px solid var(--blue);
+  color: var(--green);
+  background: rgba(34, 197, 94, 0.15);
+  border-left: 3px solid var(--green);
   padding-left: 17px;
 }
 

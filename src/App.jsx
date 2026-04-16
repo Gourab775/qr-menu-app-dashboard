@@ -26,13 +26,17 @@ function App() {
   })
   const [currentUser, setCurrentUser] = useState(null)
   const [restaurantId, setRestaurantId] = useState(null)
+  const [restaurantName, setRestaurantName] = useState('')
   const [orders, setOrders] = useState([])
   const [menuItems, setMenuItems] = useState([])
   const [categories, setCategories] = useState([])
   const [loading, setLoading] = useState(true)
   const [menuLoading, setMenuLoading] = useState(false)
+  const [isInitializing, setIsInitializing] = useState(true)
+  const [initError, setInitError] = useState(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [activeTab, setActiveTab] = useState('analytics')
+  const [activeTab, setActiveTab] = useState('orders')
+  const [orderFilter, setOrderFilter] = useState('all')
   const [showProfile, setShowProfile] = useState(false)
   const [showAddModal, setShowAddModal] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -94,36 +98,59 @@ function App() {
   const initializeApp = useCallback(async (user) => {
     if (!user) return
     
-    setCurrentUser(user)
+    setIsInitializing(true)
+    setInitError(null)
     
-    const { data: restaurantData } = await supabase
-      .from('restaurants')
-      .select('id')
-      .eq('user_id', user.id)
-      .maybeSingle()
-    
-    let restaurantIdValue = restaurantData?.id
-    
-    if (!restaurantIdValue) {
-      const { data: newRest } = await supabase
+    try {
+      setCurrentUser(user)
+      
+      const { data: restaurantData, error: restError } = await supabase
         .from('restaurants')
-        .insert({ name: user.email.split('@')[0] + "'s Restaurant", user_id: user.id })
-        .select()
+        .select('id')
+        .eq('user_id', user.id)
         .maybeSingle()
       
-      restaurantIdValue = newRest?.id
-    }
-    
-    if (!restaurantIdValue) {
-      const { data: fallback } = await supabase.from('restaurants').select('id').limit(1).maybeSingle()
-      restaurantIdValue = fallback?.id
-    }
-    
-    setRestaurantId(restaurantIdValue)
-    
-    const paymentInit = await initializePaymentTokens()
-    if (!paymentInit.success) {
-      console.warn('Payment tokens not available:', paymentInit.error)
+      if (restError) {
+        console.error('Error fetching restaurant:', restError)
+      }
+      
+      let restaurantIdValue = restaurantData?.id
+      
+      if (!restaurantIdValue) {
+        const { data: newRest, error: insertError } = await supabase
+          .from('restaurants')
+          .insert({ name: user.email.split('@')[0] + "'s Restaurant", user_id: user.id })
+          .select()
+          .maybeSingle()
+        
+        if (insertError) {
+          console.error('Error creating restaurant:', insertError)
+        }
+        restaurantIdValue = newRest?.id
+      }
+      
+      if (!restaurantIdValue) {
+        const { data: fallback } = await supabase.from('restaurants').select('id').limit(1).maybeSingle()
+        restaurantIdValue = fallback?.id
+      }
+      
+      if (!restaurantIdValue) {
+        setInitError('No restaurant found. Please contact support.')
+        setIsInitializing(false)
+        return
+      }
+      
+      setRestaurantId(restaurantIdValue)
+      
+      const paymentInit = await initializePaymentTokens()
+      if (!paymentInit.success) {
+        console.warn('Payment tokens not available:', paymentInit.error)
+      }
+    } catch (err) {
+      console.error('Initialize error:', err)
+      setInitError('Failed to initialize. Please try again.')
+    } finally {
+      setIsInitializing(false)
     }
   }, [])
 
@@ -133,7 +160,6 @@ function App() {
     }
   }, [session, initializeApp])
 
-  const [restaurantName, setRestaurantName] = useState('')
   const [soundReady, setSoundReady] = useState(false)
   const [newOrderToast, setNewOrderToast] = useState(null)
   const lastPlayedOrderRef = useRef(null)
@@ -240,9 +266,38 @@ function App() {
     }
   }, [isLoggedIn, initAudio])
 
+  const getDateFilter = (filter) => {
+    const now = new Date()
+    let startDate = null
+    
+    switch (filter) {
+      case 'today':
+        startDate = new Date(now.setHours(0, 0, 0, 0))
+        break
+      case '7days':
+        startDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+        break
+      case '30days':
+        startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+        break
+      case 'all':
+      default:
+        return null
+    }
+    
+    return startDate
+  }
+
   const loadOrders = async (isInitialLoad = false) => {
     const restId = restaurantId || RESTAURANT_ID
-    console.log('[LOAD] Using restaurant ID:', restId)
+    
+    if (!restId) {
+      console.warn('[LOAD] No restaurant ID')
+      setLoading(false)
+      return
+    }
+    
+    console.log('[LOAD] Using restaurant ID:', restId, 'Filter:', orderFilter)
     
     try {
       const { data: restaurantData } = await supabase
@@ -257,12 +312,19 @@ function App() {
         console.warn('[LOAD] Restaurant not found for ID:', restId)
       }
 
-      const { data, error } = await supabase
+      let query = supabase
         .from('live_orders')
         .select('id, restaurant_id, total_price, payment_mode, status, items, created_at, order_code, table, note')
         .eq('restaurant_id', restId)
         .order('created_at', { ascending: false })
         .limit(200)
+
+      const dateFilter = getDateFilter(orderFilter)
+      if (dateFilter) {
+        query = query.gte('created_at', dateFilter.toISOString())
+      }
+
+      const { data, error } = await query
 
       if (error) {
         console.error('[LOAD] Orders fetch error:', error)
@@ -343,13 +405,11 @@ function App() {
   }
 
   useEffect(() => {
-    if (!isLoggedIn) return
-
-    const restId = restaurantId || RESTAURANT_ID
+    if (!isLoggedIn || !restaurantId) return
     loadOrders(true)
     loadCategories()
     loadMenuItems()
-  }, [isLoggedIn, restaurantId])
+  }, [isLoggedIn, restaurantId, orderFilter])
 
   useEffect(() => {
     if (!isLoggedIn) return
@@ -581,14 +641,14 @@ function App() {
     return <ResetPassword onDone={() => { setResetMode(false); window.location.hash = ''; }} />
   }
 
-  if (authLoading) {
+  if (authLoading || isInitializing) {
     return (
       <div className="app">
         <div className="login-page">
           <div className="login-card">
             <div className="loading-state">
               <div className="loading-spinner"></div>
-              <p>Loading...</p>
+              <p>Initializing...</p>
             </div>
           </div>
         </div>
@@ -598,6 +658,25 @@ function App() {
 
   if (!isLoggedIn) {
     return <Login />
+  }
+
+  if (initError) {
+    return (
+      <div className="app">
+        <div className="login-page">
+          <div className="login-card">
+            <div className="login-icon">⚠️</div>
+            <h1 className="login-title">Initialization Error</h1>
+            <p className="login-subtitle">{initError}</p>
+            <button className="login-btn" onClick={async () => {
+              await supabase.auth.signOut()
+            }}>
+              Logout
+            </button>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   if (!restaurantId) {
@@ -651,7 +730,7 @@ function App() {
         <button className="menu-btn" onClick={() => setSidebarOpen(true)}>☰</button>
         <h2 className="header-title">
           {activeTab === 'analytics' && '📊 Analytics'}
-          {activeTab === 'live_orders' && '📦 Live Orders'}
+          {activeTab === 'orders' && '📦 Orders'}
           {activeTab === 'menu_items' && '🍽️ Menu Items'}
           {activeTab === 'categories' && '📂 Categories'}
           {activeTab === 'settings' && '⚙️ Settings'}
@@ -683,7 +762,7 @@ function App() {
       <main className="main-content">
         {activeTab === 'analytics' && <OverviewPage restaurantId={restaurantId} />}
 
-        {activeTab === 'live_orders' && (
+        {activeTab === 'orders' && (
           <div className="orders-section">
             <div className="sticky-header">
               <div className="orders-controls">
@@ -698,6 +777,32 @@ function App() {
                 </div>
                 <button onClick={loadOrders} className="refresh-btn">
                   🔄 Refresh
+                </button>
+              </div>
+              <div className="order-filters">
+                <button 
+                  className={`filter-btn ${orderFilter === 'all' ? 'active' : ''}`}
+                  onClick={() => setOrderFilter('all')}
+                >
+                  All
+                </button>
+                <button 
+                  className={`filter-btn ${orderFilter === 'today' ? 'active' : ''}`}
+                  onClick={() => setOrderFilter('today')}
+                >
+                  Last Day
+                </button>
+                <button 
+                  className={`filter-btn ${orderFilter === '7days' ? 'active' : ''}`}
+                  onClick={() => setOrderFilter('7days')}
+                >
+                  Last 7 Days
+                </button>
+                <button 
+                  className={`filter-btn ${orderFilter === '30days' ? 'active' : ''}`}
+                  onClick={() => setOrderFilter('30days')}
+                >
+                  Last 30 Days
                 </button>
               </div>
             </div>
@@ -945,10 +1050,10 @@ function Sidebar({ isOpen, onClose, activeTab, setActiveTab }) {
             📊 Analytics
           </button>
           <button 
-            className={`nav-item ${activeTab === 'live_orders' ? 'active' : ''}`}
-            onClick={() => { setActiveTab('live_orders'); onClose(); }}
+            className={`nav-item ${activeTab === 'orders' ? 'active' : ''}`}
+            onClick={() => { setActiveTab('orders'); onClose(); }}
           >
-            📦 Live Orders
+            📦 Orders
           </button>
           <button 
             className={`nav-item ${activeTab === 'menu_items' ? 'active' : ''}`}
