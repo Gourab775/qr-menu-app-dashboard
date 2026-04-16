@@ -148,11 +148,31 @@ function App() {
     }
   }, [])
 
+  const initializingRef = useRef(true)
+  
   useEffect(() => {
+    const initTimeout = setTimeout(() => {
+      if (initializingRef.current) {
+        console.warn('[INIT] Timeout reached, proceeding anyway')
+        setIsInitializing(false)
+        initializingRef.current = false
+      }
+    }, 10000)
+    
     if (session?.user) {
-      initializeApp(session.user)
+      initializeApp(session.user).finally(() => {
+        clearTimeout(initTimeout)
+        initializingRef.current = false
+      })
+    } else if (!session && !authLoading) {
+      clearTimeout(initTimeout)
+      initializingRef.current = false
     }
-  }, [session, initializeApp])
+    
+    return () => {
+      clearTimeout(initTimeout)
+    }
+  }, [session, authLoading, initializeApp])
 
   const [soundReady, setSoundReady] = useState(false)
   const [newOrderToast, setNewOrderToast] = useState(null)
