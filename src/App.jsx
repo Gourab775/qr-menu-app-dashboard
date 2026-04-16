@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { supabase, RESTAURANT_ID } from './lib/supabase'
+import { supabase } from './lib/supabase'
 import { useAuth } from './contexts/AuthContext'
-import { initializePaymentTokens } from './lib/tables'
 import MenuItemCard from './components/MenuItemCard'
 import AddItemModal from './components/AddItemModal'
 import Toast from './components/Toast'
@@ -141,11 +140,6 @@ function App() {
       }
       
       setRestaurantId(restaurantIdValue)
-      
-      const paymentInit = await initializePaymentTokens()
-      if (!paymentInit.success) {
-        console.warn('Payment tokens not available:', paymentInit.error)
-      }
     } catch (err) {
       console.error('Initialize error:', err)
       setInitError('Failed to initialize. Please try again.')
@@ -309,15 +303,11 @@ function App() {
     console.log('[LOAD] Using restaurant ID:', restId, 'Filter:', orderFilter)
     
     try {
-      const { data: restaurantData, error: restError } = await supabase
+      const { data: restaurantData } = await supabase
         .from('restaurants')
         .select('name')
         .eq('id', restId)
         .single()
-      
-      if (restError) {
-        console.error('[LOAD] Restaurant error:', restError)
-      }
       
       if (restaurantData?.name) {
         setRestaurantName(restaurantData.name)
@@ -331,36 +321,27 @@ function App() {
         .limit(200)
 
       const dateFilter = getDateFilter(orderFilter)
-      if (dateFilter) {
-        if (dateFilter.start) {
-          query = query.gte('created_at', dateFilter.start)
-        }
-        if (dateFilter.end) {
-          query = query.lte('created_at', dateFilter.end)
-        }
+      if (dateFilter?.start) {
+        query = query.gte('created_at', dateFilter.start)
+      }
+      if (dateFilter?.end) {
+        query = query.lte('created_at', dateFilter.end)
       }
 
       console.log('[LOAD] Executing query with restId:', restId)
       const { data, error } = await query
 
       if (error) {
-        console.error('[LOAD] Orders fetch error:', {
-          code: error.code,
-          message: error.message,
-          details: error.details,
-          hint: error.hint
-        })
+        console.error('[LOAD] Orders fetch error:', error.message, '| Details:', error.details)
         
         if (error.code === 'PGRST116') {
-          showToast('No orders found for this restaurant', 'info')
+          showToast('No orders found', 'info')
         } else if (error.code === '42P01') {
-          showToast('Table live_orders does not exist. Check Supabase setup.', 'error')
-        } else if (error.code === '42703') {
-          showToast('Column not found. Check table schema.', 'error')
-        } else if (error.message?.includes('network') || error.code === 'UNAVAILABLE') {
-          showToast('Network issue. Please check your connection.', 'error')
+          showToast('Table live_orders does not exist in database', 'error')
+        } else if (error.message?.includes('network')) {
+          showToast('Network error. Check connection.', 'error')
         } else {
-          showToast('Failed to load orders: ' + error.message, 'error')
+          showToast('Failed to load orders', 'error')
         }
         if (isInitialLoad) {
           setOrders([])
