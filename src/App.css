@@ -4643,6 +4643,9 @@ body {
   padding: 40px 32px;
   max-width: 1400px;
   margin: 0 auto;
+  background: #09090b;
+  min-height: 100vh;
+  box-sizing: border-box;
 }
 
 .saas-header {
@@ -4708,13 +4711,14 @@ body {
 }
 
 .saas-kpi-card {
-  background: #18181b;
-  border: 1px solid #27272a;
-  border-radius: 16px;
-  padding: 24px;
-  display: flex;
-  align-items: flex-start;
+  background: #18181b !important;
+  border: 1px solid #27272a !important;
+  border-radius: 16px !important;
+  padding: 24px !important;
+  display: flex !important;
+  align-items: flex-start !important;
   gap: 16px;
+  min-height: 140px;
   transition: all 0.25s ease;
 }
 
@@ -4773,12 +4777,13 @@ body {
 }
 
 .saas-chart-card {
-  background: #18181b;
-  border: 1px solid #27272a;
-  border-radius: 16px;
-  padding: 24px;
-  display: flex;
+  background: #18181b !important;
+  border: 1px solid #27272a !important;
+  border-radius: 16px !important;
+  padding: 24px !important;
+  display: flex !important;
   flex-direction: column;
+  min-height: 380px;
 }
 
 .saas-chart-header {
@@ -4810,12 +4815,13 @@ body {
 }
 
 .saas-insight-card {
-  background: #18181b;
-  border: 1px solid #27272a;
-  border-radius: 16px;
-  padding: 24px;
-  display: flex;
+  background: #18181b !important;
+  border: 1px solid #27272a !important;
+  border-radius: 16px !important;
+  padding: 24px !important;
+  display: flex !important;
   flex-direction: column;
+  min-height: 320px;
 }
 
 .saas-insight-header {
