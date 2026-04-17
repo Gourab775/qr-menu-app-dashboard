@@ -5041,25 +5041,84 @@ body {
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
-@media (max-width: 1400px) {
-  .saas-kpi-grid { grid-template-columns: repeat(5, 1fr); }
+/* XL Desktop (≥1400px) - Full 6 columns */
+@media (min-width: 1400px) {
+  .saas-dashboard {
+    max-width: 1400px;
+    padding: 48px 40px;
+  }
+  .saas-kpi-grid {
+    grid-template-columns: repeat(6, 1fr);
+  }
+  .saas-kpi-value {
+    font-size: 34px;
+  }
 }
-@media (max-width: 1200px) {
-  .saas-kpi-grid { grid-template-columns: repeat(3, 1fr); }
-  .saas-row.three-col { grid-template-columns: repeat(2, 1fr); }
+
+/* Large Desktop (1200px-1399px) */
+@media (min-width: 1200px) and (max-width: 1399px) {
+  .saas-dashboard {
+    max-width: 1200px;
+    padding: 40px 32px;
+  }
+  .saas-kpi-grid {
+    grid-template-columns: repeat(6, 1fr);
+  }
 }
-@media (max-width: 1024px) {
-  .saas-dashboard { padding: 32px 24px; }
-  .saas-kpi-grid { grid-template-columns: repeat(2, 1fr); }
-  .saas-row { grid-template-columns: 1fr; }
-  .saas-row.three-col { grid-template-columns: 1fr; }
+
+/* Desktop (1024px-1199px) */
+@media (min-width: 1024px) and (max-width: 1199px) {
+  .saas-dashboard {
+    max-width: 1100px;
+    padding: 36px 28px;
+  }
+  .saas-kpi-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .saas-row.three-col {
+    grid-template-columns: repeat(3, 1fr);
+  }
 }
-@media (max-width: 768px) {
-  .saas-header { flex-direction: column; align-items: flex-start; }
-  .saas-tabs { width: 100%; overflow-x: auto; }
-  .saas-kpi-grid { grid-template-columns: 1fr; }
-  .saas-kpi-card { min-height: auto; }
-  .saas-row.three-col { grid-template-columns: 1fr; }
+
+/* Tablet (768px-1023px) */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .saas-dashboard {
+    padding: 32px 24px;
+  }
+  .saas-kpi-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .saas-row {
+    grid-template-columns: 1fr;
+  }
+  .saas-row.three-col {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Mobile (<768px) */
+@media (max-width: 767px) {
+  .saas-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .saas-tabs {
+    width: 100%;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+  }
+  .saas-kpi-grid {
+    grid-template-columns: 1fr;
+  }
+  .saas-kpi-card {
+    min-height: auto;
+  }
+  .saas-row.three-col {
+    grid-template-columns: 1fr;
+  }
+  .saas-dashboard {
+    padding: 24px 16px;
+  }
 }
 
 .premium-kpi-grid {
