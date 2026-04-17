@@ -5086,12 +5086,12 @@ body {
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
 /* ========================================
-   ANALYTICS PAGE - MOBILE LAYOUT ACROSS ALL SCREENS
-   Using mobile layout as default and only layout
-   Same design on mobile, tablet, desktop - no responsive changes
+   ANALYTICS PAGE - STRICT MOBILE-FIRST WITH DESKTOP ENHANCEMENT
+   Mobile: stacked single column (base/default)
+   Desktop (>=1024px): side-by-side grid without breaking mobile
    ======================================== */
 
-/* Base mobile styles apply to ALL screen sizes */
+/* ========== MOBILE BASE (default - applies to ALL screens) ========== */
 .saas-dashboard {
   padding: 24px 16px;
   max-width: 100%;
@@ -5168,12 +5168,40 @@ body {
   flex-direction: column !important;
 }
 
-/* All screens use mobile layout - just center on larger screens */
-@media (min-width: 768px) {
+/* ========== DESKTOP ONLY (>=1024px) - Side-by-side enhancement ========== */
+@media (min-width: 1024px) {
   .saas-dashboard {
-    max-width: 600px;
+    max-width: 1400px;
     margin: 0 auto;
-    padding: 32px 24px;
+    padding: 40px 32px;
+  }
+
+  .saas-header {
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+  }
+
+  .saas-kpi-grid {
+    grid-template-columns: repeat(3, 1fr) !important;
+  }
+
+  .saas-row {
+    grid-template-columns: 1fr 1fr !important;
+  }
+
+  .saas-row.three-col {
+    grid-template-columns: repeat(3, 1fr) !important;
+  }
+
+  .saas-kpi-card,
+  .saas-chart-card,
+  .saas-insight-card {
+    min-height: 120px !important;
+  }
+
+  .saas-chart-body {
+    height: 300px !important;
   }
 }
 
