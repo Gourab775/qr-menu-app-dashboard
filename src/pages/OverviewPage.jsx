@@ -1,40 +1,84 @@
-import { useState, useEffect, useCallback } from 'react'
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts'
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import { 
+  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, 
+  BarChart, Bar, PieChart, Pie, Cell, Legend 
+} from 'recharts'
 import { supabase, RESTAURANT_ID } from '../lib/supabase'
 
+const COLORS = {
+  primary: '#22c55e',
+  secondary: '#3b82f6',
+  tertiary: '#f59e0b',
+  quaternary: '#ef4444',
+  muted: '#6b7280',
+  card: '#1a1a1a',
+  background: '#111'
+}
+
+const CHART_COLORS = ['#22c55e', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6']
+
+const SkeletonCard = ({ width = '100%', height = '80px' }) => (
+  <div className="kpi-card" style={{ height }}>
+    <div className="skeleton-line" style={{ width: '40%', height: 12, marginBottom: 8 }} />
+    <div className="skeleton-line" style={{ width: '60%', height: 28, marginBottom: 8 }} />
+    <div className="skeleton-line short" style={{ width: '30%', height: 10 }} />
+  </div>
+)
+
+const SkeletonChart = () => (
+  <div className="analytics-section">
+    <div className="section-title-skeleton" style={{ width: '30%', height: 20, marginBottom: 16 }} />
+    <div style={{ width: '100%', height: 200 }}>
+      <div className="skeleton-line" style={{ width: '100%', height: '100%' }} />
+    </div>
+  </div>
+)
+
 export default function OverviewPage({ restaurantId }) {
-  const [timeRange, setTimeRange] = useState('today')
+  const [timeRange, setTimeRange] = useState('7days')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [data, setData] = useState(null)
 
   const currentRestId = restaurantId || RESTAURANT_ID
 
+  const getDateRange = useCallback((range) => {
+    const now = new Date()
+    let startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0)
+    let endDate = new Date(now)
+    endDate.setHours(23, 59, 59, 999)
+
+    switch (range) {
+      case 'today':
+        break
+      case '7days':
+        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+        break
+      case '30days':
+        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+        break
+      case 'all':
+        startDate = new Date(2020, 0, 1)
+        break
+      default:
+        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+    }
+
+    return { start: startDate.toISOString(), end: endDate.toISOString() }
+  }, [])
+
   const loadAnalytics = useCallback(async () => {
     setLoading(true)
     setError(null)
+
     try {
-      const now = new Date()
-      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0)
-      let startDate = new Date(todayStart)
-      let endDate = new Date(todayStart)
-      endDate.setHours(23, 59, 59, 999)
-      
-      if (timeRange === 'week') {
-        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
-      } else if (timeRange === 'month') {
-        startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0)
-        endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999)
-      }
-      
-      const startISO = startDate.toISOString()
-      const endISO = endDate.toISOString()
+      const { start, end } = getDateRange(timeRange)
 
       const { data: orders, error: queryError } = await supabase
         .from('live_orders')
         .select('*')
-        .gte('created_at', startISO)
-        .lte('created_at', endISO)
+        .gte('created_at', start)
+        .lte('created_at', end)
         .order('created_at', { ascending: false })
 
       if (queryError) {
@@ -44,20 +88,7 @@ export default function OverviewPage({ restaurantId }) {
       const allOrders = Array.isArray(orders) ? orders : []
       
       if (allOrders.length === 0) {
-        setData({
-          orders: 0,
-          revenue: 0,
-          avgOrderValue: 0,
-          itemsSold: 0,
-          pendingOrders: 0,
-          completedOrders: 0,
-          dailyAvg: 0,
-          peakHour: null,
-          peakDay: null,
-          topItems: [],
-          hourlyData: [],
-          dailyData: []
-        })
+        setData(getEmptyData())
         return
       }
       
@@ -68,9 +99,11 @@ export default function OverviewPage({ restaurantId }) {
       const pendingRevenue = pendingOrders.reduce((sum, o) => sum + (Number(o.total_price) || 0), 0)
 
       const itemCount = {}
-      const hourCount = {}
-      const dayCount = {}
-      const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+      const hourRevenue = {}
+      const dayRevenue = {}
+      const dayOrders = {}
+      const paymentModes = { counter: 0, online: 0 }
+      const recentActivity = []
       
       allOrders.forEach(order => {
         if (!order || !order.created_at) return
@@ -79,11 +112,15 @@ export default function OverviewPage({ restaurantId }) {
         if (isNaN(orderDate.getTime())) return
         
         const hour = orderDate.getHours()
-        const day = orderDate.getDay()
+        const dayKey = orderDate.toISOString().split('T')[0]
         
-        hourCount[hour] = (hourCount[hour] || 0) + 1
-        dayCount[day] = (dayCount[day] || 0) + 1
+        hourRevenue[hour] = (hourRevenue[hour] || 0) + (Number(order.total_price) || 0)
+        dayRevenue[dayKey] = (dayRevenue[dayKey] || 0) + (Number(order.total_price) || 0)
+        dayOrders[dayKey] = (dayOrders[dayKey] || 0) + 1
         
+        const pm = (order.payment_mode || 'counter').toLowerCase()
+        paymentModes[pm === 'online' ? 'online' : 'counter']++
+
         const items = Array.isArray(order.items) ? order.items : []
         items.forEach(item => {
           if (!item) return
@@ -91,237 +128,217 @@ export default function OverviewPage({ restaurantId }) {
           const qty = Number(item.quantity) || 1
           itemCount[name] = (itemCount[name] || 0) + qty
         })
+
+        if (recentActivity.length < 10) {
+          recentActivity.push({
+            id: order.id,
+            code: order.order_code || order.id.slice(0, 8).toUpperCase(),
+            total: order.total_price || 0,
+            status: order.status,
+            time: orderDate
+          })
+        }
       })
 
       const sortedItems = Object.entries(itemCount).sort((a, b) => b[1] - a[1])
-      const topItems = sortedItems.slice(0, 5).map(([name, count]) => ({ name, count }))
-      const itemsSold = Object.values(itemCount).reduce((a, b) => a + b, 0)
-      
-      const sortedHours = Object.entries(hourCount).sort((a, b) => b[1] - a[1])
-      const peakHourEntry = sortedHours[0]
-      
-      const sortedDays = Object.entries(dayCount).sort((a, b) => b[1] - a[1])
-      const peakDayEntry = sortedDays[0]
+      const topItems = sortedItems.slice(0, 8).map(([name, count]) => ({ name, count }))
 
-      let dailyAvg = 0
-      let hourlyData = []
-      let dailyData = []
-      
-      if (timeRange === 'week' || timeRange === 'month') {
-        const currentDay = timeRange === 'month' ? now.getDate() : 7
-        dailyAvg = currentDay > 0 ? Math.round(totalOrders / currentDay) : 0
+      const hourlyData = Object.entries(hourRevenue).map(([hour, revenue]) => ({
+        hour: `${hour}:00`,
+        revenue: Math.round(revenue)
+      })).sort((a, b) => parseInt(a.hour) - parseInt(b.hour))
 
-        for (let h = 0; h < 24; h++) {
-          hourlyData.push({
-            hour: h,
-            label: `${h}:00`,
-            orders: hourCount[h] || 0
-          })
-        }
+      const dailyData = Object.keys(dayRevenue).sort().slice(-14).map(day => ({
+        day: new Date(day).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' }),
+        revenue: Math.round(dayRevenue[day]),
+        orders: dayOrders[day] || 0
+      }))
 
-        let daysInRange = 7
-        if (timeRange === 'month') {
-          daysInRange = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
-        }
-        
-        const periodDailyOrders = {}
-        
-        allOrders.forEach(order => {
-          if (!order || !order.created_at) return
-          const orderDate = new Date(order.created_at)
-          if (isNaN(orderDate.getTime())) return
-          const day = orderDate.getDate()
-          periodDailyOrders[day] = (periodDailyOrders[day] || 0) + 1
-        })
-        
-        for (let d = 1; d <= daysInRange; d++) {
-          dailyData.push({
-            day: d,
-            label: d,
-            orders: periodDailyOrders[d] || 0
-          })
-        }
-      } else {
-        for (let h = 0; h < 24; h++) {
-          hourlyData.push({
-            hour: h,
-            label: `${h}:00`,
-            orders: hourCount[h] || 0
-          })
-        }
-      }
+      const paymentData = [
+        { name: 'Pay at Counter', value: paymentModes.counter, color: COLORS.tertiary },
+        { name: 'Online Payment', value: paymentModes.online, color: COLORS.secondary }
+      ].filter(d => d.value > 0)
 
       setData({
         orders: totalOrders,
         revenue: totalRevenue,
         pendingRevenue,
         avgOrderValue: totalOrders > 0 ? Math.round(totalRevenue / totalOrders) : 0,
-        itemsSold,
+        itemsSold: Object.values(itemCount).reduce((a, b) => a + b, 0),
         pendingOrders: pendingOrders.length,
         completedOrders: completedOrders.length,
-        dailyAvg,
-        peakHour: peakHourEntry ? `${peakHourEntry[0]}:00` : null,
-        peakDay: peakDayEntry ? dayNames[peakDayEntry[0]] : null,
         topItems,
         hourlyData,
-        dailyData
+        dailyData,
+        paymentData,
+        recentActivity
       })
     } catch (err) {
       console.error('Analytics error:', err)
-      setError(err.message || 'Failed to load analytics')
+      setError(err.message)
+      setData(getEmptyData())
     } finally {
       setLoading(false)
     }
-  }, [timeRange])
+  }, [timeRange, getDateRange])
+
+  const getEmptyData = () => ({
+    orders: 0,
+    revenue: 0,
+    pendingRevenue: 0,
+    avgOrderValue: 0,
+    itemsSold: 0,
+    pendingOrders: 0,
+    completedOrders: 0,
+    topItems: [],
+    hourlyData: [],
+    dailyData: [],
+    paymentData: [],
+    recentActivity: []
+  })
 
   useEffect(() => {
     loadAnalytics()
   }, [loadAnalytics])
 
-  const isToday = timeRange === 'today'
-  const isWeek = timeRange === 'week'
-  const isMonth = timeRange === 'month'
+  const handleRefresh = () => loadAnalytics()
 
-  const handleRefresh = () => {
-    loadAnalytics()
-  }
+  const formatCurrency = (val) => `₹${(val || 0).toLocaleString('en-IN')}`
 
   const getRangeLabel = () => {
-    if (isToday) return 'Today'
-    if (isWeek) return 'This Week'
-    return 'This Month'
+    switch (timeRange) {
+      case 'today': return "Today's"
+      case '7days': return 'Last 7 Days'
+      case '30days': return 'Last 30 Days'
+      case 'all': return 'All Time'
+      default: return 'Last 7 Days'
+    }
   }
+
+  const isToday = timeRange === 'today'
+  const isWeek = timeRange === '7days'
+  const isMonth = timeRange === '30days'
+
+  const filters = [
+    { id: 'today', label: 'Today' },
+    { id: '7days', label: 'Last 7 Days' },
+    { id: '30days', label: 'Last 30 Days' },
+    { id: 'all', label: 'All' }
+  ]
 
   return (
     <div className="analytics-page">
-      <div className="analytics-page-header">
-        <h1 className="page-main-title">Analytics</h1>
-        <button 
-          onClick={handleRefresh} 
-          className="refresh-btn-small" 
-          title="Refresh"
-          disabled={loading}
-        >
-          <span className={loading ? 'spin' : ''}>↻</span>
-        </button>
-      </div>
-
-      <div className="time-range-tabs">
-        <button 
-          className={`time-range-tab ${timeRange === 'today' ? 'active' : ''}`}
-          onClick={() => setTimeRange('today')}
-        >
-          Today
-        </button>
-        <button 
-          className={`time-range-tab ${timeRange === 'week' ? 'active' : ''}`}
-          onClick={() => setTimeRange('week')}
-        >
-          This Week
-        </button>
-        <button 
-          className={`time-range-tab ${timeRange === 'month' ? 'active' : ''}`}
-          onClick={() => setTimeRange('month')}
-        >
-          This Month
-        </button>
-      </div>
-
-      {loading && (
-        <div className="analytics-loading">
-          <div className="skeleton-grid">
-            {[1,2,3].map(i => (
-              <div key={i} className="skeleton-card-stat">
-                <div className="skeleton-line" style={{width: '40%'}}></div>
-                <div className="skeleton-line" style={{width: '60%'}}></div>
-                <div className="skeleton-line short" style={{width: '30%'}}></div>
-              </div>
-            ))}
-          </div>
+      <div className="analytics-header">
+        <h2 className="analytics-title">Analytics</h2>
+        <div className="analytics-filters">
+          {filters.map(f => (
+            <button
+              key={f.id}
+              className={`filter-pill ${timeRange === f.id ? 'active' : ''}`}
+              onClick={() => setTimeRange(f.id)}
+            >
+              {f.label}
+            </button>
+          ))}
         </div>
-      )}
+      </div>
 
-      {!loading && error && (
+      {loading ? (
+        <div className="analytics-loading">
+          <div className="kpi-grid">
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+          </div>
+          <SkeletonChart />
+          <SkeletonChart />
+        </div>
+      ) : error ? (
         <div className="analytics-error">
           <div className="error-icon">⚠️</div>
           <p className="error-title">Unable to load analytics</p>
           <p className="error-message">{error}</p>
           <button className="retry-btn" onClick={handleRefresh}>Try Again</button>
         </div>
-      )}
-
-      {!loading && !error && data && (
+      ) : data ? (
         <>
-          <div className="analytics-section">
-            <h3 className="section-title">Performance</h3>
-            <div className="stats-grid">
-              <div className="stat-card">
-                <div className="stat-label-row">
-                  <span className="stat-label">Total Orders</span>
-                  <span className="stat-badge">{getRangeLabel()}</span>
-                </div>
-                <div className="stat-value-row">
-                  <span className="stat-value-large">{data.orders}</span>
-                </div>
-                {(isWeek || isMonth) && data.dailyAvg > 0 && (
-                  <div className="stat-meta">{data.dailyAvg} avg/day</div>
-                )}
+          <div className="kpi-grid">
+            <div className="kpi-card primary">
+              <div className="kpi-header">
+                <span className="kpi-label">{getRangeLabel()} Revenue</span>
+                <span className="kpi-badge success">Confirmed</span>
               </div>
+              <div className="kpi-value">{formatCurrency(data.revenue)}</div>
+              {data.pendingRevenue > 0 && (
+                <div className="kpi-meta">{formatCurrency(data.pendingRevenue)} pending</div>
+              )}
+            </div>
 
-              <div className="stat-card">
-                <div className="stat-label-row">
-                  <span className="stat-label">Revenue</span>
-                  <span className="stat-badge success">Confirmed</span>
-                </div>
-                <div className="stat-value-row">
-                  <span className="stat-value-large">₹{Number(data.revenue || 0).toLocaleString()}</span>
-                </div>
-                {(data.pendingOrders || 0) > 0 && (
-                  <div className="stat-meta pending">₹{Number(data.pendingRevenue || 0).toLocaleString()} pending</div>
-                )}
+            <div className="kpi-card">
+              <div className="kpi-header">
+                <span className="kpi-label">Total Orders</span>
               </div>
+              <div className="kpi-value">{data.orders}</div>
+              {data.completedOrders > 0 && (
+                <div className="kpi-meta">{data.completedOrders} completed</div>
+              )}
+            </div>
 
-              <div className="stat-card">
-                <div className="stat-label-row">
-                  <span className="stat-label">Avg Order Value</span>
-                </div>
-                <div className="stat-value-row">
-                  <span className="stat-value-large">₹{Number(data.avgOrderValue || 0)}</span>
-                </div>
-                <div className="stat-meta">{data.completedOrders || 0} completed</div>
+            <div className="kpi-card">
+              <div className="kpi-header">
+                <span className="kpi-label">Avg Order Value</span>
               </div>
+              <div className="kpi-value">{formatCurrency(data.avgOrderValue)}</div>
+              <div className="kpi-meta">per order</div>
+            </div>
+
+            <div className="kpi-card">
+              <div className="kpi-header">
+                <span className="kpi-label">Items Sold</span>
+              </div>
+              <div className="kpi-value">{data.itemsSold}</div>
+              <div className="kpi-meta">total items</div>
             </div>
           </div>
 
-          {data.hourlyData && data.hourlyData.length > 0 && (
+          {data.dailyData && data.dailyData.length > 0 && (
             <div className="analytics-section">
               <h3 className="section-title">Revenue Trend</h3>
-              <div className="revenue-chart">
-                <ResponsiveContainer width="100%" height={200}>
-                  <LineChart data={data.hourlyData}>
+              <div className="chart-container">
+                <ResponsiveContainer width="100%" height={250}>
+                  <LineChart data={data.dailyData}>
                     <XAxis 
-                      dataKey="hour" 
-                      stroke="#888" 
-                      fontSize={12}
-                      tickFormatter={(val) => val}
+                      dataKey="day" 
+                      stroke="#666" 
+                      fontSize={11}
+                      tickLine={false}
+                      axisLine={false}
                     />
                     <YAxis 
-                      stroke="#888" 
-                      fontSize={12}
-                      tickFormatter={(val) => `₹${val}`}
+                      stroke="#666" 
+                      fontSize={11}
+                      tickLine={false}
+                      axisLine={false}
+                      tickFormatter={(v) => `₹${v}`}
                     />
                     <Tooltip 
-                      contentStyle={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: '8px' }}
+                      contentStyle={{ 
+                        background: '#1a1a1a', 
+                        border: '1px solid #333', 
+                        borderRadius: '8px',
+                        fontSize: 12
+                      }}
+                      formatter={(value) => [formatCurrency(value), 'Revenue']}
                       labelStyle={{ color: '#fff' }}
-                      formatter={(value) => [`₹${value.toLocaleString()}`, 'Revenue']}
                     />
                     <Line 
                       type="monotone" 
                       dataKey="revenue" 
-                      stroke="#22c55e" 
+                      stroke={COLORS.primary}
                       strokeWidth={2}
-                      dot={false}
-                      activeDot={{ r: 4 }}
+                      dot={{ fill: COLORS.primary, strokeWidth: 0, r: 3 }}
+                      activeDot={{ r: 5, fill: COLORS.primary }}
                     />
                   </LineChart>
                 </ResponsiveContainer>
@@ -329,89 +346,89 @@ export default function OverviewPage({ restaurantId }) {
             </div>
           )}
 
-          {data.dailyData && data.dailyData.length > 0 && isMonth && (
+          {data.dailyData && data.dailyData.length > 0 && (
             <div className="analytics-section">
-              <h3 className="section-title">Daily Orders</h3>
-              <div className="revenue-chart">
+              <h3 className="section-title">Order Count</h3>
+              <div className="chart-container">
                 <ResponsiveContainer width="100%" height={200}>
                   <BarChart data={data.dailyData}>
                     <XAxis 
                       dataKey="day" 
-                      stroke="#888" 
-                      fontSize={12}
+                      stroke="#666" 
+                      fontSize={11}
+                      tickLine={false}
+                      axisLine={false}
                     />
                     <YAxis 
-                      stroke="#888" 
-                      fontSize={12}
+                      stroke="#666" 
+                      fontSize={11}
+                      tickLine={false}
+                      axisLine={false}
                     />
                     <Tooltip 
-                      contentStyle={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: '8px' }}
+                      contentStyle={{ 
+                        background: '#1a1a1a', 
+                        border: '1px solid #333', 
+                        borderRadius: '8px',
+                        fontSize: 12
+                      }}
                       labelStyle={{ color: '#fff' }}
                     />
-                    <Bar dataKey="orders" fill="#22c55e" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="orders" fill={COLORS.secondary} radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
             </div>
           )}
 
-          {(isWeek || isMonth) && (
-            <div className="analytics-section">
-              <h3 className="section-title">{isWeek ? 'Weekly' : 'Monthly'} Insights</h3>
-              <div className="stats-grid three-col">
-                <div className="stat-card small">
-                  <span className="stat-label">Items Sold</span>
-                  <span className="stat-value-medium">{data.itemsSold || 0}</span>
-                </div>
-                <div className="stat-card small">
-                  <span className="stat-label">Peak Hour</span>
-                  <span className="stat-value-medium">{data.peakHour || '-'}</span>
-                </div>
-                <div className="stat-card small">
-                  <span className="stat-label">Best Day</span>
-                  <span className="stat-value-medium">{data.peakDay || '-'}</span>
-                </div>
+          {data.paymentData && data.paymentData.length > 0 && (
+            <div className="analytics-section half">
+              <h3 className="section-title">Payment Modes</h3>
+              <div className="chart-container-small">
+                <ResponsiveContainer width="100%" height={180}>
+                  <PieChart>
+                    <Pie
+                      data={data.paymentData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={50}
+                      outerRadius={70}
+                      paddingAngle={4}
+                      dataKey="value"
+                    >
+                      {data.paymentData.map((entry, index) => (
+                        <Cell key={entry.name} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip 
+                      contentStyle={{ 
+                        background: '#1a1a1a', 
+                        border: '1px solid #333', 
+                        borderRadius: '8px',
+                        fontSize: 12
+                      }}
+                    />
+                    <Legend 
+                      verticalAlign="bottom"
+                      formatter={(value) => <span style={{ color: '#999', fontSize: 12 }}>{value}</span>}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
               </div>
             </div>
           )}
 
           {data.topItems && data.topItems.length > 0 && (
-            <div className="analytics-section">
+            <div className="analytics-section half">
               <h3 className="section-title">Top Selling Items</h3>
-              <div className="top-items-list-compact">
+              <div className="top-items-list">
                 {data.topItems.map((item, index) => (
-                  <div key={item?.name || index} className="top-item-row">
+                  <div key={item.name} className="top-item-row">
                     <span className="top-item-rank">{index + 1}</span>
-                    <span className="top-item-name">{item?.name || 'Unknown'}</span>
-                    <span className="top-item-count">{item?.count || 0}</span>
+                    <span className="top-item-name">{item.name}</span>
+                    <span className="top-item-count">{item.count} sold</span>
                   </div>
                 ))}
-              </div>
-            </div>
-          )}
-
-          {(isWeek || isMonth) && data.dailyData && data.dailyData.length > 0 && (
-            <div className="analytics-section">
-              <h3 className="section-title">Daily Orders</h3>
-              <div className="mini-chart">
-                {data.dailyData.map((d) => {
-                  const maxOrders = Math.max(...(data.dailyData?.map(x => x?.orders || 0) || [1]))
-                  const heightPercent = maxOrders > 0 ? (d?.orders || 0) / maxOrders * 100 : 0
-                  return (
-                    <div 
-                      key={d?.day || 0}
-                      className="mini-bar" 
-                      style={{ 
-                        height: `${Math.max(4, heightPercent)}%`
-                      }}
-                      title={`Day ${d?.day || 0}: ${d?.orders || 0} orders`}
-                    />
-                  )
-                })}
-              </div>
-              <div className="mini-chart-labels">
-                <span>1</span>
-                <span>{data.dailyData.length}</span>
               </div>
             </div>
           )}
@@ -421,12 +438,15 @@ export default function OverviewPage({ restaurantId }) {
               <div className="empty-icon">📊</div>
               <p className="empty-title">No orders yet</p>
               <p className="empty-subtitle">
-                {isMonth ? 'No orders recorded this month' : isWeek ? 'No orders recorded this week' : 'No orders recorded today'}
+                {isToday ? 'No orders recorded today' : 
+                 isWeek ? 'No orders in the last 7 days' : 
+                 isMonth ? 'No orders in the last 30 days' : 
+                 'No orders recorded'}
               </p>
             </div>
           )}
         </>
-      )}
+      ) : null}
     </div>
   )
 }
