@@ -270,7 +270,7 @@ export default function OverviewPage({ restaurantId }) {
               <div className="saas-kpi-content">
                 <span className="saas-kpi-label">Completed</span>
                 <span className="saas-kpi-value">{metrics.completedOrders}</span>
-                <span className="saas-kpi-sub">{fmtPct(metrics.completedOrders, metrics.ordersTotal)}% of total</span>
+                <span className="saas-kpi-sub">{fmtPct(metrics.completedOrders, metrics.ordersTotal)}% completion</span>
               </div>
             </div>
 
@@ -289,6 +289,15 @@ export default function OverviewPage({ restaurantId }) {
                 <span className="saas-kpi-label">Items Sold</span>
                 <span className="saas-kpi-value">{metrics.itemsSold}</span>
                 <span className="saas-kpi-sub">total items</span>
+              </div>
+            </div>
+
+            <div className="saas-kpi-card">
+              <div className="saas-kpi-icon">⏳</div>
+              <div className="saas-kpi-content">
+                <span className="saas-kpi-label">Pending</span>
+                <span className="saas-kpi-value">{metrics.pendingOrders}</span>
+                <span className="saas-kpi-sub">awaiting action</span>
               </div>
             </div>
           </div>
