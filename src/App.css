@@ -4715,10 +4715,23 @@ body {
   box-shadow: 0 2px 10px rgba(34, 197, 94, 0.35), 0 0 20px rgba(34, 197, 94, 0.15);
 }
 
-@media (max-width: 640px) {
+@media (max-width: 768px) {
+  .saas-dashboard {
+    padding: 24px 16px;
+  }
+
   .saas-header {
     flex-direction: column;
     align-items: stretch;
+    gap: 16px;
+  }
+
+  .saas-header-left h1 {
+    font-size: 22px;
+  }
+
+  .saas-header-left p {
+    font-size: 13px;
   }
 
   .saas-filters {
@@ -4728,55 +4741,45 @@ body {
   }
 
   .saas-filter-btn {
-    padding: 10px 16px;
+    padding: 8px 14px;
     font-size: 12px;
+  }
+
+  .saas-kpi-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  .saas-kpi-card {
+    padding: 16px;
+  }
+
+  .saas-kpi-value {
+    font-size: 22px;
+  }
+
+  .saas-charts-row {
+    grid-template-columns: 1fr;
+  }
+
+  .saas-insights-row {
+    grid-template-columns: 1fr;
   }
 }
 
-.saas-header-left h1 {
-  font-size: 28px;
-  font-weight: 700;
-  color: #fafafa;
-  margin: 0 0 4px 0;
-}
+@media (max-width: 480px) {
+  .saas-kpi-grid {
+    grid-template-columns: 1fr;
+  }
 
-.saas-header-left p {
-  font-size: 14px;
-  color: #a1a1aa;
-  margin: 0;
-}
+  .saas-filters {
+    width: 100%;
+  }
 
-.saas-filters {
-  display: flex;
-  background: #18181b;
-  border: 1px solid #27272a;
-  border-radius: 10px;
-  padding: 4px;
-  gap: 2px;
-}
-
-.saas-filter-btn {
-  padding: 8px 14px;
-  border: none;
-  background: transparent;
-  color: #71717a;
-  font-size: 12px;
-  font-weight: 600;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  white-space: nowrap;
-}
-
-.saas-filter-btn:hover {
-  color: #fafafa;
-  background: #27272a;
-}
-
-.saas-filter-btn.active {
-  background: #22c55e;
-  color: #fff;
-  box-shadow: 0 2px 8px rgba(34, 197, 94, 0.25);
+  .saas-filter-btn {
+    flex: 1;
+    text-align: center;
+  }
 }
 
 /* KPI Grid */
@@ -4795,7 +4798,7 @@ body {
   display: flex;
   align-items: flex-start;
   gap: 16px;
-  transition: all 0.25s ease;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .saas-kpi-card:hover {
@@ -4809,6 +4812,10 @@ body {
   border-color: rgba(34, 197, 94, 0.3);
 }
 
+.saas-kpi-card.primary:hover {
+  box-shadow: 0 8px 32px rgba(34, 197, 94, 0.15);
+}
+
 .saas-kpi-icon {
   font-size: 20px;
   width: 48px;
@@ -4818,6 +4825,7 @@ body {
   justify-content: center;
   background: #27272a;
   border-radius: 12px;
+  flex-shrink: 0;
 }
 
 .saas-kpi-content {
@@ -4825,6 +4833,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  min-width: 0;
 }
 
 .saas-kpi-label {
@@ -4859,10 +4868,19 @@ body {
   padding: 24px;
   display: flex;
   flex-direction: column;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.saas-chart-card:hover {
+  border-color: #3f3f46;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
 }
 
 .saas-chart-header {
   margin-bottom: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
 }
 
 .saas-chart-header h3 {
@@ -4873,7 +4891,7 @@ body {
 }
 
 .saas-chart-header span {
-  font-size: 13px;
+  font-size: 12px;
   color: #71717a;
 }
 
@@ -4896,6 +4914,12 @@ body {
   padding: 24px;
   display: flex;
   flex-direction: column;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.saas-insight-card:hover {
+  border-color: #3f3f46;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
 }
 
 .saas-insight-header {
@@ -4975,15 +4999,20 @@ body {
 .saas-activity {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 4px;
 }
 
 .saas-activity-item {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 0;
-  border-bottom: 1px solid #27272a;
+  padding: 10px 12px;
+  border-radius: 10px;
+  transition: background 0.2s ease;
+}
+
+.saas-activity-item:hover {
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .saas-activity-item:last-child {
@@ -4998,6 +5027,7 @@ body {
   justify-content: center;
   border-radius: 50%;
   font-size: 12px;
+  flex-shrink: 0;
 }
 
 .saas-status-dot.success {
@@ -5156,104 +5186,42 @@ body {
   50% { opacity: 0.5; }
 }
 
-.analytics-page {
-  padding: 24px 16px;
-  max-width: 100%;
-  margin: 0 auto;
-  animation: fadeIn 0.3s ease;
+@media (min-width: 768px) {
+  .saas-dashboard {
+    padding: 40px 32px;
+  }
+
+  .saas-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+  }
+
+  .saas-kpi-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .saas-kpi-value {
+    font-size: 28px;
+  }
+
+  .saas-charts-row {
+    grid-template-columns: 2fr 1fr;
+  }
+
+  .saas-insights-row {
+    grid-template-columns: repeat(3, 1fr);
+  }
 }
 
-/* Header */
-.analytics-header {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 24px;
-  gap: 16px;
-}
+@media (min-width: 1024px) {
+  .saas-kpi-grid {
+    grid-template-columns: repeat(6, 1fr);
+  }
 
-.analytics-header-left {
-  flex: 1;
-}
-
-.analytics-title {
-  font-size: 24px;
-  font-weight: 700;
-  color: #fafafa;
-  margin: 0 0 4px 0;
-  letter-spacing: -0.5px;
-}
-
-.analytics-subtitle {
-  font-size: 14px;
-  color: #a1a1aa;
-  margin: 0;
-}
-
-.analytics-filters {
-  display: flex;
-  background: #18181b;
-  border: 1px solid #27272a;
-  border-radius: 10px;
-  padding: 4px;
-  gap: 2px;
-  overflow-x: auto;
-  width: 100%;
-  flex-wrap: nowrap;
-}
-
-.analytics-filter-btn {
-  padding: 10px 16px;
-  border: none;
-  background: transparent;
-  color: #a1a1aa;
-  font-size: 13px;
-  font-weight: 500;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  white-space: nowrap;
-}
-
-.analytics-filter-btn:hover {
-  color: #fafafa;
-  background: #27272a;
-}
-
-.analytics-filter-btn.active {
-  background: #22c55e;
-  color: #fff;
-}
-
-/* KPI Grid - Mobile (stacked) */
-.analytics-kpi-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 16px;
-  margin-bottom: 24px;
-}
-
-.analytics-kpi-card {
-  background: #18181b;
-  border: 1px solid #27272a;
-  border-radius: 16px;
-  padding: 20px;
-  display: flex;
-  align-items: flex-start;
-  gap: 16px;
-  transition: all 0.25s ease;
-}
-
-.analytics-kpi-card:hover {
-  transform: translateY(-2px);
-  border-color: #3f3f46;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-}
-
-.analytics-kpi-card.analytics-highlight {
-  background: linear-gradient(145deg, rgba(34, 197, 94, 0.08), #18181b);
-  border-color: rgba(34, 197, 94, 0.3);
+  .saas-kpi-value {
+    font-size: 28px;
+  }
 }
 
 .analytics-kpi-icon {
