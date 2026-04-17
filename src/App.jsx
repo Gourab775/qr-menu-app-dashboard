@@ -966,12 +966,25 @@ function App() {
 
         {activeTab === 'menu_items' && (
           <div className="menu-section">
+            <div className="menu-header-row">
+              <div className="menu-stats">
+                <span className="stat-label">Total Items</span>
+                <span className="stat-value">{menuItems.length}</span>
+              </div>
+              <button onClick={loadMenuItems} className="refresh-btn-glass">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M23 4v6h-6M1 20v-6h6"/>
+                  <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                </svg>
+                Refresh
+              </button>
+            </div>
             <div className="menu-controls">
               <div className="search-box">
                 <span className="search-icon">🔍</span>
                 <input
                   type="text"
-                  placeholder="Search items..."
+                  placeholder="Search menu items..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
@@ -999,13 +1012,13 @@ function App() {
               </div>
               
               <button className="add-btn" onClick={() => setShowAddModal(true)}>
-                ➕ Add Item
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <line x1="12" y1="5" x2="12" y2="19"/>
+                  <line x1="5" y1="12" x2="19" y2="12"/>
+                </svg>
+                Add Item
               </button>
             </div>
-            
-            <button onClick={loadMenuItems} className="refresh-btn">
-              🔄 Refresh
-            </button>
             
             {menuLoading ? (
               <div className="loading-grid">
@@ -1019,13 +1032,24 @@ function App() {
               </div>
             ) : filteredItems.length === 0 ? (
               <div className="empty-state">
-                <div className="empty-icon">🍽️</div>
-                <p>{searchQuery || filterType !== 'all' ? 'No items match your search' : 'No menu items yet'}</p>
-                {menuItems.length === 0 && (
-                  <p className="hint-text">Click "Add Item" to create your first menu item!</p>
-                )}
-                <button className="add-btn" onClick={() => setShowAddModal(true)} style={{marginTop: '16px'}}>
-                  Add your first item
+                <div className="empty-icon">{searchQuery || filterType !== 'all' ? '🔍' : '🍽️'}</div>
+                <h3>{searchQuery || filterType !== 'all' ? 'No items found' : 'No menu items yet'}</h3>
+                <p>{searchQuery || filterType !== 'all' 
+                  ? 'Try adjusting your search or filter to find what you\'re looking for.' 
+                  : 'Start building your menu by adding your first item. It\'s quick and easy!'}</p>
+                <button className="add-btn" onClick={() => {
+                  if (searchQuery || filterType !== 'all') {
+                    setSearchQuery('');
+                    setFilterType('all');
+                  } else {
+                    setShowAddModal(true);
+                  }
+                }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <line x1="12" y1="5" x2="12" y2="19"/>
+                    <line x1="5" y1="12" x2="19" y2="12"/>
+                  </svg>
+                  {searchQuery || filterType !== 'all' ? 'Clear filters' : 'Add your first item'}
                 </button>
               </div>
             ) : (
@@ -1039,6 +1063,17 @@ function App() {
                     categories={categories}
                   />
                 ))}
+              </div>
+            )}
+
+            {filteredItems.length > 0 && (
+              <div className="menu-footer">
+                <div className="filter-summary">
+                  <span className="summary-text">
+                    Showing {filteredItems.length} of {menuItems.length} items
+                    {searchQuery && ` for "${searchQuery}"`}
+                  </span>
+                </div>
               </div>
             )}
           </div>
