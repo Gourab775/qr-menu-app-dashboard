@@ -2310,38 +2310,6 @@ body {
   }
 }
 
-  .page-header {
-    flex-direction: column;
-    gap: 16px;
-    align-items: flex-start;
-  }
-  
-  .add-btn {
-    width: 100%;
-  }
-
-  .category-card {
-    flex-direction: column;
-  }
-
-  .category-card-left {
-    width: 100%;
-  }
-
-  .category-card-right {
-    width: 100%;
-    flex-direction: row;
-    justify-content: space-between;
-    align-items: center;
-  }
-
-  .sort-order-wrapper {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 4px;
-  }
-}
-
 /* Confirm Modal */
 .confirm-modal-overlay {
   position: fixed;
