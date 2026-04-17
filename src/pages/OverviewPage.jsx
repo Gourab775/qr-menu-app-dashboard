@@ -187,9 +187,9 @@ export default function OverviewPage({ restaurantId }) {
 
   const tabs = [
     { id: 'today', label: 'Today' },
-    { id: '7days', label: 'Last 7 Days' },
-    { id: '30days', label: 'Last 30 Days' },
-    { id: 'all', label: 'All Time' }
+    { id: '7days', label: '7D' },
+    { id: '30days', label: '30D' },
+    { id: 'all', label: 'All' }
   ]
 
   const filterLabel = filter === 'today' ? 'Today' : filter === '7days' ? 'Last 7 Days' : filter === '30days' ? 'Last 30 Days' : 'All Time'
