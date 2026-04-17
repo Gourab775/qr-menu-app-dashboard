@@ -1,21 +1,20 @@
 import { useState, useEffect, useCallback } from 'react'
-import { 
-  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, 
+import {
+  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
   BarChart, Bar, PieChart, Pie, Cell, Legend, AreaChart, Area
 } from 'recharts'
-import { supabase, RESTAURANT_ID } from '../lib/supabase'
+import { supabase } from '../lib/supabase'
 
 const ACCENT = {
   green: '#22c55e',
   blue: '#3b82f6',
   orange: '#f59e0b',
   purple: '#8b5cf6',
-  red: '#ef4444',
-  background: '#0a0a0a',
-  card: '#141414',
-  border: '#262626',
+  background: '#09090b',
+  card: '#18181b',
+  border: '#27272a',
   text: '#fafafa',
-  muted: '#737373'
+  muted: '#a1a1aa'
 }
 
 const CHART_COLORS = {
@@ -25,41 +24,17 @@ const CHART_COLORS = {
   online: ACCENT.purple
 }
 
-const KPICardSkel = () => (
-  <div className="saas-kpi-card skel">
-    <div className="skel-circle" />
-    <div className="saas-kpi-content">
-      <div className="skel-line sm" />
-      <div className="skel-line lg" />
-      <div className="skel-line xs" />
-    </div>
-  </div>
-)
-
-const ChartSkel = () => (
-  <div className="saas-chart-card skel">
-    <div className="saas-chart-header">
-      <div className="skel-line md" />
-      <div className="skel-line sm" />
-    </div>
-    <div className="skel-area" />
-  </div>
-)
-
-const InsightSkel = () => (
-  <div className="saas-insight-card skel">
-    <div className="skel-line md" />
-    {[1,2,3,4,5].map(i => <div key={i} className="skel-row" />)}
-  </div>
-)
+function formatCurrency(v) {
+  return '₹' + (v || 0).toLocaleString('en-IN')
+}
 
 function getTimeAgo(date) {
   const diff = Date.now() - new Date(date).getTime()
   const mins = Math.floor(diff / 60000)
   if (mins < 1) return 'now'
-  if (mins < 60) return `${mins}m`
+  if (mins < 60) return mins + 'm'
   const hours = Math.floor(mins / 60)
-  if (hours < 24) return `${hours}h`
+  if (hours < 24) return hours + 'h'
   return new Date(date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })
 }
 
@@ -134,7 +109,7 @@ export default function OverviewPage({ restaurantId }) {
           items[name] = (items[name] || 0) + (Number(it.quantity) || 1)
         })
 
-        if (recent.length < 8) {
+        if (recent.length < 10) {
           recent.push({
             id: o.id,
             code: o.order_code || o.id.slice(0, 8).toUpperCase(),
@@ -148,7 +123,7 @@ export default function OverviewPage({ restaurantId }) {
 
       const topItems = Object.entries(items)
         .sort((a, b) => b[1] - a[1])
-        .slice(0, 8)
+        .slice(0, 10)
         .map(([name, count]) => ({ name, count }))
 
       const chartData = Object.keys(dailyRev).sort().slice(-14).map(d => ({
@@ -159,7 +134,7 @@ export default function OverviewPage({ restaurantId }) {
       }))
 
       const payData = [
-        { name: 'Pay at Counter', value: payments.counter, fill: CHART_COLORS.counter },
+        { name: 'Counter', value: payments.counter, fill: CHART_COLORS.counter },
         { name: 'Online', value: payments.online, fill: CHART_COLORS.online }
       ].filter(d => d.value > 0)
 
@@ -192,8 +167,8 @@ export default function OverviewPage({ restaurantId }) {
 
   useEffect(() => { fetchAnalytics() }, [fetchAnalytics])
 
-  const fmt = (v) => `₹${(v || 0).toLocaleString('en-IN')}`
   const fmtPct = (a, b) => b ? Math.round(a / b * 100) : 0
+  const fmt = formatCurrency
 
   const tabs = [
     { id: 'today', label: 'Today' },
@@ -202,18 +177,22 @@ export default function OverviewPage({ restaurantId }) {
     { id: 'all', label: 'All Time' }
   ]
 
+  const filterLabel = filter === 'today' ? 'Today' : filter === '7days' ? 'Last 7 Days' : filter === '30days' ? 'Last 30 Days' : 'All Time'
+
+  const pcFmt = (v) => v.toLocaleString('en-IN')
+
   return (
-    <div className="saas-dashboard">
-      <div className="saas-header">
-        <div className="saas-header-title">
-          <h1>Analytics</h1>
-          <p>Performance insights and metrics</p>
+    <div className="pc-dashboard">
+      <div className="pc-header">
+        <div className="pc-header-left">
+          <h1 className="pc-title">Analytics</h1>
+          <p className="pc-subtitle">Performance insights and metrics for {filterLabel}</p>
         </div>
-        <div className="saas-tabs">
+        <div className="pc-filters">
           {tabs.map(t => (
             <button
               key={t.id}
-              className={`saas-tab ${filter === t.id ? 'active' : ''}`}
+              className={`pc-filter-btn ${filter === t.id ? 'active' : ''}`}
               onClick={() => setFilter(t.id)}
             >
               {t.label}
@@ -223,126 +202,134 @@ export default function OverviewPage({ restaurantId }) {
       </div>
 
       {loading ? (
-        <div className="saas-loading">
-          <div className="saas-kpi-grid">
-            {[...Array(5)].map(i => <KPICardSkel key={i} />)}
+        <div className="pc-loading">
+          <div className="pc-kpi-row">
+            {[1,2,3,4,5,6].map(i => (
+              <div key={i} className="pc-kpi-card pc-skel">
+                <div className="pc-skel-icon" />
+                <div className="pc-skel-content">
+                  <div className="pc-skel-line sm" />
+                  <div className="pc-skel-line lg" />
+                </div>
+              </div>
+            ))}
           </div>
-          <div className="saas-row">
-            <ChartSkel />
-            <ChartSkel />
+          <div className="pc-chart-row">
+            <div className="pc-chart-card pc-skel"><div className="pc-skel-area" /></div>
+            <div className="pc-chart-card pc-skel"><div className="pc-skel-area" /></div>
           </div>
-          <div className="saas-row">
-            <InsightSkel />
-            <InsightSkel />
-            <InsightSkel />
+          <div className="pc-insight-row">
+            <div className="pc-insight-card pc-skel" />
+            <div className="pc-insight-card pc-skel" />
+            <div className="pc-insight-card pc-skel" />
           </div>
         </div>
       ) : error ? (
-        <div className="saas-error">
-          <span className="saas-error-icon">⚠️</span>
+        <div className="pc-error">
+          <span className="pc-error-icon">!</span>
           <h3>Failed to load analytics</h3>
           <p>{error}</p>
-          <button className="saas-retry" onClick={fetchAnalytics}>Retry</button>
+          <button className="pc-retry-btn" onClick={fetchAnalytics}>Retry</button>
         </div>
       ) : metrics ? (
         <>
-          <div className="saas-kpi-grid">
-            <div className="saas-kpi-card primary-glow">
-              <div className="saas-kpi-icon">💰</div>
-              <div className="saas-kpi-content">
-                <span className="saas-kpi-label">{filter === 'today' ? "Today's" : filter === '7days' ? 'Last 7 Days' : filter === '30days' ? 'Last 30 Days' : 'All Time'} Revenue</span>
-                <span className="saas-kpi-value">{fmt(metrics.revenueTotal)}</span>
-                {metrics.revenuePending > 0 && <span className="saas-kpi-sub">{fmt(metrics.revenuePending)} pending</span>}
+          <div className="pc-kpi-row">
+            <div className="pc-kpi-card pc-highlight">
+              <div className="pc-kpi-icon">R</div>
+              <div className="pc-kpi-content">
+                <span className="pc-kpi-label">Total Revenue</span>
+                <span className="pc-kpi-value">{fmt(metrics.revenueTotal)}</span>
+                {metrics.revenuePending > 0 && <span className="pc-kpi-sub">{fmt(metrics.revenuePending)} pending</span>}
               </div>
             </div>
 
-            <div className="saas-kpi-card">
-              <div className="saas-kpi-icon">📦</div>
-              <div className="saas-kpi-content">
-                <span className="saas-kpi-label">Total Orders</span>
-                <span className="saas-kpi-value">{metrics.ordersTotal}</span>
-                {metrics.completedOrders > 0 && <span className="saas-kpi-sub">{metrics.completedOrders} completed</span>}
+            <div className="pc-kpi-card">
+              <div className="pc-kpi-icon">O</div>
+              <div className="pc-kpi-content">
+                <span className="pc-kpi-label">Total Orders</span>
+                <span className="pc-kpi-value">{metrics.ordersTotal}</span>
+                <span className="pc-kpi-sub">{metrics.completedOrders} completed</span>
               </div>
             </div>
 
-            <div className="saas-kpi-card">
-              <div className="saas-kpi-icon">✅</div>
-              <div className="saas-kpi-content">
-                <span className="saas-kpi-label">Completed</span>
-                <span className="saas-kpi-value">{metrics.completedOrders}</span>
-                <span className="saas-kpi-sub">{fmtPct(metrics.completedOrders, metrics.ordersTotal)}% completion</span>
+            <div className="pc-kpi-card">
+              <div className="pc-kpi-icon">C</div>
+              <div className="pc-kpi-content">
+                <span className="pc-kpi-label">Completed</span>
+                <span className="pc-kpi-value">{metrics.completedOrders}</span>
+                <span className="pc-kpi-sub">{fmtPct(metrics.completedOrders, metrics.ordersTotal)}% rate</span>
               </div>
             </div>
 
-            <div className="saas-kpi-card">
-              <div className="saas-kpi-icon">📊</div>
-              <div className="saas-kpi-content">
-                <span className="saas-kpi-label">Avg Order Value</span>
-                <span className="saas-kpi-value">{fmt(metrics.avgOrder)}</span>
-                <span className="saas-kpi-sub">per order</span>
+            <div className="pc-kpi-card">
+              <div className="pc-kpi-icon">A</div>
+              <div className="pc-kpi-content">
+                <span className="pc-kpi-label">Avg Order</span>
+                <span className="pc-kpi-value">{fmt(metrics.avgOrder)}</span>
+                <span className="pc-kpi-sub">per order</span>
               </div>
             </div>
 
-            <div className="saas-kpi-card">
-              <div className="saas-kpi-icon">🍽️</div>
-              <div className="saas-kpi-content">
-                <span className="saas-kpi-label">Items Sold</span>
-                <span className="saas-kpi-value">{metrics.itemsSold}</span>
-                <span className="saas-kpi-sub">total items</span>
+            <div className="pc-kpi-card">
+              <div className="pc-kpi-icon">I</div>
+              <div className="pc-kpi-content">
+                <span className="pc-kpi-label">Items Sold</span>
+                <span className="pc-kpi-value">{metrics.itemsSold}</span>
+                <span className="pc-kpi-sub">total items</span>
               </div>
             </div>
 
-            <div className="saas-kpi-card">
-              <div className="saas-kpi-icon">⏳</div>
-              <div className="saas-kpi-content">
-                <span className="saas-kpi-label">Pending</span>
-                <span className="saas-kpi-value">{metrics.pendingOrders}</span>
-                <span className="saas-kpi-sub">awaiting action</span>
+            <div className="pc-kpi-card">
+              <div className="pc-kpi-icon">P</div>
+              <div className="pc-kpi-content">
+                <span className="pc-kpi-label">Pending</span>
+                <span className="pc-kpi-value">{metrics.pendingOrders}</span>
+                <span className="pc-kpi-sub">awaiting</span>
               </div>
             </div>
           </div>
 
-          <div className="saas-row">
-            <div className="saas-chart-card">
-              <div className="saas-chart-header">
+          <div className="pc-chart-row">
+            <div className="pc-chart-card pc-wide">
+              <div className="pc-chart-header">
                 <h3>Revenue Trend</h3>
-                <span className="saas-chart-sub">Daily revenue over time</span>
+                <span>Daily revenue over time</span>
               </div>
-              <div className="saas-chart-body">
-                <ResponsiveContainer width="100%" height={300}>
+              <div className="pc-chart-body">
+                <ResponsiveContainer width="100%" height={320}>
                   <AreaChart data={metrics.chartData}>
                     <defs>
-                      <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor={CHART_COLORS.revenue} stopOpacity={0.25}/>
+                      <linearGradient id="revGradNew" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor={CHART_COLORS.revenue} stopOpacity={0.2}/>
                         <stop offset="95%" stopColor={CHART_COLORS.revenue} stopOpacity={0}/>
                       </linearGradient>
                     </defs>
-                    <XAxis dataKey="label" stroke="#525252" fontSize={10} tickLine={false} axisLine={false} />
-                    <YAxis stroke="#525252" fontSize={10} tickLine={false} axisLine={false} tickFormatter={v => `₹${v}`} />
+                    <XAxis dataKey="label" stroke="#71717a" fontSize={11} tickLine={false} axisLine={false} />
+                    <YAxis stroke="#71717a" fontSize={11} tickLine={false} axisLine={false} />
                     <Tooltip 
-                      contentStyle={{ background: '#1c1c1c', border: '1px solid #333', borderRadius: '8px', fontSize: 12 }}
-                      formatter={v => [fmt(v), 'Revenue']}
-                      labelStyle={{ color: '#fff' }}
+                      contentStyle={{ background: '#18181b', border: '1px solid #27272a', borderRadius: '8px', fontSize: 12 }}
+                      formatter={(v) => [fmt(v), 'Revenue']}
+                      labelStyle={{ color: '#fafafa' }}
                     />
-                    <Area type="monotone" dataKey="revenue" stroke={CHART_COLORS.revenue} strokeWidth={2} fill="url(#revGrad)" />
+                    <Area type="monotone" dataKey="revenue" stroke={CHART_COLORS.revenue} strokeWidth={2} fill="url(#revGradNew)" />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
             </div>
 
-            <div className="saas-chart-card">
-              <div className="saas-chart-header">
+            <div className="pc-chart-card">
+              <div className="pc-chart-header">
                 <h3>Order Volume</h3>
-                <span className="saas-chart-sub">Daily order count</span>
+                <span>Daily order count</span>
               </div>
-              <div className="saas-chart-body">
-                <ResponsiveContainer width="100%" height={300}>
+              <div className="pc-chart-body">
+                <ResponsiveContainer width="100%" height={320}>
                   <BarChart data={metrics.chartData}>
-                    <XAxis dataKey="label" stroke="#525252" fontSize={10} tickLine={false} axisLine={false} />
-                    <YAxis stroke="#525252" fontSize={10} tickLine={false} axisLine={false} />
+                    <XAxis dataKey="label" stroke="#71717a" fontSize={11} tickLine={false} axisLine={false} />
+                    <YAxis stroke="#71717a" fontSize={11} tickLine={false} axisLine={false} />
                     <Tooltip 
-                      contentStyle={{ background: '#1c1c1c', border: '1px solid #333', borderRadius: '8px', fontSize: 12 }}
-                      labelStyle={{ color: '#fff' }}
+                      contentStyle={{ background: '#18181b', border: '1px solid #27272a', borderRadius: '8px', fontSize: 12 }}
+                      labelStyle={{ color: '#fafafa' }}
                     />
                     <Bar dataKey="orders" fill={CHART_COLORS.orders} radius={[4, 4, 0, 0]} />
                   </BarChart>
@@ -351,86 +338,85 @@ export default function OverviewPage({ restaurantId }) {
             </div>
           </div>
 
-          <div className="saas-row three-col">
-            <div className="saas-insight-card">
-              <div className="saas-insight-header">
+          <div className="pc-insight-row">
+            <div className="pc-insight-card">
+              <div className="pc-insight-header">
                 <h3>Top Selling Items</h3>
               </div>
               {metrics.topItems?.length ? (
-                <div className="saas-top-items">
+                <div className="pc-top-items">
                   {metrics.topItems.map((item, i) => (
-                    <div key={item.name} className="saas-top-item">
-                      <span className="saas-rank">{i + 1}</span>
-                      <div className="saas-bar-track">
-                        <div className="saas-bar-fill" style={{ width: `${(item.count / metrics.topItems[0].count) * 100}%` }} />
+                    <div key={item.name} className="pc-top-item">
+                      <span className="pc-rank">{i + 1}</span>
+                      <div className="pc-bar-track">
+                        <div className="pc-bar-fill" style={{ width: (item.count / metrics.topItems[0].count) * 100 + '%' }} />
                       </div>
-                      <span className="saas-name">{item.name}</span>
-                      <span className="saas-count">{item.count}</span>
+                      <span className="pc-item-name">{item.name}</span>
+                      <span className="pc-item-count">{item.count}</span>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="saas-empty">No data available</div>
+                <div className="pc-empty">No data available</div>
               )}
             </div>
 
-            <div className="saas-insight-card">
-              <div className="saas-insight-header">
+            <div className="pc-insight-card">
+              <div className="pc-insight-header">
                 <h3>Payment Modes</h3>
               </div>
               {metrics.payData?.length ? (
-                <div className="saas-pie-wrap">
-                  <ResponsiveContainer width="100%" height={180}>
+                <div className="pc-pie-wrap">
+                  <ResponsiveContainer width="100%" height={220}>
                     <PieChart>
                       <Pie
                         data={metrics.payData}
                         cx="50%"
                         cy="50%"
-                        innerRadius={45}
-                        outerRadius={65}
-                        paddingAngle={5}
+                        innerRadius={60}
+                        outerRadius={85}
+                        paddingAngle={4}
                         dataKey="value"
                       >
                         {metrics.payData.map(entry => <Cell key={entry.name} fill={entry.fill} />)}
                       </Pie>
-                      <Tooltip contentStyle={{ background: '#1c1c1c', border: '1px solid #333', borderRadius: 6 }} />
-                      <Legend verticalAlign="bottom" formatter={v => <span style={{ color: '#888', fontSize: 11 }}>{v}</span>} />
+                      <Tooltip contentStyle={{ background: '#18181b', border: '1px solid #27272a', borderRadius: 6 }} />
+                      <Legend verticalAlign="bottom" formatter={v => <span style={{ color: '#a1a1aa', fontSize: 12 }}>{v}</span>} />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
               ) : (
-                <div className="saas-empty">No payment data</div>
+                <div className="pc-empty">No payment data</div>
               )}
             </div>
 
-            <div className="saas-insight-card">
-              <div className="saas-insight-header">
+            <div className="pc-insight-card">
+              <div className="pc-insight-header">
                 <h3>Recent Orders</h3>
               </div>
               {metrics.recentActivity?.length ? (
-                <div className="saas-activity">
+                <div className="pc-activity">
                   {metrics.recentActivity.map(o => (
-                    <div key={o.id} className="saas-activity-item">
-                      <div className={`saas-status-dot ${o.status === 'accepted' ? 'success' : o.status === 'rejected' ? 'error' : 'pending'}`}>
-                        {o.status === 'accepted' ? '✓' : o.status === 'rejected' ? '✕' : '○'}
+                    <div key={o.id} className="pc-activity-item">
+                      <div className={`pc-status-dot ${o.status === 'accepted' ? 'success' : o.status === 'rejected' ? 'error' : 'pending'}`}>
+                        {o.status === 'accepted' ? '✓' : o.status === 'rejected' ? 'X' : '...'}
                       </div>
-                      <div className="saas-activity-info">
-                        <span className="saas-activity-code">#{o.code}</span>
-                        <span className="saas-activity-meta">{fmt(o.total)} · {getTimeAgo(o.time)}</span>
+                      <div className="pc-activity-info">
+                        <span className="pc-order-code">#{o.code}</span>
+                        <span className="pc-order-meta">{fmt(o.total)} - {getTimeAgo(o.time)}</span>
                       </div>
-                      <span className="saas-activity-pay">{o.payment === 'online' ? '💳' : '💵'}</span>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="saas-empty">No recent activity</div>
+                <div className="pc-empty">No recent activity</div>
               )}
             </div>
           </div>
 
           {metrics.ordersTotal === 0 && (
-            <div className="saas-empty-state">
-              <span className="saas-empty-icon">📊</span>
+            <div className="pc-empty-state">
+              <span>A</span>
               <h3>No orders recorded</h3>
               <p>Orders will appear here once placed</p>
             </div>
