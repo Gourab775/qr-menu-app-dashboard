@@ -38,6 +38,17 @@ function getTimeAgo(date) {
   return new Date(date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })
 }
 
+function getDaysInRange(startDate, endDate) {
+  const days = []
+  const current = new Date(startDate)
+  const end = new Date(endDate)
+  while (current <= end) {
+    days.push(new Date(current))
+    current.setDate(current.getDate() + 1)
+  }
+  return days
+}
+
 export default function OverviewPage({ restaurantId }) {
   const [filter, setFilter] = useState('7days')
   const [loading, setLoading] = useState(true)
@@ -46,18 +57,17 @@ export default function OverviewPage({ restaurantId }) {
 
   const getDateRange = useCallback((range) => {
     const now = new Date()
+    const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999)
     let start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0)
-    let end = new Date(now)
-    end.setHours(23, 59, 59, 999)
 
     switch (range) {
       case 'today': break
-      case '7days': start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000); break
-      case '30days': start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000); break
-      case 'all': start = new Date(2020, 0, 1); break
-      default: start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+      case '7days': start = new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000); start.setHours(0,0,0,0); break
+      case '30days': start = new Date(now.getTime() - 29 * 24 * 60 * 60 * 1000); start.setHours(0,0,0,0); break
+      case 'all': start = new Date(2020, 0, 1); start.setHours(0,0,0,0); break
+      default: start = new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000); start.setHours(0,0,0,0)
     }
-    return { start: start.toISOString(), end: end.toISOString() }
+    return { start: start.toISOString(), end: end.toISOString(), startDate: start, endDate: end }
   }, [])
 
   const fetchAnalytics = useCallback(async () => {
@@ -65,7 +75,7 @@ export default function OverviewPage({ restaurantId }) {
     setError(null)
 
     try {
-      const { start, end } = getDateRange(filter)
+      const { start, end, startDate, endDate } = getDateRange(filter)
 
       const { data: orders, error: queryError } = await supabase
         .from('live_orders')
@@ -78,27 +88,31 @@ export default function OverviewPage({ restaurantId }) {
 
       const list = Array.isArray(orders) ? orders : []
       
-      if (!list.length) {
-        setMetrics(emptyState())
-        return
-      }
+      const allDays = getDaysInRange(startDate, endDate)
+      const dailyRev = {}
+      const dailyOrd = {}
       
+      allDays.forEach(day => {
+        const dateKey = day.toISOString().split('T')[0]
+        dailyRev[dateKey] = 0
+        dailyOrd[dateKey] = 0
+      })
+      
+      list.forEach(o => {
+        if (!o?.created_at) return
+        const day = new Date(o.created_at).toISOString().split('T')[0]
+        dailyRev[day] = (dailyRev[day] || 0) + (Number(o.total_price) || 0)
+        dailyOrd[day] = (dailyOrd[day] || 0) + 1
+      })
+
       const completed = list.filter(o => o.status === 'accepted')
       const pending = list.filter(o => o.status !== 'accepted' && o.status !== 'rejected')
       
       const items = {}
-      const dailyRev = {}
-      const dailyOrd = {}
       const payments = { counter: 0, online: 0 }
       const recent = []
       
       list.forEach(o => {
-        if (!o?.created_at) return
-        
-        const day = new Date(o.created_at).toISOString().split('T')[0]
-        dailyRev[day] = (dailyRev[day] || 0) + (Number(o.total_price) || 0)
-        dailyOrd[day] = (dailyOrd[day] || 0) + 1
-        
         const pm = (o.payment_mode || 'counter').toLowerCase()
         payments[pm === 'online' ? 'online' : 'counter']++
 
@@ -126,12 +140,15 @@ export default function OverviewPage({ restaurantId }) {
         .slice(0, 10)
         .map(([name, count]) => ({ name, count }))
 
-      const chartData = Object.keys(dailyRev).sort().slice(-14).map(d => ({
-        date: d,
-        label: new Date(d).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' }),
-        revenue: Math.round(dailyRev[d]),
-        orders: dailyOrd[d] || 0
-      }))
+      const chartData = allDays.map(day => {
+        const dateKey = day.toISOString().split('T')[0]
+        return {
+          date: dateKey,
+          label: day.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' }),
+          revenue: dailyRev[dateKey] || 0,
+          orders: dailyOrd[dateKey] || 0
+        }
+      })
 
       const payData = [
         { name: 'Counter', value: payments.counter, fill: CHART_COLORS.counter },
@@ -168,7 +185,6 @@ export default function OverviewPage({ restaurantId }) {
   useEffect(() => { fetchAnalytics() }, [fetchAnalytics])
 
   const fmtPct = (a, b) => b ? Math.round(a / b * 100) : 0
-  const fmt = formatCurrency
 
   const tabs = [
     { id: 'today', label: 'Today' },
@@ -179,20 +195,18 @@ export default function OverviewPage({ restaurantId }) {
 
   const filterLabel = filter === 'today' ? 'Today' : filter === '7days' ? 'Last 7 Days' : filter === '30days' ? 'Last 30 Days' : 'All Time'
 
-  const pcFmt = (v) => v.toLocaleString('en-IN')
-
   return (
-    <div className="pc-dashboard">
-      <div className="pc-header">
-        <div className="pc-header-left">
-          <h1 className="pc-title">Analytics</h1>
-          <p className="pc-subtitle">Performance insights and metrics for {filterLabel}</p>
+    <div className="analytics-page">
+      <div className="analytics-header">
+        <div className="analytics-header-left">
+          <h1 className="analytics-title">Analytics</h1>
+          <p className="analytics-subtitle">Performance insights for {filterLabel}</p>
         </div>
-        <div className="pc-filters">
+        <div className="analytics-filters">
           {tabs.map(t => (
             <button
               key={t.id}
-              className={`pc-filter-btn ${filter === t.id ? 'active' : ''}`}
+              className={`analytics-filter-btn ${filter === t.id ? 'active' : ''}`}
               onClick={() => setFilter(t.id)}
             >
               {t.label}
@@ -202,104 +216,104 @@ export default function OverviewPage({ restaurantId }) {
       </div>
 
       {loading ? (
-        <div className="pc-loading">
-          <div className="pc-kpi-row">
+        <div className="analytics-loading">
+          <div className="analytics-kpi-grid">
             {[1,2,3,4,5,6].map(i => (
-              <div key={i} className="pc-kpi-card pc-skel">
-                <div className="pc-skel-icon" />
-                <div className="pc-skel-content">
-                  <div className="pc-skel-line sm" />
-                  <div className="pc-skel-line lg" />
+              <div key={i} className="analytics-kpi-card analytics-skel">
+                <div className="analytics-skel-icon" />
+                <div className="analytics-skel-content">
+                  <div className="analytics-skel-line sm" />
+                  <div className="analytics-skel-line lg" />
                 </div>
               </div>
             ))}
           </div>
-          <div className="pc-chart-row">
-            <div className="pc-chart-card pc-skel"><div className="pc-skel-area" /></div>
-            <div className="pc-chart-card pc-skel"><div className="pc-skel-area" /></div>
+          <div className="analytics-charts-row">
+            <div className="analytics-chart-card analytics-skel"><div className="analytics-skel-area" /></div>
+            <div className="analytics-chart-card analytics-skel"><div className="analytics-skel-area" /></div>
           </div>
-          <div className="pc-insight-row">
-            <div className="pc-insight-card pc-skel" />
-            <div className="pc-insight-card pc-skel" />
-            <div className="pc-insight-card pc-skel" />
+          <div className="analytics-insights-row">
+            <div className="analytics-insight-card analytics-skel" />
+            <div className="analytics-insight-card analytics-skel" />
+            <div className="analytics-insight-card analytics-skel" />
           </div>
         </div>
       ) : error ? (
-        <div className="pc-error">
-          <span className="pc-error-icon">!</span>
+        <div className="analytics-error">
+          <span className="analytics-error-icon">!</span>
           <h3>Failed to load analytics</h3>
           <p>{error}</p>
-          <button className="pc-retry-btn" onClick={fetchAnalytics}>Retry</button>
+          <button className="analytics-retry-btn" onClick={fetchAnalytics}>Retry</button>
         </div>
       ) : metrics ? (
         <>
-          <div className="pc-kpi-row">
-            <div className="pc-kpi-card pc-highlight">
-              <div className="pc-kpi-icon">R</div>
-              <div className="pc-kpi-content">
-                <span className="pc-kpi-label">Total Revenue</span>
-                <span className="pc-kpi-value">{fmt(metrics.revenueTotal)}</span>
-                {metrics.revenuePending > 0 && <span className="pc-kpi-sub">{fmt(metrics.revenuePending)} pending</span>}
+          <div className="analytics-kpi-grid">
+            <div className="analytics-kpi-card analytics-highlight">
+              <div className="analytics-kpi-icon">R</div>
+              <div className="analytics-kpi-content">
+                <span className="analytics-kpi-label">Total Revenue</span>
+                <span className="analytics-kpi-value">{formatCurrency(metrics.revenueTotal)}</span>
+                {metrics.revenuePending > 0 && <span className="analytics-kpi-sub">{formatCurrency(metrics.revenuePending)} pending</span>}
               </div>
             </div>
 
-            <div className="pc-kpi-card">
-              <div className="pc-kpi-icon">O</div>
-              <div className="pc-kpi-content">
-                <span className="pc-kpi-label">Total Orders</span>
-                <span className="pc-kpi-value">{metrics.ordersTotal}</span>
-                <span className="pc-kpi-sub">{metrics.completedOrders} completed</span>
+            <div className="analytics-kpi-card">
+              <div className="analytics-kpi-icon">O</div>
+              <div className="analytics-kpi-content">
+                <span className="analytics-kpi-label">Total Orders</span>
+                <span className="analytics-kpi-value">{metrics.ordersTotal}</span>
+                <span className="analytics-kpi-sub">{metrics.completedOrders} completed</span>
               </div>
             </div>
 
-            <div className="pc-kpi-card">
-              <div className="pc-kpi-icon">C</div>
-              <div className="pc-kpi-content">
-                <span className="pc-kpi-label">Completed</span>
-                <span className="pc-kpi-value">{metrics.completedOrders}</span>
-                <span className="pc-kpi-sub">{fmtPct(metrics.completedOrders, metrics.ordersTotal)}% rate</span>
+            <div className="analytics-kpi-card">
+              <div className="analytics-kpi-icon">C</div>
+              <div className="analytics-kpi-content">
+                <span className="analytics-kpi-label">Completed</span>
+                <span className="analytics-kpi-value">{metrics.completedOrders}</span>
+                <span className="analytics-kpi-sub">{fmtPct(metrics.completedOrders, metrics.ordersTotal)}% rate</span>
               </div>
             </div>
 
-            <div className="pc-kpi-card">
-              <div className="pc-kpi-icon">A</div>
-              <div className="pc-kpi-content">
-                <span className="pc-kpi-label">Avg Order</span>
-                <span className="pc-kpi-value">{fmt(metrics.avgOrder)}</span>
-                <span className="pc-kpi-sub">per order</span>
+            <div className="analytics-kpi-card">
+              <div className="analytics-kpi-icon">A</div>
+              <div className="analytics-kpi-content">
+                <span className="analytics-kpi-label">Avg Order</span>
+                <span className="analytics-kpi-value">{formatCurrency(metrics.avgOrder)}</span>
+                <span className="analytics-kpi-sub">per order</span>
               </div>
             </div>
 
-            <div className="pc-kpi-card">
-              <div className="pc-kpi-icon">I</div>
-              <div className="pc-kpi-content">
-                <span className="pc-kpi-label">Items Sold</span>
-                <span className="pc-kpi-value">{metrics.itemsSold}</span>
-                <span className="pc-kpi-sub">total items</span>
+            <div className="analytics-kpi-card">
+              <div className="analytics-kpi-icon">I</div>
+              <div className="analytics-kpi-content">
+                <span className="analytics-kpi-label">Items Sold</span>
+                <span className="analytics-kpi-value">{metrics.itemsSold}</span>
+                <span className="analytics-kpi-sub">total items</span>
               </div>
             </div>
 
-            <div className="pc-kpi-card">
-              <div className="pc-kpi-icon">P</div>
-              <div className="pc-kpi-content">
-                <span className="pc-kpi-label">Pending</span>
-                <span className="pc-kpi-value">{metrics.pendingOrders}</span>
-                <span className="pc-kpi-sub">awaiting</span>
+            <div className="analytics-kpi-card">
+              <div className="analytics-kpi-icon">P</div>
+              <div className="analytics-kpi-content">
+                <span className="analytics-kpi-label">Pending</span>
+                <span className="analytics-kpi-value">{metrics.pendingOrders}</span>
+                <span className="analytics-kpi-sub">awaiting</span>
               </div>
             </div>
           </div>
 
-          <div className="pc-chart-row">
-            <div className="pc-chart-card pc-wide">
-              <div className="pc-chart-header">
+          <div className="analytics-charts-row">
+            <div className="analytics-chart-card">
+              <div className="analytics-chart-header">
                 <h3>Revenue Trend</h3>
                 <span>Daily revenue over time</span>
               </div>
-              <div className="pc-chart-body">
-                <ResponsiveContainer width="100%" height={320}>
+              <div className="analytics-chart-body">
+                <ResponsiveContainer width="100%" height={300}>
                   <AreaChart data={metrics.chartData}>
                     <defs>
-                      <linearGradient id="revGradNew" x1="0" y1="0" x2="0" y2="1">
+                      <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor={CHART_COLORS.revenue} stopOpacity={0.2}/>
                         <stop offset="95%" stopColor={CHART_COLORS.revenue} stopOpacity={0}/>
                       </linearGradient>
@@ -308,22 +322,22 @@ export default function OverviewPage({ restaurantId }) {
                     <YAxis stroke="#71717a" fontSize={11} tickLine={false} axisLine={false} />
                     <Tooltip 
                       contentStyle={{ background: '#18181b', border: '1px solid #27272a', borderRadius: '8px', fontSize: 12 }}
-                      formatter={(v) => [fmt(v), 'Revenue']}
+                      formatter={(v) => [formatCurrency(v), 'Revenue']}
                       labelStyle={{ color: '#fafafa' }}
                     />
-                    <Area type="monotone" dataKey="revenue" stroke={CHART_COLORS.revenue} strokeWidth={2} fill="url(#revGradNew)" />
+                    <Area type="monotone" dataKey="revenue" stroke={CHART_COLORS.revenue} strokeWidth={2} fill="url(#revGrad)" />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
             </div>
 
-            <div className="pc-chart-card">
-              <div className="pc-chart-header">
+            <div className="analytics-chart-card">
+              <div className="analytics-chart-header">
                 <h3>Order Volume</h3>
                 <span>Daily order count</span>
               </div>
-              <div className="pc-chart-body">
-                <ResponsiveContainer width="100%" height={320}>
+              <div className="analytics-chart-body">
+                <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={metrics.chartData}>
                     <XAxis dataKey="label" stroke="#71717a" fontSize={11} tickLine={false} axisLine={false} />
                     <YAxis stroke="#71717a" fontSize={11} tickLine={false} axisLine={false} />
@@ -338,43 +352,43 @@ export default function OverviewPage({ restaurantId }) {
             </div>
           </div>
 
-          <div className="pc-insight-row">
-            <div className="pc-insight-card">
-              <div className="pc-insight-header">
+          <div className="analytics-insights-row">
+            <div className="analytics-insight-card">
+              <div className="analytics-insight-header">
                 <h3>Top Selling Items</h3>
               </div>
               {metrics.topItems?.length ? (
-                <div className="pc-top-items">
+                <div className="analytics-top-items">
                   {metrics.topItems.map((item, i) => (
-                    <div key={item.name} className="pc-top-item">
-                      <span className="pc-rank">{i + 1}</span>
-                      <div className="pc-bar-track">
-                        <div className="pc-bar-fill" style={{ width: (item.count / metrics.topItems[0].count) * 100 + '%' }} />
+                    <div key={item.name} className="analytics-top-item">
+                      <span className="analytics-rank">{i + 1}</span>
+                      <div className="analytics-bar-track">
+                        <div className="analytics-bar-fill" style={{ width: (item.count / metrics.topItems[0].count) * 100 + '%' }} />
                       </div>
-                      <span className="pc-item-name">{item.name}</span>
-                      <span className="pc-item-count">{item.count}</span>
+                      <span className="analytics-item-name">{item.name}</span>
+                      <span className="analytics-item-count">{item.count}</span>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="pc-empty">No data available</div>
+                <div className="analytics-empty">No data available</div>
               )}
             </div>
 
-            <div className="pc-insight-card">
-              <div className="pc-insight-header">
+            <div className="analytics-insight-card">
+              <div className="analytics-insight-header">
                 <h3>Payment Modes</h3>
               </div>
               {metrics.payData?.length ? (
-                <div className="pc-pie-wrap">
-                  <ResponsiveContainer width="100%" height={220}>
+                <div className="analytics-pie-wrap">
+                  <ResponsiveContainer width="100%" height={200}>
                     <PieChart>
                       <Pie
                         data={metrics.payData}
                         cx="50%"
                         cy="50%"
-                        innerRadius={60}
-                        outerRadius={85}
+                        innerRadius={50}
+                        outerRadius={75}
                         paddingAngle={4}
                         dataKey="value"
                       >
@@ -386,36 +400,36 @@ export default function OverviewPage({ restaurantId }) {
                   </ResponsiveContainer>
                 </div>
               ) : (
-                <div className="pc-empty">No payment data</div>
+                <div className="analytics-empty">No payment data</div>
               )}
             </div>
 
-            <div className="pc-insight-card">
-              <div className="pc-insight-header">
+            <div className="analytics-insight-card">
+              <div className="analytics-insight-header">
                 <h3>Recent Orders</h3>
               </div>
               {metrics.recentActivity?.length ? (
-                <div className="pc-activity">
+                <div className="analytics-activity">
                   {metrics.recentActivity.map(o => (
-                    <div key={o.id} className="pc-activity-item">
-                      <div className={`pc-status-dot ${o.status === 'accepted' ? 'success' : o.status === 'rejected' ? 'error' : 'pending'}`}>
+                    <div key={o.id} className="analytics-activity-item">
+                      <div className={`analytics-status-dot ${o.status === 'accepted' ? 'success' : o.status === 'rejected' ? 'error' : 'pending'}`}>
                         {o.status === 'accepted' ? '✓' : o.status === 'rejected' ? 'X' : '...'}
                       </div>
-                      <div className="pc-activity-info">
-                        <span className="pc-order-code">#{o.code}</span>
-                        <span className="pc-order-meta">{fmt(o.total)} - {getTimeAgo(o.time)}</span>
+                      <div className="analytics-activity-info">
+                        <span className="analytics-order-code">#{o.code}</span>
+                        <span className="analytics-order-meta">{formatCurrency(o.total)} - {getTimeAgo(o.time)}</span>
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="pc-empty">No recent activity</div>
+                <div className="analytics-empty">No recent activity</div>
               )}
             </div>
           </div>
 
           {metrics.ordersTotal === 0 && (
-            <div className="pc-empty-state">
+            <div className="analytics-empty-state">
               <span>A</span>
               <h3>No orders recorded</h3>
               <p>Orders will appear here once placed</p>
