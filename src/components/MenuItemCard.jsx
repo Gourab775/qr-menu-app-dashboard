@@ -2,6 +2,20 @@ import { useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import ConfirmModal from './ConfirmModal'
 
+const VegIcon = ({ className }) => (
+  <svg className={className} width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="1.5" y="1.5" width="13" height="13" rx="2.5" stroke="currentColor" strokeWidth="1.5"/>
+    <circle cx="8" cy="8" r="3.5" fill="currentColor"/>
+  </svg>
+);
+
+const NonVegIcon = ({ className }) => (
+  <svg className={className} width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="1.5" y="1.5" width="13" height="13" rx="2.5" stroke="currentColor" strokeWidth="1.5"/>
+    <path d="M8 4.5L11.5 10.5H4.5L8 4.5Z" fill="currentColor"/>
+  </svg>
+);
+
 export default function MenuItemCard({ item, onSave, onDelete, categories = [] }) {
   const [formData, setFormData] = useState({
     name: item.name,
@@ -81,14 +95,14 @@ export default function MenuItemCard({ item, onSave, onDelete, categories = [] }
                   {getInitials(formData.name)}
                 </div>
               )}
-              <span className={`veg-badge ${formData.is_veg ? 'veg' : 'nonveg'}`}>
-                {formData.is_veg ? '🟢' : '🔴'}
-              </span>
+              <div className={`veg-badge-container ${formData.is_veg ? 'veg' : 'nonveg'}`}>
+                {formData.is_veg ? <VegIcon className="veg-badge-icon" /> : <NonVegIcon className="veg-badge-icon" />}
+              </div>
             </div>
             
             <input
               type="url"
-              className="image-url-input"
+              className="image-url-input premium-input-small"
               value={formData.image_url}
               onChange={(e) => handleImageChange(e.target.value)}
               placeholder="Paste image URL..."
@@ -96,13 +110,26 @@ export default function MenuItemCard({ item, onSave, onDelete, categories = [] }
           </div>
           
           <div className="card-center">
-            <input
-              type="text"
-              className="name-input premium-input"
-              value={formData.name}
-              onChange={(e) => handleChange('name', e.target.value)}
-              placeholder="Item name"
-            />
+            <div className="card-center-header">
+              <input
+                type="text"
+                className="name-input premium-input"
+                value={formData.name}
+                onChange={(e) => handleChange('name', e.target.value)}
+                placeholder="Item name"
+              />
+              <div className="price-row">
+                <span className="rupee-icon">₹</span>
+                <input
+                  type="number"
+                  className="price-input premium-input"
+                  value={formData.price}
+                  onChange={(e) => handleChange('price', Number(e.target.value))}
+                  min="0"
+                  step="1"
+                />
+              </div>
+            </div>
             
             <textarea
               className="desc-input premium-input"
@@ -114,6 +141,7 @@ export default function MenuItemCard({ item, onSave, onDelete, categories = [] }
 
             {categories.length > 0 && (
               <select
+                className="category-select premium-input"
                 value={formData.category_id || ''}
                 onChange={(e) => handleChange('category_id', e.target.value || null)}
               >
@@ -123,74 +151,71 @@ export default function MenuItemCard({ item, onSave, onDelete, categories = [] }
                 ))}
               </select>
             )}
-            
-            <div className="price-row">
-              <span className="rupee-icon">₹</span>
-              <input
-                type="number"
-                className="price-input premium-input"
-                value={formData.price}
-                onChange={(e) => handleChange('price', Number(e.target.value))}
-                min="0"
-                step="1"
-              />
-            </div>
           </div>
           
           <div className="card-right">
             <div className="toggle-section">
               <span className="toggle-label">Type</span>
-              <div className="veg-toggle">
+              <div className="veg-toggle-group">
                 <button
-                  className={`veg-btn ${formData.is_veg ? 'active' : ''}`}
+                  className={`type-btn-glass ${formData.is_veg ? 'active veg' : ''}`}
                   onClick={() => handleChange('is_veg', true)}
                 >
-                  <span className="veg-dot-small">🟢</span>
+                  <VegIcon className="btn-icon-svg" />
                   Veg
                 </button>
                 <button
-                  className={`nonveg-btn ${!formData.is_veg ? 'active' : ''}`}
+                  className={`type-btn-glass ${!formData.is_veg ? 'active nonveg' : ''}`}
                   onClick={() => handleChange('is_veg', false)}
                 >
-                  <span className="veg-dot-small">🔴</span>
+                  <NonVegIcon className="btn-icon-svg" />
                   Non-Veg
                 </button>
               </div>
             </div>
             
             <div className="toggle-section">
-              <span className="toggle-label">Status</span>
+              <span className="toggle-label">Availability</span>
               <button
-                className={`status-toggle ${formData.is_available ? 'available' : 'out-of-stock'}`}
+                className={`status-toggle-glass ${formData.is_available ? 'available' : 'out-of-stock'}`}
                 onClick={() => handleChange('is_available', !formData.is_available)}
               >
                 {formData.is_available ? (
                   <>
-                    <span className="status-icon">✓</span>
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="status-icon"><path d="M11.6667 3.5L5.25001 9.91667L2.33334 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
                     Available
                   </>
                 ) : (
                   <>
-                    <span className="status-icon">✗</span>
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="status-icon"><path d="M10.5 3.5L3.5 10.5M3.5 3.5L10.5 10.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
                     Out of Stock
                   </>
                 )}
               </button>
             </div>
 
-            <div className="save-indicator">
-              {saving && <span className="saving-text">Saving...</span>}
-              {!saving && formData.name !== item.name && (
-                <span className="saved-text">✓ Saved</span>
-              )}
-            </div>
+            <div className="action-row">
+              <div className="save-indicator">
+                {saving ? (
+                  <span className="saving-text">Saving...</span>
+                ) : formData.name !== item.name ? (
+                  <span className="saved-text">
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M10 3L4.5 8.5L2 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                    Saved
+                  </span>
+                ) : null}
+              </div>
 
-            <button 
-              className="remove-btn"
-              onClick={() => setShowDeleteModal(true)}
-            >
-              🗑️ Remove
-            </button>
+              <button 
+                className="remove-btn-icon"
+                onClick={() => setShowDeleteModal(true)}
+                title="Remove Item"
+              >
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M2 4H14M5.33333 4V2.66667C5.33333 2.29853 5.63181 2 6 2H10C10.3682 2 10.6667 2.29853 10.6667 2.66667V4M6.66667 7.33333V11.3333M9.33333 7.33333V11.3333M3.33333 4L4 12.6667C4 13.403 4.59695 14 5.33333 14H10.6667C11.403 14 12 13.403 12 12.6667L12.6667 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
       </div>
