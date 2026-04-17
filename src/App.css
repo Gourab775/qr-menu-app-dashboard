@@ -4643,9 +4643,10 @@ body {
   padding: 40px 32px;
   max-width: 1400px;
   margin: 0 auto;
-  background: #09090b;
+  background: #09090b !important;
   min-height: 100vh;
   box-sizing: border-box;
+  display: block !important;
 }
 
 .saas-header {

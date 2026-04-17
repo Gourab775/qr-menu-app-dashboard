@@ -4,6 +4,7 @@ import {
   BarChart, Bar, PieChart, Pie, Cell, Legend, AreaChart, Area
 } from 'recharts'
 import { supabase } from '../lib/supabase'
+import './OverviewPage.css'
 
 const ACCENT = {
   green: '#22c55e',
@@ -100,6 +101,8 @@ export default function OverviewPage({ restaurantId }) {
       
       list.forEach(o => {
         if (!o?.created_at) return
+        if (o.status === 'rejected') return // Exclude rejected orders from main revenue
+
         const day = new Date(o.created_at).toISOString().split('T')[0]
         dailyRev[day] = (dailyRev[day] || 0) + (Number(o.total_price) || 0)
         dailyOrd[day] = (dailyOrd[day] || 0) + 1
@@ -110,9 +113,9 @@ export default function OverviewPage({ restaurantId }) {
       
       const items = {}
       const payments = { counter: 0, online: 0 }
-      const recent = []
       
       list.forEach(o => {
+        if (o.status === 'rejected') return
         const pm = (o.payment_mode || 'counter').toLowerCase()
         payments[pm === 'online' ? 'online' : 'counter']++
 
@@ -122,21 +125,11 @@ export default function OverviewPage({ restaurantId }) {
           const name = it.name || 'Item'
           items[name] = (items[name] || 0) + (Number(it.quantity) || 1)
         })
-
-        if (recent.length < 10) {
-          recent.push({
-            id: o.id,
-            code: o.order_code || o.id.slice(0, 8).toUpperCase(),
-            total: o.total_price || 0,
-            status: o.status,
-            time: new Date(o.created_at)
-          })
-        }
       })
 
       const topItems = Object.entries(items)
         .sort((a, b) => b[1] - a[1])
-        .slice(0, 8)
+        .slice(0, 5)
         .map(([name, count]) => ({ name, count }))
 
       const chartData = allDays.map(day => {
@@ -165,7 +158,6 @@ export default function OverviewPage({ restaurantId }) {
         topItems,
         chartData,
         payData,
-        recentActivity: recent.sort((a, b) => b.time - a.time)
       })
     } catch (err) {
       console.error('Analytics fetch failed:', err)
@@ -178,7 +170,7 @@ export default function OverviewPage({ restaurantId }) {
 
   const emptyState = () => ({
     ordersTotal: 0, revenueTotal: 0, revenuePending: 0, avgOrder: 0, itemsSold: 0,
-    completedOrders: 0, pendingOrders: 0, topItems: [], chartData: [], payData: [], recentActivity: []
+    completedOrders: 0, pendingOrders: 0, topItems: [], chartData: [], payData: []
   })
 
   useEffect(() => { fetchAnalytics() }, [fetchAnalytics])
@@ -187,25 +179,25 @@ export default function OverviewPage({ restaurantId }) {
 
   const tabs = [
     { id: 'today', label: 'Today' },
-    { id: '7days', label: '7D' },
-    { id: '30days', label: '30D' },
-    { id: 'all', label: 'All' }
+    { id: '7days', label: 'Last 7 Days' },
+    { id: '30days', label: 'Last 30 Days' },
+    { id: 'all', label: 'All Time' }
   ]
 
-  const filterLabel = filter === 'today' ? 'Today' : filter === '7days' ? 'Last 7 Days' : filter === '30days' ? 'Last 30 Days' : 'All Time'
+  const filterLabel = tabs.find(t => t.id === filter)?.label || 'Overview'
 
   return (
-    <div className="saas-dashboard">
-      <div className="saas-header">
-        <div className="saas-header-left">
-          <h1>Analytics</h1>
-          <p>Performance insights for {filterLabel}</p>
+    <div className="analytics-dashboard">
+      <div className="analytics-header">
+        <div className="analytics-header-left">
+          <h1>Analytics Overview</h1>
+          <p>Performance insights for {filterLabel.toLowerCase()}</p>
         </div>
-        <div className="saas-filters">
+        <div className="analytics-filters">
           {tabs.map(t => (
             <button
               key={t.id}
-              className={`saas-filter-btn ${filter === t.id ? 'active' : ''}`}
+              className={`analytics-filter-btn ${filter === t.id ? 'active' : ''}`}
               onClick={() => setFilter(t.id)}
             >
               {t.label}
@@ -215,220 +207,190 @@ export default function OverviewPage({ restaurantId }) {
       </div>
 
       {loading ? (
-        <div className="saas-loading">
-          <div className="saas-kpi-grid">
-            {[1,2,3,4,5,6].map(i => (
-              <div key={i} className="saas-kpi-card saas-skel">
-                <div className="saas-skel-icon" />
-                <div className="saas-skel-content">
-                  <div className="saas-skel-line sm" />
-                  <div className="saas-skel-line lg" />
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="saas-charts-row">
-            <div className="saas-chart-card saas-skel"><div className="saas-skel-area" /></div>
-            <div className="saas-chart-card saas-skel"><div className="saas-skel-area" /></div>
-          </div>
+        <div className="analytics-loading">
+          <div className="analytics-spinner" />
+          <p>Analyzing restaurant performance...</p>
         </div>
       ) : error ? (
-        <div className="saas-error">
-          <span>!</span>
+        <div className="analytics-empty">
           <h3>Failed to load analytics</h3>
           <p>{error}</p>
-          <button onClick={fetchAnalytics}>Retry</button>
+          <button className="analytics-filter-btn active" style={{marginTop: '16px'}} onClick={fetchAnalytics}>Retry</button>
         </div>
       ) : metrics ? (
         <>
-          <div className="saas-kpi-grid">
-            <div className="saas-kpi-card primary">
-              <div className="saas-kpi-icon">R</div>
-              <div className="saas-kpi-content">
-                <span className="saas-kpi-label">Total Revenue</span>
-                <span className="saas-kpi-value">{formatCurrency(metrics.revenueTotal)}</span>
-                {metrics.revenuePending > 0 && <span className="saas-kpi-sub">{formatCurrency(metrics.revenuePending)} pending</span>}
+          <div className="kpi-grid">
+            <div className="kpi-card">
+              <div className="kpi-icon-wrap revenue">💰</div>
+              <div className="kpi-info">
+                <span className="kpi-label">Total Revenue</span>
+                <span className="kpi-value">{formatCurrency(metrics.revenueTotal)}</span>
+                {metrics.revenuePending > 0 ? (
+                  <span className="kpi-sub neutral">{formatCurrency(metrics.revenuePending)} pending</span>
+                ) : (
+                  <span className="kpi-sub positive">From {metrics.completedOrders} completed</span>
+                )}
               </div>
             </div>
 
-            <div className="saas-kpi-card">
-              <div className="saas-kpi-icon">O</div>
-              <div className="saas-kpi-content">
-                <span className="saas-kpi-label">Total Orders</span>
-                <span className="saas-kpi-value">{metrics.ordersTotal}</span>
-                <span className="saas-kpi-sub">{metrics.completedOrders} completed</span>
+            <div className="kpi-card">
+              <div className="kpi-icon-wrap orders">📦</div>
+              <div className="kpi-info">
+                <span className="kpi-label">Total Orders</span>
+                <span className="kpi-value">{metrics.ordersTotal}</span>
+                <span className="kpi-sub neutral">{metrics.completedOrders} completed • {metrics.pendingOrders} pending</span>
               </div>
             </div>
 
-            <div className="saas-kpi-card">
-              <div className="saas-kpi-icon">C</div>
-              <div className="saas-kpi-content">
-                <span className="saas-kpi-label">Completed</span>
-                <span className="saas-kpi-value">{metrics.completedOrders}</span>
-                <span className="saas-kpi-sub">{fmtPct(metrics.completedOrders, metrics.ordersTotal)}% rate</span>
+            <div className="kpi-card">
+              <div className="kpi-icon-wrap avg">📈</div>
+              <div className="kpi-info">
+                <span className="kpi-label">Average Order</span>
+                <span className="kpi-value">{formatCurrency(metrics.avgOrder)}</span>
+                <span className="kpi-sub positive">Per successful order</span>
               </div>
             </div>
 
-            <div className="saas-kpi-card">
-              <div className="saas-kpi-icon">A</div>
-              <div className="saas-kpi-content">
-                <span className="saas-kpi-label">Avg Order</span>
-                <span className="saas-kpi-value">{formatCurrency(metrics.avgOrder)}</span>
-                <span className="saas-kpi-sub">per order</span>
-              </div>
-            </div>
-
-            <div className="saas-kpi-card">
-              <div className="saas-kpi-icon">I</div>
-              <div className="saas-kpi-content">
-                <span className="saas-kpi-label">Items Sold</span>
-                <span className="saas-kpi-value">{metrics.itemsSold}</span>
-                <span className="saas-kpi-sub">total items</span>
-              </div>
-            </div>
-
-            <div className="saas-kpi-card">
-              <div className="saas-kpi-icon">P</div>
-              <div className="saas-kpi-content">
-                <span className="saas-kpi-label">Pending</span>
-                <span className="saas-kpi-value">{metrics.pendingOrders}</span>
-                <span className="saas-kpi-sub">awaiting</span>
+            <div className="kpi-card">
+              <div className="kpi-icon-wrap items">🍽️</div>
+              <div className="kpi-info">
+                <span className="kpi-label">Items Sold</span>
+                <span className="kpi-value">{metrics.itemsSold}</span>
+                <span className="kpi-sub neutral">Across all categories</span>
               </div>
             </div>
           </div>
 
-          <div className="saas-charts-row">
-            <div className="saas-chart-card">
-              <div className="saas-chart-header">
-                <h3>Revenue Trend</h3>
-                <span>Daily revenue over time</span>
+          <div className="charts-grid">
+            <div className="chart-card">
+              <div className="chart-header">
+                <h3>Revenue & Order Trend</h3>
+                <p>Daily performance over the selected period</p>
               </div>
-              <div className="saas-chart-body">
-                <ResponsiveContainer width="100%" height={320}>
+              <div className="chart-body">
+                <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={metrics.chartData}>
                     <defs>
-                      <linearGradient id="saasRevGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor={CHART_COLORS.revenue} stopOpacity={0.2}/>
+                      <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor={CHART_COLORS.revenue} stopOpacity={0.3}/>
                         <stop offset="95%" stopColor={CHART_COLORS.revenue} stopOpacity={0}/>
                       </linearGradient>
                     </defs>
-                    <XAxis dataKey="label" stroke="#71717a" fontSize={11} tickLine={false} axisLine={false} />
-                    <YAxis stroke="#71717a" fontSize={11} tickLine={false} axisLine={false} />
+                    <XAxis dataKey="label" stroke="#71717a" fontSize={12} tickLine={false} axisLine={false} dy={10} />
+                    <YAxis yAxisId="left" stroke="#71717a" fontSize={12} tickLine={false} axisLine={false} dx={-10} tickFormatter={(value) => `₹${value}`} />
+                    <YAxis yAxisId="right" orientation="right" stroke="#71717a" fontSize={12} tickLine={false} axisLine={false} dx={10} />
                     <Tooltip 
-                      contentStyle={{ background: '#18181b', border: '1px solid #27272a', borderRadius: '8px', fontSize: 12 }}
-                      formatter={(v) => [formatCurrency(v), 'Revenue']}
-                      labelStyle={{ color: '#fafafa' }}
+                      contentStyle={{ background: 'rgba(24, 24, 27, 0.9)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', boxShadow: '0 8px 32px rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)' }}
+                      labelStyle={{ color: '#a1a1aa', fontWeight: 'bold', marginBottom: '8px' }}
+                      itemStyle={{ fontWeight: '500' }}
                     />
-                    <Area type="monotone" dataKey="revenue" stroke={CHART_COLORS.revenue} strokeWidth={2} fill="url(#saasRevGrad)" />
+                    <Area yAxisId="left" type="monotone" name="Revenue" dataKey="revenue" stroke={CHART_COLORS.revenue} strokeWidth={3} fillOpacity={1} fill="url(#colorRev)" />
+                    <Line yAxisId="right" type="monotone" name="Orders" dataKey="orders" stroke={CHART_COLORS.orders} strokeWidth={2} dot={{r: 4, strokeWidth: 2}} activeDot={{r: 6}} />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
             </div>
 
-            <div className="saas-chart-card">
-              <div className="saas-chart-header">
-                <h3>Order Volume</h3>
-                <span>Daily order count</span>
+            <div className="chart-card">
+              <div className="chart-header">
+                <h3>Payment Breakdown</h3>
+                <p>Online vs Counter payments</p>
               </div>
-              <div className="saas-chart-body">
-                <ResponsiveContainer width="100%" height={320}>
-                  <BarChart data={metrics.chartData}>
-                    <XAxis dataKey="label" stroke="#71717a" fontSize={11} tickLine={false} axisLine={false} />
-                    <YAxis stroke="#71717a" fontSize={11} tickLine={false} axisLine={false} />
-                    <Tooltip 
-                      contentStyle={{ background: '#18181b', border: '1px solid #27272a', borderRadius: '8px', fontSize: 12 }}
-                      labelStyle={{ color: '#fafafa' }}
-                    />
-                    <Bar dataKey="orders" fill={CHART_COLORS.orders} radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          </div>
-
-          <div className="saas-insights-row">
-            <div className="saas-insight-card">
-              <div className="saas-insight-header">
-                <h3>Top Selling Items</h3>
-              </div>
-              {metrics.topItems?.length ? (
-                <div className="saas-top-items">
-                  {metrics.topItems.map((item, i) => (
-                    <div key={item.name} className="saas-top-item">
-                      <span className="saas-rank">{i + 1}</span>
-                      <div className="saas-bar-track">
-                        <div className="saas-bar-fill" style={{ width: (item.count / metrics.topItems[0].count) * 100 + '%' }} />
-                      </div>
-                      <span className="saas-item-name">{item.name}</span>
-                      <span className="saas-item-count">{item.count}</span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="saas-empty">No data available</div>
-              )}
-            </div>
-
-            <div className="saas-insight-card">
-              <div className="saas-insight-header">
-                <h3>Payment Modes</h3>
-              </div>
-              {metrics.payData?.length ? (
-                <div className="saas-pie-wrap">
-                  <ResponsiveContainer width="100%" height={200}>
+              <div className="chart-body" style={{display: 'flex', alignItems: 'center'}}>
+                {metrics.payData?.length ? (
+                  <ResponsiveContainer width="100%" height={260}>
                     <PieChart>
                       <Pie
                         data={metrics.payData}
                         cx="50%"
                         cy="50%"
-                        innerRadius={50}
-                        outerRadius={75}
-                        paddingAngle={4}
+                        innerRadius={65}
+                        outerRadius={90}
+                        paddingAngle={5}
                         dataKey="value"
+                        stroke="none"
                       >
                         {metrics.payData.map(entry => <Cell key={entry.name} fill={entry.fill} />)}
                       </Pie>
-                      <Tooltip contentStyle={{ background: '#18181b', border: '1px solid #27272a', borderRadius: 6 }} />
-                      <Legend verticalAlign="bottom" formatter={v => <span style={{ color: '#a1a1aa', fontSize: 12 }}>{v}</span>} />
+                      <Tooltip 
+                        contentStyle={{ background: 'rgba(24, 24, 27, 0.9)', border: '1px solid #27272a', borderRadius: '8px' }}
+                        itemStyle={{ color: '#fff', fontWeight: 600 }}
+                      />
+                      <Legend verticalAlign="bottom" height={36} iconType="circle" formatter={v => <span style={{ color: '#e4e4e7', fontWeight: 500 }}>{v}</span>} />
                     </PieChart>
                   </ResponsiveContainer>
-                </div>
-              ) : (
-                <div className="saas-empty">No payment data</div>
-              )}
-            </div>
-
-            <div className="saas-insight-card">
-              <div className="saas-insight-header">
-                <h3>Recent Orders</h3>
+                ) : (
+                  <div className="analytics-empty" style={{width: '100%', padding: '20px', border: 'none'}}>No payment data</div>
+                )}
               </div>
-              {metrics.recentActivity?.length ? (
-                <div className="saas-activity">
-                  {metrics.recentActivity.map(o => (
-                    <div key={o.id} className="saas-activity-item">
-                      <div className={`saas-status-dot ${o.status === 'accepted' ? 'success' : o.status === 'rejected' ? 'error' : 'pending'}`}>
-                        {o.status === 'accepted' ? '✓' : o.status === 'rejected' ? '×' : '○'}
-                      </div>
-                      <div className="saas-activity-info">
-                        <span>#{o.code}</span>
-                        <span>{formatCurrency(o.total)} • {getTimeAgo(o.time)}</span>
+            </div>
+          </div>
+
+          <div className="insights-grid">
+            <div className="chart-card" style={{padding: '32px'}}>
+              <div className="chart-header" style={{marginBottom: '32px'}}>
+                <h3>🏆 Top Selling Items</h3>
+                <p>Most popular items by quantity sold</p>
+              </div>
+              {metrics.topItems?.length ? (
+                <div className="top-items-list">
+                  {metrics.topItems.map((item, i) => (
+                    <div key={item.name} className="top-item-row">
+                      <span className={`top-item-rank rank-${i + 1}`}>#{i + 1}</span>
+                      <div className="top-item-details">
+                        <div className="top-item-name-row">
+                          <span className="top-item-name">{item.name}</span>
+                          <span className="top-item-count">{item.count} Sold</span>
+                        </div>
+                        <div className="top-item-bar-bg">
+                          <div 
+                            className="top-item-bar-fill" 
+                            style={{ width: `${(item.count / metrics.topItems[0].count) * 100}%` }} 
+                          />
+                        </div>
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="saas-empty">No recent activity</div>
+                <div className="analytics-empty" style={{border: 'none', padding: '20px'}}>No item sales yet</div>
               )}
             </div>
-          </div>
 
-          {metrics.ordersTotal === 0 && (
-            <div className="saas-empty-state">
-              <span>���</span>
-              <h3>No orders recorded</h3>
-              <p>Orders will appear here once placed</p>
+            <div className="chart-card" style={{padding: '32px'}}>
+              <div className="chart-header" style={{marginBottom: '32px'}}>
+                <h3>📊 Key Conversion</h3>
+                <p>Analysis of successful order fulfillment</p>
+              </div>
+              <div style={{display:'flex', flexDirection:'column', gap:'24px', flex:1, justifyContent:'center'}}>
+                <div>
+                  <div style={{display:'flex', justifyContent:'space-between', marginBottom:'8px'}}>
+                    <span style={{color: '#a1a1aa', fontWeight: 500}}>Completion Rate</span>
+                    <span style={{color: '#fff', fontWeight: 700}}>{fmtPct(metrics.completedOrders, metrics.ordersTotal)}%</span>
+                  </div>
+                  <div className="top-item-bar-bg" style={{height:'12px', borderRadius:'6px'}}>
+                    <div className="top-item-bar-fill" style={{ width: `${fmtPct(metrics.completedOrders, metrics.ordersTotal)}%`, background: 'linear-gradient(90deg, #22c55e, #86efac)' }} />
+                  </div>
+                </div>
+
+                <div>
+                  <div style={{display:'flex', justifyContent:'space-between', marginBottom:'8px'}}>
+                    <span style={{color: '#a1a1aa', fontWeight: 500}}>Avg. Items Per Order</span>
+                    <span style={{color: '#fff', fontWeight: 700}}>
+                      {metrics.ordersTotal ? (metrics.itemsSold / metrics.ordersTotal).toFixed(1) : '0'}
+                    </span>
+                  </div>
+                </div>
+
+                {metrics.pendingOrders > 0 && (
+                  <div style={{padding:'16px', background:'rgba(245, 158, 11, 0.1)', border:'1px solid rgba(245, 158, 11, 0.2)', borderRadius:'12px'}}>
+                    <h4 style={{color:'#f59e0b', fontSize:'14px', marginBottom:'4px'}}>Action Needed</h4>
+                    <p style={{color:'#d4d4d8', fontSize:'13px'}}>You have {metrics.pendingOrders} pending orders waiting to be processed.</p>
+                  </div>
+                )}
+              </div>
             </div>
-          )}
+          </div>
         </>
       ) : null}
     </div>
