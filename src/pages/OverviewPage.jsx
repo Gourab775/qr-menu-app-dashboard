@@ -129,7 +129,6 @@ export default function OverviewPage({ restaurantId }) {
             code: o.order_code || o.id.slice(0, 8).toUpperCase(),
             total: o.total_price || 0,
             status: o.status,
-            payment: o.payment_mode,
             time: new Date(o.created_at)
           })
         }
@@ -137,7 +136,7 @@ export default function OverviewPage({ restaurantId }) {
 
       const topItems = Object.entries(items)
         .sort((a, b) => b[1] - a[1])
-        .slice(0, 10)
+        .slice(0, 8)
         .map(([name, count]) => ({ name, count }))
 
       const chartData = allDays.map(day => {
@@ -196,17 +195,17 @@ export default function OverviewPage({ restaurantId }) {
   const filterLabel = filter === 'today' ? 'Today' : filter === '7days' ? 'Last 7 Days' : filter === '30days' ? 'Last 30 Days' : 'All Time'
 
   return (
-    <div className="analytics-page">
-      <div className="analytics-header">
-        <div className="analytics-header-left">
-          <h1 className="analytics-title">Analytics</h1>
-          <p className="analytics-subtitle">Performance insights for {filterLabel}</p>
+    <div className="saas-dashboard">
+      <div className="saas-header">
+        <div className="saas-header-left">
+          <h1>Analytics</h1>
+          <p>Performance insights for {filterLabel}</p>
         </div>
-        <div className="analytics-filters">
+        <div className="saas-filters">
           {tabs.map(t => (
             <button
               key={t.id}
-              className={`analytics-filter-btn ${filter === t.id ? 'active' : ''}`}
+              className={`saas-filter-btn ${filter === t.id ? 'active' : ''}`}
               onClick={() => setFilter(t.id)}
             >
               {t.label}
@@ -216,104 +215,99 @@ export default function OverviewPage({ restaurantId }) {
       </div>
 
       {loading ? (
-        <div className="analytics-loading">
-          <div className="analytics-kpi-grid">
+        <div className="saas-loading">
+          <div className="saas-kpi-grid">
             {[1,2,3,4,5,6].map(i => (
-              <div key={i} className="analytics-kpi-card analytics-skel">
-                <div className="analytics-skel-icon" />
-                <div className="analytics-skel-content">
-                  <div className="analytics-skel-line sm" />
-                  <div className="analytics-skel-line lg" />
+              <div key={i} className="saas-kpi-card saas-skel">
+                <div className="saas-skel-icon" />
+                <div className="saas-skel-content">
+                  <div className="saas-skel-line sm" />
+                  <div className="saas-skel-line lg" />
                 </div>
               </div>
             ))}
           </div>
-          <div className="analytics-charts-row">
-            <div className="analytics-chart-card analytics-skel"><div className="analytics-skel-area" /></div>
-            <div className="analytics-chart-card analytics-skel"><div className="analytics-skel-area" /></div>
-          </div>
-          <div className="analytics-insights-row">
-            <div className="analytics-insight-card analytics-skel" />
-            <div className="analytics-insight-card analytics-skel" />
-            <div className="analytics-insight-card analytics-skel" />
+          <div className="saas-charts-row">
+            <div className="saas-chart-card saas-skel"><div className="saas-skel-area" /></div>
+            <div className="saas-chart-card saas-skel"><div className="saas-skel-area" /></div>
           </div>
         </div>
       ) : error ? (
-        <div className="analytics-error">
-          <span className="analytics-error-icon">!</span>
+        <div className="saas-error">
+          <span>!</span>
           <h3>Failed to load analytics</h3>
           <p>{error}</p>
-          <button className="analytics-retry-btn" onClick={fetchAnalytics}>Retry</button>
+          <button onClick={fetchAnalytics}>Retry</button>
         </div>
       ) : metrics ? (
         <>
-          <div className="analytics-kpi-grid">
-            <div className="analytics-kpi-card analytics-highlight">
-              <div className="analytics-kpi-icon">R</div>
-              <div className="analytics-kpi-content">
-                <span className="analytics-kpi-label">Total Revenue</span>
-                <span className="analytics-kpi-value">{formatCurrency(metrics.revenueTotal)}</span>
-                {metrics.revenuePending > 0 && <span className="analytics-kpi-sub">{formatCurrency(metrics.revenuePending)} pending</span>}
+          <div className="saas-kpi-grid">
+            <div className="saas-kpi-card primary">
+              <div className="saas-kpi-icon">R</div>
+              <div className="saas-kpi-content">
+                <span className="saas-kpi-label">Total Revenue</span>
+                <span className="saas-kpi-value">{formatCurrency(metrics.revenueTotal)}</span>
+                {metrics.revenuePending > 0 && <span className="saas-kpi-sub">{formatCurrency(metrics.revenuePending)} pending</span>}
               </div>
             </div>
 
-            <div className="analytics-kpi-card">
-              <div className="analytics-kpi-icon">O</div>
-              <div className="analytics-kpi-content">
-                <span className="analytics-kpi-label">Total Orders</span>
-                <span className="analytics-kpi-value">{metrics.ordersTotal}</span>
-                <span className="analytics-kpi-sub">{metrics.completedOrders} completed</span>
+            <div className="saas-kpi-card">
+              <div className="saas-kpi-icon">O</div>
+              <div className="saas-kpi-content">
+                <span className="saas-kpi-label">Total Orders</span>
+                <span className="saas-kpi-value">{metrics.ordersTotal}</span>
+                <span className="saas-kpi-sub">{metrics.completedOrders} completed</span>
               </div>
             </div>
 
-            <div className="analytics-kpi-card">
-              <div className="analytics-kpi-icon">C</div>
-              <div className="analytics-kpi-content">
-                <span className="analytics-kpi-label">Completed</span>
-                <span className="analytics-kpi-value">{metrics.completedOrders}</span>
-                <span className="analytics-kpi-sub">{fmtPct(metrics.completedOrders, metrics.ordersTotal)}% rate</span>
+            <div className="saas-kpi-card">
+              <div className="saas-kpi-icon">C</div>
+              <div className="saas-kpi-content">
+                <span className="saas-kpi-label">Completed</span>
+                <span className="saas-kpi-value">{metrics.completedOrders}</span>
+                <span className="saas-kpi-sub">{fmtPct(metrics.completedOrders, metrics.ordersTotal)}% rate</span>
               </div>
             </div>
 
-            <div className="analytics-kpi-card">
-              <div className="analytics-kpi-icon">A</div>
-              <div className="analytics-kpi-content">
-                <span className="analytics-kpi-label">Avg Order</span>
-                <span className="analytics-kpi-value">{formatCurrency(metrics.avgOrder)}</span>
-                <span className="analytics-kpi-sub">per order</span>
+            <div className="saas-kpi-card">
+              <div className="saas-kpi-icon">A</div>
+              <div className="saas-kpi-content">
+                <span className="saas-kpi-label">Avg Order</span>
+                <span className="saas-kpi-value">{formatCurrency(metrics.avgOrder)}</span>
+                <span className="saas-kpi-sub">per order</span>
               </div>
             </div>
 
-            <div className="analytics-kpi-card">
-              <div className="analytics-kpi-icon">I</div>
-              <div className="analytics-kpi-content">
-                <span className="analytics-kpi-label">Items Sold</span>
-                <span className="analytics-kpi-value">{metrics.itemsSold}</span>
-                <span className="analytics-kpi-sub">total items</span>
+            <div className="saas-kpi-card">
+              <div className="saas-kpi-icon">I</div>
+              <div className="saas-kpi-content">
+                <span className="saas-kpi-label">Items Sold</span>
+                <span className="saas-kpi-value">{metrics.itemsSold}</span>
+                <span className="saas-kpi-sub">total items</span>
               </div>
             </div>
 
-            <div className="analytics-kpi-card">
-              <div className="analytics-kpi-icon">P</div>
-              <div className="analytics-kpi-content">
-                <span className="analytics-kpi-label">Pending</span>
-                <span className="analytics-kpi-value">{metrics.pendingOrders}</span>
-                <span className="analytics-kpi-sub">awaiting</span>
+            <div className="saas-kpi-card">
+              <div className="saas-kpi-icon">P</div>
+              <div className="saas-kpi-content">
+                <span className="saas-kpi-label">Pending</span>
+                <span className="saas-kpi-value">{metrics.pendingOrders}</span>
+                <span className="saas-kpi-sub">awaiting</span>
               </div>
             </div>
           </div>
 
-          <div className="analytics-charts-row">
-            <div className="analytics-chart-card">
-              <div className="analytics-chart-header">
+          <div className="saas-charts-row">
+            <div className="saas-chart-card">
+              <div className="saas-chart-header">
                 <h3>Revenue Trend</h3>
                 <span>Daily revenue over time</span>
               </div>
-              <div className="analytics-chart-body">
-                <ResponsiveContainer width="100%" height={300}>
+              <div className="saas-chart-body">
+                <ResponsiveContainer width="100%" height={320}>
                   <AreaChart data={metrics.chartData}>
                     <defs>
-                      <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
+                      <linearGradient id="saasRevGrad" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor={CHART_COLORS.revenue} stopOpacity={0.2}/>
                         <stop offset="95%" stopColor={CHART_COLORS.revenue} stopOpacity={0}/>
                       </linearGradient>
@@ -325,19 +319,19 @@ export default function OverviewPage({ restaurantId }) {
                       formatter={(v) => [formatCurrency(v), 'Revenue']}
                       labelStyle={{ color: '#fafafa' }}
                     />
-                    <Area type="monotone" dataKey="revenue" stroke={CHART_COLORS.revenue} strokeWidth={2} fill="url(#revGrad)" />
+                    <Area type="monotone" dataKey="revenue" stroke={CHART_COLORS.revenue} strokeWidth={2} fill="url(#saasRevGrad)" />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
             </div>
 
-            <div className="analytics-chart-card">
-              <div className="analytics-chart-header">
+            <div className="saas-chart-card">
+              <div className="saas-chart-header">
                 <h3>Order Volume</h3>
                 <span>Daily order count</span>
               </div>
-              <div className="analytics-chart-body">
-                <ResponsiveContainer width="100%" height={300}>
+              <div className="saas-chart-body">
+                <ResponsiveContainer width="100%" height={320}>
                   <BarChart data={metrics.chartData}>
                     <XAxis dataKey="label" stroke="#71717a" fontSize={11} tickLine={false} axisLine={false} />
                     <YAxis stroke="#71717a" fontSize={11} tickLine={false} axisLine={false} />
@@ -352,35 +346,35 @@ export default function OverviewPage({ restaurantId }) {
             </div>
           </div>
 
-          <div className="analytics-insights-row">
-            <div className="analytics-insight-card">
-              <div className="analytics-insight-header">
+          <div className="saas-insights-row">
+            <div className="saas-insight-card">
+              <div className="saas-insight-header">
                 <h3>Top Selling Items</h3>
               </div>
               {metrics.topItems?.length ? (
-                <div className="analytics-top-items">
+                <div className="saas-top-items">
                   {metrics.topItems.map((item, i) => (
-                    <div key={item.name} className="analytics-top-item">
-                      <span className="analytics-rank">{i + 1}</span>
-                      <div className="analytics-bar-track">
-                        <div className="analytics-bar-fill" style={{ width: (item.count / metrics.topItems[0].count) * 100 + '%' }} />
+                    <div key={item.name} className="saas-top-item">
+                      <span className="saas-rank">{i + 1}</span>
+                      <div className="saas-bar-track">
+                        <div className="saas-bar-fill" style={{ width: (item.count / metrics.topItems[0].count) * 100 + '%' }} />
                       </div>
-                      <span className="analytics-item-name">{item.name}</span>
-                      <span className="analytics-item-count">{item.count}</span>
+                      <span className="saas-item-name">{item.name}</span>
+                      <span className="saas-item-count">{item.count}</span>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="analytics-empty">No data available</div>
+                <div className="saas-empty">No data available</div>
               )}
             </div>
 
-            <div className="analytics-insight-card">
-              <div className="analytics-insight-header">
+            <div className="saas-insight-card">
+              <div className="saas-insight-header">
                 <h3>Payment Modes</h3>
               </div>
               {metrics.payData?.length ? (
-                <div className="analytics-pie-wrap">
+                <div className="saas-pie-wrap">
                   <ResponsiveContainer width="100%" height={200}>
                     <PieChart>
                       <Pie
@@ -400,37 +394,37 @@ export default function OverviewPage({ restaurantId }) {
                   </ResponsiveContainer>
                 </div>
               ) : (
-                <div className="analytics-empty">No payment data</div>
+                <div className="saas-empty">No payment data</div>
               )}
             </div>
 
-            <div className="analytics-insight-card">
-              <div className="analytics-insight-header">
+            <div className="saas-insight-card">
+              <div className="saas-insight-header">
                 <h3>Recent Orders</h3>
               </div>
               {metrics.recentActivity?.length ? (
-                <div className="analytics-activity">
+                <div className="saas-activity">
                   {metrics.recentActivity.map(o => (
-                    <div key={o.id} className="analytics-activity-item">
-                      <div className={`analytics-status-dot ${o.status === 'accepted' ? 'success' : o.status === 'rejected' ? 'error' : 'pending'}`}>
-                        {o.status === 'accepted' ? '✓' : o.status === 'rejected' ? 'X' : '...'}
+                    <div key={o.id} className="saas-activity-item">
+                      <div className={`saas-status-dot ${o.status === 'accepted' ? 'success' : o.status === 'rejected' ? 'error' : 'pending'}`}>
+                        {o.status === 'accepted' ? '✓' : o.status === 'rejected' ? '×' : '○'}
                       </div>
-                      <div className="analytics-activity-info">
-                        <span className="analytics-order-code">#{o.code}</span>
-                        <span className="analytics-order-meta">{formatCurrency(o.total)} - {getTimeAgo(o.time)}</span>
+                      <div className="saas-activity-info">
+                        <span>#{o.code}</span>
+                        <span>{formatCurrency(o.total)} • {getTimeAgo(o.time)}</span>
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="analytics-empty">No recent activity</div>
+                <div className="saas-empty">No recent activity</div>
               )}
             </div>
           </div>
 
           {metrics.ordersTotal === 0 && (
-            <div className="analytics-empty-state">
-              <span>A</span>
+            <div className="saas-empty-state">
+              <span>���</span>
               <h3>No orders recorded</h3>
               <p>Orders will appear here once placed</p>
             </div>
