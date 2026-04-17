@@ -265,40 +265,54 @@ export default function OverviewPage({ restaurantId }) {
         <>
           <div className="kpi-grid">
             <div className="kpi-card primary">
-              <div className="kpi-header">
+              <div className="kpi-icon">💰</div>
+              <div className="kpi-content">
                 <span className="kpi-label">{getRangeLabel()} Revenue</span>
-                <span className="kpi-badge success">Confirmed</span>
+                <span className="kpi-value">{formatCurrency(data.revenue)}</span>
+                {data.pendingRevenue > 0 && (
+                  <span className="kpi-meta">{formatCurrency(data.pendingRevenue)} pending</span>
+                )}
               </div>
-              <div className="kpi-value">{formatCurrency(data.revenue)}</div>
-              {data.pendingRevenue > 0 && (
-                <div className="kpi-meta">{formatCurrency(data.pendingRevenue)} pending</div>
-              )}
             </div>
 
             <div className="kpi-card">
-              <div className="kpi-header">
+              <div className="kpi-icon">📦</div>
+              <div className="kpi-content">
                 <span className="kpi-label">Total Orders</span>
+                <span className="kpi-value">{data.orders}</span>
+                {data.completedOrders > 0 && (
+                  <span className="kpi-meta">{data.completedOrders} completed</span>
+                )}
               </div>
-              <div className="kpi-value">{data.orders}</div>
-              {data.completedOrders > 0 && (
-                <div className="kpi-meta">{data.completedOrders} completed</div>
-              )}
             </div>
 
             <div className="kpi-card">
-              <div className="kpi-header">
+              <div className="kpi-icon">✅</div>
+              <div className="kpi-content">
+                <span className="kpi-label">Completed</span>
+                <span className="kpi-value">{data.completedOrders}</span>
+                <span className="kpi-meta">
+                  {data.orders > 0 ? Math.round(data.completedOrders / data.orders * 100) : 0}% of total
+                </span>
+              </div>
+            </div>
+
+            <div className="kpi-card">
+              <div className="kpi-icon">📊</div>
+              <div className="kpi-content">
                 <span className="kpi-label">Avg Order Value</span>
+                <span className="kpi-value">{formatCurrency(data.avgOrderValue)}</span>
+                <span className="kpi-meta">per order</span>
               </div>
-              <div className="kpi-value">{formatCurrency(data.avgOrderValue)}</div>
-              <div className="kpi-meta">per order</div>
             </div>
 
             <div className="kpi-card">
-              <div className="kpi-header">
+              <div className="kpi-icon">🍽️</div>
+              <div className="kpi-content">
                 <span className="kpi-label">Items Sold</span>
+                <span className="kpi-value">{data.itemsSold}</span>
+                <span className="kpi-meta">total items</span>
               </div>
-              <div className="kpi-value">{data.itemsSold}</div>
-              <div className="kpi-meta">total items</div>
             </div>
           </div>
 
