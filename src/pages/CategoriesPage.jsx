@@ -110,13 +110,12 @@ export default function CategoriesPage({ restaurantId }) {
   if (loading) {
     return (
       <div className="categories-page">
-        <div className="loading-grid">
-          {[1, 2, 3].map(i => (
-            <div key={i} className="skeleton-card">
-              <div className="skeleton-line"></div>
-              <div className="skeleton-line short"></div>
-            </div>
-          ))}
+        <div className="skeleton-container">
+          <div className="skeleton-grid">
+            {[1, 2, 3, 4].map(i => (
+              <div key={i} className="skeleton skeleton-card"></div>
+            ))}
+          </div>
         </div>
       </div>
     )

@@ -207,9 +207,17 @@ export default function OverviewPage({ restaurantId }) {
       </div>
 
       {loading ? (
-        <div className="analytics-loading">
-          <div className="analytics-spinner" />
-          <p>Analyzing restaurant performance...</p>
+        <div className="skeleton-container">
+          <div className="skeleton-grid">
+            <div className="skeleton skeleton-card"></div>
+            <div className="skeleton skeleton-card"></div>
+            <div className="skeleton skeleton-card"></div>
+            <div className="skeleton skeleton-card"></div>
+          </div>
+          <div className="skeleton-grid" style={{ marginTop: '24px' }}>
+            <div className="skeleton skeleton-card" style={{ height: '320px', gridColumn: 'span 2' }}></div>
+            <div className="skeleton skeleton-card" style={{ height: '320px' }}></div>
+          </div>
         </div>
       ) : error ? (
         <div className="analytics-empty">

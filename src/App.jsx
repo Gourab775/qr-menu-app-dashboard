@@ -14,6 +14,7 @@ import OverviewPage from './pages/OverviewPage'
 import SettingsPage from './pages/SettingsPage'
 import { formatDateTime } from './utils/formatDateTime'
 import './App.css'
+import './theme.css'
 
 const ORDER_CACHE_KEY = 'dashboard_orders'
 
@@ -681,11 +682,11 @@ function App() {
     return (
       <div className="app">
         <div className="login-page">
-          <div className="login-card">
-            <div className="loading-state">
-              <div className="loading-spinner"></div>
-              <p>Loading...</p>
-            </div>
+          <div className="login-card skeleton-container">
+            <div className="skeleton skeleton-title" style={{ width: '60%', margin: '0 auto 24px' }}></div>
+            <div className="skeleton skeleton-text" style={{ width: '100%' }}></div>
+            <div className="skeleton skeleton-text" style={{ width: '100%' }}></div>
+            <div className="skeleton skeleton-button" style={{ width: '100%', marginTop: '16px' }}></div>
           </div>
         </div>
       </div>
@@ -739,9 +740,13 @@ function App() {
           <div className="profile-icon">👤</div>
         </header>
         <main className="main-content">
-          <div className="loading-state">
-            <div className="loading-spinner"></div>
-            <p>Loading dashboard...</p>
+          <div className="skeleton-container" style={{maxWidth: '800px', margin: '0 auto'}}>
+            <div className="skeleton-grid">
+              <div className="skeleton skeleton-card"></div>
+              <div className="skeleton skeleton-card"></div>
+              <div className="skeleton skeleton-card"></div>
+              <div className="skeleton skeleton-card"></div>
+            </div>
           </div>
         </main>
       </div>
