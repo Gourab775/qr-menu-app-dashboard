@@ -12,6 +12,7 @@ import FeaturedItemsPanel from './components/FeaturedItemsPanel'
 import CategoriesPage from './pages/CategoriesPage'
 import OverviewPage from './pages/OverviewPage'
 import SettingsPage from './pages/SettingsPage'
+import TablesPage from './pages/TablesPage'
 import { formatDateTime } from './utils/formatDateTime'
 import './App.css'
 import './theme.css'
@@ -340,18 +341,12 @@ function App() {
 
       let query = supabase
         .from('live_orders')
-        .select('id, restaurant_id, total_price, payment_mode, status, items, created_at, order_code, table_id, note')
+        .select('id, restaurant_id, total_price, payment_mode, status, items, created_at, order_code, table_id, note, restaurant_tables(table_number)')
         .eq('restaurant_id', restId)
         .order('created_at', { ascending: false })
         .limit(200)
 
-      const dateFilter = getDateFilter(orderFilter)
-      if (dateFilter?.start) {
-        query = query.gte('created_at', dateFilter.start)
-      }
-      if (dateFilter?.end) {
-        query = query.lte('created_at', dateFilter.end)
-      }
+      // Date filter removed to show all past orders as requested
 
       console.log('[LOAD] Executing query with restId:', restId)
       const { data, error } = await query
@@ -770,6 +765,7 @@ function App() {
           {activeTab === 'orders' && '📦 Orders'}
           {activeTab === 'menu_items' && '🍽️ Menu Items'}
           {activeTab === 'categories' && '📂 Categories'}
+          {activeTab === 'tables' && '🪑 Tables'}
           {activeTab === 'settings' && '⚙️ Settings'}
         </h2>
         <div className="profile-wrapper" ref={profileRef}>
@@ -876,6 +872,8 @@ function App() {
                     const isTimeout = minutesOld >= 10 && order.status !== 'accepted'
                     const isWarning = minutesOld >= 8 && minutesOld < 10 && order.status !== 'accepted'
                     
+                    const tableNum = order.restaurant_tables?.table_number || (order.table_id && !order.table_id.includes('-') ? order.table_id : null);
+
                     return (
                     <div 
                       key={order.id} 
@@ -897,8 +895,10 @@ function App() {
                       <div className="order-header">
                         <div className="order-header-left">
                           <span className="order-code">#{order.order_code || order.id.slice(0, 8).toUpperCase()}</span>
-                          {order.table_id && (
-                            <span className="order-table">Table {order.table_id}</span>
+                          {tableNum ? (
+                            <span className="order-table">Table {tableNum}</span>
+                          ) : (
+                            <span className="order-table" style={{ background: 'var(--border)', color: 'var(--text-muted)' }}>No Table</span>
                           )}
                           {isCounter && (
                             <span className="payment-badge">💵 Pay at Counter</span>
@@ -934,8 +934,8 @@ function App() {
                             {item.note && (
                               <span className="item-note">Note: {item.note}</span>
                             )}
-                            {item.table && (
-                              <span className="item-table">Table {item.table}</span>
+                            {(item.table || tableNum) && (
+                              <span className="item-table">Table {item.table || tableNum}</span>
                             )}
                           </div>
                         ))}
@@ -1086,6 +1086,8 @@ function App() {
 
         {activeTab === 'categories' && <CategoriesPage restaurantId={restaurantId} />}
 
+        {activeTab === 'tables' && <TablesPage restaurantId={restaurantId} />}
+
         {activeTab === 'settings' && <SettingsPage preferences={preferences} setPreferences={setPreferences} onToast={showToast} restaurantId={restaurantId} />}
 
         {activeTab === 'featured' && <FeaturedItemsPanel restaurantId={restaurantId} />}
@@ -1151,6 +1153,12 @@ function Sidebar({ isOpen, onClose, activeTab, setActiveTab }) {
             onClick={() => { setActiveTab('featured'); onClose(); }}
           >
             🎯 Featured
+          </button>
+          <button 
+            className={`nav-item ${activeTab === 'tables' ? 'active' : ''}`}
+            onClick={() => { setActiveTab('tables'); onClose(); }}
+          >
+            🪑 Tables
           </button>
           <button 
             className={`nav-item ${activeTab === 'settings' ? 'active' : ''}`}
