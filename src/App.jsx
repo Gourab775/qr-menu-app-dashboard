@@ -27,6 +27,7 @@ function App() {
   })
   const [currentUser, setCurrentUser] = useState(null)
   const [restaurantId, setRestaurantId] = useState(null)
+  const [restaurantSlug, setRestaurantSlug] = useState('')
   const [restaurantName, setRestaurantName] = useState('')
   const [orders, setOrders] = useState([])
   const [menuItems, setMenuItems] = useState([])
@@ -107,7 +108,7 @@ function App() {
       
       const { data: restaurantData, error: restError } = await supabase
         .from('restaurants')
-        .select('id')
+        .select('id, slug')
         .eq('user_id', user.id)
         .maybeSingle()
       
@@ -142,6 +143,13 @@ function App() {
       }
       
       setRestaurantId(restaurantIdValue)
+      if (restaurantData?.slug) {
+        setRestaurantSlug(restaurantData.slug)
+      } else if (restaurantIdValue) {
+        // Fallback fetch slug if missing
+        const { data: slugData } = await supabase.from('restaurants').select('slug').eq('id', restaurantIdValue).single()
+        if (slugData?.slug) setRestaurantSlug(slugData.slug)
+      }
     } catch (err) {
       console.error('Initialize error:', err)
       setInitError('Failed to initialize. Please try again.')
@@ -456,25 +464,40 @@ function App() {
           }
           lastPlayedOrderRef.current = newOrderId
           
-          setOrders(prev => {
-            const exists = prev.some(o => o.id === newOrderId)
-            if (exists) return prev
+          // Fetch table number for the new order to ensure it displays correctly
+          const fetchNewOrderWithTable = async () => {
+            const { data: freshOrder } = await supabase
+              .from('live_orders')
+              .select('*, restaurant_tables(table_number)')
+              .eq('id', newOrderId)
+              .single()
             
-            if (preferences.soundEnabled) {
-              playNotificationSound()
+            if (freshOrder) {
+              setOrders(prev => {
+                const exists = prev.some(o => o.id === newOrderId)
+                if (exists) {
+                  return prev.map(o => o.id === newOrderId ? { ...o, ...freshOrder } : o)
+                }
+                
+                if (preferences.soundEnabled) {
+                  playNotificationSound()
+                }
+                
+                if (preferences.orderNotifications) {
+                  const orderCode = freshOrder.order_code || newOrderId.slice(0, 8).toUpperCase()
+                  setNewOrderToast(`📦 New Order #${orderCode}`)
+                  setTimeout(() => setNewOrderToast(null), 4000)
+                }
+                
+                const newOrders = [freshOrder, ...prev]
+                return newOrders.sort((a, b) => 
+                  new Date(b.created_at) - new Date(a.created_at)
+                )
+              })
             }
-            
-            if (preferences.orderNotifications) {
-              const orderCode = payload.new.order_code || newOrderId.slice(0, 8).toUpperCase()
-              setNewOrderToast(`📦 New Order #${orderCode}`)
-              setTimeout(() => setNewOrderToast(null), 4000)
-            }
-            
-            const newOrders = [payload.new, ...prev]
-            return newOrders.sort((a, b) => 
-              new Date(b.created_at) - new Date(a.created_at)
-            )
-          })
+          }
+
+          fetchNewOrderWithTable()
         }
       )
       .on(
@@ -872,7 +895,7 @@ function App() {
                     const isTimeout = minutesOld >= 10 && order.status !== 'accepted'
                     const isWarning = minutesOld >= 8 && minutesOld < 10 && order.status !== 'accepted'
                     
-                    const tableNum = order.restaurant_tables?.table_number || (order.table_id && !order.table_id.includes('-') ? order.table_id : null);
+                    const tableNum = order.restaurant_tables?.table_number;
 
                     return (
                     <div 
@@ -1086,7 +1109,7 @@ function App() {
 
         {activeTab === 'categories' && <CategoriesPage restaurantId={restaurantId} />}
 
-        {activeTab === 'tables' && <TablesPage restaurantId={restaurantId} />}
+        {activeTab === 'tables' && <TablesPage restaurantId={restaurantId} restaurantSlug={restaurantSlug} />}
 
         {activeTab === 'settings' && <SettingsPage preferences={preferences} setPreferences={setPreferences} onToast={showToast} restaurantId={restaurantId} />}
 

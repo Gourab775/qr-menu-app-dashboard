@@ -1,9 +1,12 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 
-const BASE_URL = 'https://qr-menu-app-gamma.vercel.app/desi-spice-kitchen';
-
-export default function TablesPage({ restaurantId }) {
+export default function TablesPage({ restaurantId, restaurantSlug }) {
+  const BASE_URL = `${window.location.origin.replace('5175', '5173')}/${restaurantSlug || 'default'}`;
+  // Use a fallback or the production URL if origin is not suitable
+  const FINAL_BASE_URL = window.location.origin.includes('localhost') 
+    ? BASE_URL 
+    : `https://qr-menu-app-gamma.vercel.app/${restaurantSlug || 'default'}`;
   const [tables, setTables] = useState([]);
   const [loading, setLoading] = useState(true);
   const [newTableNum, setNewTableNum] = useState('');
@@ -99,8 +102,8 @@ export default function TablesPage({ restaurantId }) {
     }
   };
 
-  const handlePrintQR = (id, tableNum) => {
-    const qrUrl = `${BASE_URL}?table=${encodeURIComponent(id)}`;
+  const handlePrintQR = (id, tableNum, tableToken) => {
+    const qrUrl = `${FINAL_BASE_URL}?table=${encodeURIComponent(tableToken || id)}`;
     const qrImageSrc = `https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=${encodeURIComponent(qrUrl)}`;
     
     const printWindow = window.open('', '_blank');
@@ -181,7 +184,7 @@ export default function TablesPage({ restaurantId }) {
       ) : (
         <div className="menu-list" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px' }}>
           {tables.map(table => {
-            const qrUrl = `${BASE_URL}?table=${encodeURIComponent(table.id)}`;
+            const qrUrl = `${FINAL_BASE_URL}?table=${encodeURIComponent(table.table_token || table.id)}`;
             const qrImageSrc = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrUrl)}&margin=10`;
             
             return (
@@ -197,7 +200,7 @@ export default function TablesPage({ restaurantId }) {
                   <button 
                     className="bill-btn" 
                     style={{ flex: 1, padding: '8px', fontSize: '0.9rem' }}
-                    onClick={() => handlePrintQR(table.id, table.table_number)}
+                    onClick={() => handlePrintQR(table.id, table.table_number, table.table_token)}
                   >
                     🖨️ Print QR
                   </button>
