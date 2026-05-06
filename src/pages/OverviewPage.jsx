@@ -180,8 +180,7 @@ export default function OverviewPage({ restaurantId }) {
   const tabs = [
     { id: 'today', label: 'Today' },
     { id: '7days', label: 'Last 7 Days' },
-    { id: '30days', label: 'Last 30 Days' },
-    { id: 'all', label: 'All Time' }
+    { id: '30days', label: 'Last 30 Days' }
   ]
 
   const filterLabel = tabs.find(t => t.id === filter)?.label || 'Overview'

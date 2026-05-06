@@ -30,6 +30,18 @@ export default function TablesPage({ restaurantId, restaurantSlug }) {
 
       if (err) throw err;
       
+      // Auto-populate missing tokens for legacy tables
+      const missingTokens = (data || []).filter(t => !t.table_token);
+      if (missingTokens.length > 0) {
+        console.warn(`Found ${missingTokens.length} tables without tokens. Auto-populating...`);
+        for (const table of missingTokens) {
+          const token = crypto.randomUUID();
+          await supabase.from('restaurant_tables').update({ table_token: token }).eq('id', table.id);
+        }
+        loadTables();
+        return;
+      }
+
       // Sort numerically
       const sorted = (data || []).sort((a, b) => {
         const numA = Number(a.table_number) || 0;
@@ -103,7 +115,11 @@ export default function TablesPage({ restaurantId, restaurantSlug }) {
   };
 
   const handlePrintQR = (id, tableNum, tableToken) => {
-    const qrUrl = `${FINAL_BASE_URL}?table=${encodeURIComponent(tableToken || id)}`;
+    if (!tableToken) {
+      alert("This table is missing a security token. Please refresh the page to allow the system to generate one.");
+      return;
+    }
+    const qrUrl = `${FINAL_BASE_URL}?table=${encodeURIComponent(tableToken)}`;
     const qrImageSrc = `https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=${encodeURIComponent(qrUrl)}`;
     
     const printWindow = window.open('', '_blank');
@@ -184,7 +200,7 @@ export default function TablesPage({ restaurantId, restaurantSlug }) {
       ) : (
         <div className="menu-list" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px' }}>
           {tables.map(table => {
-            const qrUrl = `${FINAL_BASE_URL}?table=${encodeURIComponent(table.table_token || table.id)}`;
+            const qrUrl = `${FINAL_BASE_URL}?table=${encodeURIComponent(table.table_token)}`;
             const qrImageSrc = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrUrl)}&margin=10`;
             
             return (

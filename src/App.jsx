@@ -885,12 +885,6 @@ function App() {
                   Live
                 </button>
                 <button 
-                  className={`filter-btn ${orderFilter === 'all' ? 'active' : ''}`}
-                  onClick={() => setOrderFilter('all')}
-                >
-                  All
-                </button>
-                <button 
                   className={`filter-btn ${orderFilter === 'today' ? 'active' : ''}`}
                   onClick={() => setOrderFilter('today')}
                 >
@@ -941,86 +935,67 @@ function App() {
                     return (
                     <div 
                       key={order.id} 
-                      className={`order-card ${order.status === 'accepted' ? 'accepted' : ''} ${isTimeout ? 'timeout' : ''} ${isWarning ? 'warning' : ''}`}
-                      style={{
-                        background: order.status === 'accepted'
-                          ? 'linear-gradient(135deg, rgba(34, 197, 94, 0.1), var(--card))'
-                          : isTimeout
-                          ? 'linear-gradient(135deg, rgba(239, 68, 68, 0.15), var(--card))'
-                          : isWarning
-                          ? 'linear-gradient(135deg, rgba(249, 115, 22, 0.15), var(--card))'
-                          : isCounter
-                          ? 'linear-gradient(135deg, rgba(139, 90, 43, 0.15), var(--card))'
-                          : isOnline
-                          ? 'linear-gradient(135deg, rgba(59, 130, 246, 0.1), var(--card))'
-                          : undefined
-                      }}
+                      className={`order-card-new ${order.status === 'accepted' ? 'accepted' : ''} ${isTimeout ? 'timeout' : ''} ${isWarning ? 'warning' : ''}`}
                     >
-                      <div className="order-header">
-                        <div className="order-header-left">
-                          <span className="order-code">#{order.order_code || order.id.slice(0, 8).toUpperCase()}</span>
-                          {tableNum ? (
-                            <span className="order-table">Table {tableNum}</span>
-                          ) : (
-                            <span className="order-table" style={{ background: 'var(--border)', color: 'var(--text-muted)' }}>No Table</span>
-                          )}
-                          {isCounter && (
-                            <span className="payment-badge">💵 Pay at Counter</span>
-                          )}
-                          {isOnline && (
-                            <span className="payment-badge online">💳 Online Paid</span>
-                          )}
-                          {order.status !== 'accepted' && (
-                            <span className={`time-badge ${minutesOld >= 8 ? 'urgent' : ''}`}>
-                              {minutesOld}m ago
-                            </span>
-                          )}
+                      <div className="card-top-bar">
+                        <div className="order-id-group">
+                          <span className="order-badge">#{order.order_code || order.id.slice(0, 8).toUpperCase()}</span>
+                          <span className="order-timestamp">{formatDateTime(order.created_at)}</span>
                         </div>
-                        <div className="order-datetime">
-                          {formatDateTime(order.created_at)}
+                        <div className="order-status-group">
+                          {isCounter && <span className="p-badge counter">Cash/Counter</span>}
+                          {isOnline && <span className="p-badge online">Online Paid</span>}
+                          <span className={`status-pill ${order.status}`}>{order.status}</span>
+                        </div>
+                      </div>
+
+                      <div className="card-main-info">
+                        <div className="info-item">
+                          <span className="info-label">Table</span>
+                          <span className="info-value highlighted">{tableNum || 'N/A'}</span>
+                        </div>
+                        <div className="info-item">
+                          <span className="info-label">Total Amount</span>
+                          <span className="info-value price">₹{order.total_price}</span>
+                        </div>
+                        <div className="info-item">
+                          <span className="info-label">Time</span>
+                          <span className={`info-value ${minutesOld >= 8 ? 'urgent' : ''}`}>{minutesOld}m ago</span>
                         </div>
                       </div>
 
                       {order.note && (
-                        <div className="order-note">
-                          Note: {order.note}
+                        <div className="order-special-note">
+                          <strong>Note:</strong> {order.note}
                         </div>
                       )}
                       
-                      <div className="order-items">
-                        {order.items?.map((item, i) => (
-                          <div key={i} className="order-item">
-                            <div className="item-row">
-                              <span>{item.is_veg ? '🟢' : '🔴'}</span>
-                              <span className="item-name">{item.name}</span>
-                              <span className="item-qty">× {item.quantity}</span>
+                      <div className="order-items-container">
+                        <div className="items-header">Items ({order.items?.length || 0})</div>
+                        <div className="items-list-new">
+                          {order.items?.map((item, i) => (
+                            <div key={i} className="item-row-new">
+                              <div className="item-main-desc">
+                                <span className={`veg-indicator ${item.is_veg ? 'veg' : 'non-veg'}`}></span>
+                                <span className="item-name-text">{item.name}</span>
+                              </div>
+                              <div className="item-qty-tag">x{item.quantity}</div>
                             </div>
-                            {item.note && (
-                              <span className="item-note">Note: {item.note}</span>
-                            )}
-                            {(item.table || tableNum) && (
-                              <span className="item-table">Table {item.table || tableNum}</span>
-                            )}
-                          </div>
-                        ))}
+                          ))}
+                        </div>
                       </div>
                       
-                      <div className="order-bottom">
-                        <p className="order-price">₹{order.total_price}</p>
-                        
-                        <div className="order-actions">
-                          <button className="bill-btn" onClick={() => setSelectedOrder(order)}>
-                            🧾
-                          </button>
-                          
+                      <div className="card-actions-new">
+                        <button className="action-btn icon" onClick={() => setSelectedOrder(order)} title="View Bill">🧾</button>
+                        <div className="primary-actions">
                           {order.status === 'accepted' ? (
-                            <div className="accepted-label">
-                              ✓ Accepted
+                            <div className="acceptance-confirmed">
+                              <span className="check-icon">✓</span> Order Accepted
                             </div>
                           ) : (
                             <>
-                              <button className="decline-btn" onClick={() => handleDecline(order.id, order.order_code)}>Decline</button>
-                              <button className="accept-btn" onClick={() => handleAccept(order.id)}>Accept</button>
+                              <button className="action-btn decline" onClick={() => handleDecline(order.id, order.order_code)}>Decline</button>
+                              <button className="action-btn accept" onClick={() => handleAccept(order.id)}>Accept Order</button>
                             </>
                           )}
                         </div>
