@@ -354,9 +354,14 @@ function App() {
         .order('created_at', { ascending: false })
         .limit(200)
 
-      // Date filter removed to show all past orders as requested
+      // Apply date filter
+      const filterBounds = getDateFilter(orderFilter)
+      if (filterBounds) {
+        if (filterBounds.start) query = query.gte('created_at', filterBounds.start)
+        if (filterBounds.end) query = query.lte('created_at', filterBounds.end)
+      }
 
-      console.log('[LOAD] Executing query with restId:', restId)
+      console.log('[LOAD] Executing query with restId:', restId, 'Filter bounds:', filterBounds)
       const { data, error } = await query
 
       if (error) {
@@ -958,10 +963,14 @@ function App() {
                           <span className="info-label">Total Amount</span>
                           <span className="info-value price">₹{order.total_price}</span>
                         </div>
-                        <div className="info-item">
-                          <span className="info-label">Time</span>
-                          <span className={`info-value ${minutesOld >= 8 ? 'urgent' : ''}`}>{minutesOld}m ago</span>
-                        </div>
+                        {order.status !== 'accepted' && (
+                          <div className="info-item">
+                            <span className="info-label">Time</span>
+                            <span className={`info-value ${minutesOld >= 8 ? 'urgent' : ''}`}>
+                              <RunningTimer createdAt={order.created_at} />
+                            </span>
+                          </div>
+                        )}
                       </div>
 
                       {order.note && (
@@ -1209,6 +1218,27 @@ function Sidebar({ isOpen, onClose, activeTab, setActiveTab }) {
       </aside>
     </>
   )
+}
+
+function RunningTimer({ createdAt }) {
+  const [elapsed, setElapsed] = useState('');
+
+  useEffect(() => {
+    const update = () => {
+      const now = new Date();
+      const start = new Date(createdAt);
+      const diff = Math.floor((now - start) / 1000);
+      if (diff < 60) setElapsed(`${diff}s ago`);
+      else if (diff < 3600) setElapsed(`${Math.floor(diff / 60)}m ago`);
+      else setElapsed(`${Math.floor(diff / 3600)}h ${Math.floor((diff % 3600) / 60)}m ago`);
+    };
+
+    update();
+    const interval = setInterval(update, 1000);
+    return () => clearInterval(interval);
+  }, [createdAt]);
+
+  return <span>{elapsed}</span>;
 }
 
 export default App
