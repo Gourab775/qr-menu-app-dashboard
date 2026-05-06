@@ -380,20 +380,48 @@ function App() {
        
       console.log('Fetched orders:', data?.length || 0)
       if (data?.length) {
-        console.log('Payment modes:', data.map(o => ({ id: o.id, payment_mode: o.payment_mode, status: o.status })))
+        console.log('table_id values:', data.map(o => ({ id: o.id, table_id: o.table_id, has_table_join: !!o.restaurant_tables })))
       }
-      
+
+      // --- Fallback table resolution ---
+      // The PostgREST join (restaurant_tables(table_number)) only works when the
+      // FK constraint exists. This direct query works regardless of schema state.
+      const unresolvedIds = [...new Set(
+        (data || [])
+          .filter(o => o.table_id && !o.restaurant_tables?.table_number)
+          .map(o => o.table_id)
+      )]
+      let tableMap = {}
+      if (unresolvedIds.length > 0) {
+        const { data: tableRows } = await supabase
+          .from('restaurant_tables')
+          .select('id, table_number')
+          .in('id', unresolvedIds)
+        ;(tableRows || []).forEach(t => { tableMap[t.id] = t.table_number })
+      }
+
+      const mergeTableNumber = (order) => ({
+        ...order,
+        restaurant_tables:
+          order.restaurant_tables ??
+          (order.table_id && tableMap[order.table_id]
+            ? { table_number: tableMap[order.table_id] }
+            : null),
+      })
+
+      const resolvedData = (data || []).map(mergeTableNumber)
+
       if (isInitialLoad) {
-        setOrders(data || [])
+        setOrders(resolvedData)
       } else {
         setOrders(prev => {
           const existingIds = new Set(prev.map(o => o.id))
-          const newOrders = (data || []).filter(o => !existingIds.has(o.id))
+          const newOrders = resolvedData.filter(o => !existingIds.has(o.id))
           const updatedOrders = prev.map(existing => {
-            const updated = data?.find(d => d.id === existing.id)
+            const updated = resolvedData.find(d => d.id === existing.id)
             return updated ? { ...existing, ...updated } : existing
           })
-          return [...updatedOrders, ...newOrders].sort((a, b) => 
+          return [...updatedOrders, ...newOrders].sort((a, b) =>
             new Date(b.created_at) - new Date(a.created_at)
           )
         })
@@ -464,37 +492,50 @@ function App() {
           }
           lastPlayedOrderRef.current = newOrderId
           
-          // Fetch table number for the new order to ensure it displays correctly
+          // Fetch table number for the new order to ensure it displays correctly.
+          // Falls back to a direct restaurant_tables query if the FK join is absent.
           const fetchNewOrderWithTable = async () => {
             const { data: freshOrder } = await supabase
               .from('live_orders')
               .select('*, restaurant_tables(table_number)')
               .eq('id', newOrderId)
               .single()
-            
-            if (freshOrder) {
-              setOrders(prev => {
-                const exists = prev.some(o => o.id === newOrderId)
-                if (exists) {
-                  return prev.map(o => o.id === newOrderId ? { ...o, ...freshOrder } : o)
-                }
-                
-                if (preferences.soundEnabled) {
-                  playNotificationSound()
-                }
-                
-                if (preferences.orderNotifications) {
-                  const orderCode = freshOrder.order_code || newOrderId.slice(0, 8).toUpperCase()
-                  setNewOrderToast(`📦 New Order #${orderCode}`)
-                  setTimeout(() => setNewOrderToast(null), 4000)
-                }
-                
-                const newOrders = [freshOrder, ...prev]
-                return newOrders.sort((a, b) => 
-                  new Date(b.created_at) - new Date(a.created_at)
-                )
-              })
+
+            if (!freshOrder) return
+
+            // Fallback: if FK join didn't return table_number, fetch it directly
+            let resolved = freshOrder
+            if (freshOrder.table_id && !freshOrder.restaurant_tables?.table_number) {
+              const { data: tableRow } = await supabase
+                .from('restaurant_tables')
+                .select('id, table_number')
+                .eq('id', freshOrder.table_id)
+                .maybeSingle()
+              if (tableRow) {
+                resolved = { ...freshOrder, restaurant_tables: { table_number: tableRow.table_number } }
+              }
             }
+
+            setOrders(prev => {
+              const exists = prev.some(o => o.id === newOrderId)
+              if (exists) {
+                return prev.map(o => o.id === newOrderId ? { ...o, ...resolved } : o)
+              }
+
+              if (preferences.soundEnabled) {
+                playNotificationSound()
+              }
+
+              if (preferences.orderNotifications) {
+                const orderCode = resolved.order_code || newOrderId.slice(0, 8).toUpperCase()
+                setNewOrderToast(`📦 New Order #${orderCode}`)
+                setTimeout(() => setNewOrderToast(null), 4000)
+              }
+
+              return [resolved, ...prev].sort((a, b) =>
+                new Date(b.created_at) - new Date(a.created_at)
+              )
+            })
           }
 
           fetchNewOrderWithTable()
