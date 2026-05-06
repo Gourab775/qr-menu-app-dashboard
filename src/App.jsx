@@ -942,50 +942,59 @@ function App() {
                       key={order.id} 
                       className={`order-card-new ${order.status === 'accepted' ? 'accepted' : ''} ${isTimeout ? 'timeout' : ''} ${isWarning ? 'warning' : ''}`}
                     >
+                      {/* Card Header */}
                       <div className="card-top-bar">
                         <div className="order-id-group">
                           <span className="order-badge">#{order.order_code || order.id.slice(0, 8).toUpperCase()}</span>
                           <span className="order-timestamp">{formatDateTime(order.created_at)}</span>
                         </div>
                         <div className="order-status-group">
-                          {isCounter && <span className="p-badge counter">Cash/Counter</span>}
-                          {isOnline && <span className="p-badge online">Online Paid</span>}
-                          <span className={`status-pill ${order.status}`}>{order.status}</span>
+                          {order.status === 'accepted' && (
+                            <span className="ready-badge">
+                              <span className="dot">●</span> READY FOR SERVICE
+                            </span>
+                          )}
+                          <div style={{ display: 'flex', gap: '4px' }}>
+                            {isCounter && <span className="p-badge counter">Cash</span>}
+                            {isOnline && <span className="p-badge online">Paid</span>}
+                          </div>
                         </div>
                       </div>
 
+                      {/* Main Info Section */}
                       <div className="card-main-info">
                         <div className="info-item">
                           <span className="info-label">Table</span>
                           <span className="info-value highlighted">{tableNum || 'N/A'}</span>
                         </div>
-                        <div className="info-item">
-                          <span className="info-label">Total Amount</span>
+                        <div className="info-item" style={{ alignItems: 'flex-end' }}>
+                          <span className="info-label">Total</span>
                           <span className="info-value price">₹{order.total_price}</span>
                         </div>
                         {order.status !== 'accepted' && (
-                          <div className="info-item">
-                            <span className="info-label">Time</span>
-                            <span className={`info-value ${minutesOld >= 8 ? 'urgent' : ''}`}>
-                              <RunningTimer createdAt={order.created_at} />
+                          <div className="info-item" style={{ gridColumn: 'span 2', marginTop: '4px' }}>
+                            <span className="info-label">Time Elapsed</span>
+                            <span className={`info-value ${minutesOld >= 8 ? 'urgent' : ''}`} style={{ fontSize: '13px' }}>
+                              ⏱️ <RunningTimer createdAt={order.created_at} />
                             </span>
                           </div>
                         )}
                       </div>
 
                       {order.note && (
-                        <div className="order-special-note">
+                        <div className="order-special-note" style={{ fontSize: '12px', padding: '8px', borderRadius: '8px' }}>
                           <strong>Note:</strong> {order.note}
                         </div>
                       )}
                       
+                      {/* Items Section */}
                       <div className="order-items-container">
-                        <div className="items-header">Items ({order.items?.length || 0})</div>
+                        <div className="items-header">Order Items ({order.items?.length || 0})</div>
                         <div className="items-list-new">
                           {order.items?.map((item, i) => (
                             <div key={i} className="item-row-new">
                               <div className="item-main-desc">
-                                <span className={`veg-indicator ${item.is_veg ? 'veg' : 'non-veg'}`}></span>
+                                <span className={`veg-indicator ${item.is_veg ? 'veg' : 'non-veg'}`} style={{ color: item.is_veg ? 'var(--green)' : 'var(--red)' }}></span>
                                 <span className="item-name-text">{item.name}</span>
                               </div>
                               <div className="item-qty-tag">x{item.quantity}</div>
@@ -994,17 +1003,18 @@ function App() {
                         </div>
                       </div>
                       
+                      {/* Actions Footer */}
                       <div className="card-actions-new">
                         <button className="action-btn icon" onClick={() => setSelectedOrder(order)} title="View Bill">🧾</button>
-                        <div className="primary-actions">
+                        <div style={{ flex: 1, display: 'flex', gap: '8px' }}>
                           {order.status === 'accepted' ? (
                             <div className="acceptance-confirmed">
-                              <span className="check-icon">✓</span> Order Accepted
+                              <span className="check-icon">✓</span> Prepared
                             </div>
                           ) : (
                             <>
                               <button className="action-btn decline" onClick={() => handleDecline(order.id, order.order_code)}>Decline</button>
-                              <button className="action-btn accept" onClick={() => handleAccept(order.id)}>Accept Order</button>
+                              <button className="action-btn accept" onClick={() => handleAccept(order.id)}>Accept</button>
                             </>
                           )}
                         </div>
