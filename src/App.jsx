@@ -566,7 +566,6 @@ function App() {
                   order_id: payload.new.id,
                   items: payload.new.items,
                   table_id: payload.new.table_id,
-                  restaurant_id: restaurantId,
                   status: 'pending',
                   created_at: new Date().toISOString()
                 })
@@ -674,11 +673,6 @@ function App() {
           created_at: new Date().toISOString()
         }
         
-        // Add restaurant_id if we have it
-        if (restaurantId) {
-          kitchenOrder.restaurant_id = restaurantId
-        }
-
         const { error: insertError } = await supabase
           .from('kitchen_board')
           .insert(kitchenOrder)

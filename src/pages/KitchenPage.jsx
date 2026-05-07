@@ -1,33 +1,32 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 
-export default function KitchenPage({ restaurantId }) {
+export default function KitchenPage() {
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
   const isInitialFetch = useRef(true)
 
   const fetchKitchenOrders = useCallback(async () => {
-    if (!restaurantId) return
     if (isInitialFetch.current) setLoading(true)
     
     try {
-      // First attempt with restaurant_id filter and join
+      // Fetch kitchen orders with basic columns to avoid 400 errors
+      // Join with restaurant_tables if possible, else use fallback
       let { data, error } = await supabase
         .from('kitchen_board')
         .select('*, restaurant_tables(table_number)')
-        .eq('restaurant_id', restaurantId)
         .neq('status', 'completed')
         .order('created_at', { ascending: true })
 
-      // Fallback: if restaurant_id filter failed, it might not exist
-      if (error && error.message.includes('column "restaurant_id" does not exist')) {
-        const result = await supabase
+      if (error) {
+        console.warn('Initial fetch error, trying without join:', error.message)
+        const fallbackRes = await supabase
           .from('kitchen_board')
-          .select('*, restaurant_tables(table_number)')
+          .select('*')
           .neq('status', 'completed')
           .order('created_at', { ascending: true })
-        data = result.data
-        error = result.error
+        data = fallbackRes.data
+        error = fallbackRes.error
       }
 
       if (error) throw error
@@ -60,7 +59,7 @@ export default function KitchenPage({ restaurantId }) {
       setLoading(false)
       isInitialFetch.current = false
     }
-  }, [restaurantId])
+  }, [])
 
   useEffect(() => {
     fetchKitchenOrders()
@@ -71,11 +70,6 @@ export default function KitchenPage({ restaurantId }) {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'kitchen_board' },
         (payload) => {
-          // If we have restaurantId and the payload has it, filter here
-          if (restaurantId && payload.new?.restaurant_id && payload.new.restaurant_id !== restaurantId) {
-            return
-          }
-
           if (payload.eventType === 'INSERT') {
             fetchKitchenOrders() // Re-fetch to get table info correctly
           } else if (payload.eventType === 'UPDATE') {
@@ -94,7 +88,7 @@ export default function KitchenPage({ restaurantId }) {
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [restaurantId, fetchKitchenOrders])
+  }, [fetchKitchenOrders])
 
   const updateStatus = async (orderId, status) => {
     try {
