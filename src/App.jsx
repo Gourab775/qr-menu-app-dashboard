@@ -550,7 +550,28 @@ function App() {
       .on(
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'live_orders' },
-        (payload) => {
+        async (payload) => {
+          // If order just became accepted, ensure it is in kitchen_board
+          if (payload.new.status === 'accepted' && payload.old.status !== 'accepted') {
+            const { data: existing } = await supabase
+              .from('kitchen_board')
+              .select('id')
+              .eq('order_id', payload.new.id)
+              .maybeSingle()
+            
+            if (!existing) {
+              await supabase
+                .from('kitchen_board')
+                .insert({
+                  order_id: payload.new.id,
+                  items: payload.new.items,
+                  table_id: payload.new.table_id,
+                  restaurant_id: restaurantId,
+                  status: 'pending',
+                  created_at: new Date().toISOString()
+                })
+            }
+          }
           setOrders(prev =>
             prev.map(order =>
               order.id === payload.new.id ? { ...order, ...payload.new } : order
@@ -645,17 +666,32 @@ function App() {
         .maybeSingle()
 
       if (!existing) {
-        await supabase
+        const kitchenOrder = {
+          order_id: orderId,
+          items: order.items,
+          table_id: order.table_id,
+          status: 'pending',
+          created_at: new Date().toISOString()
+        }
+        
+        // Add restaurant_id if we have it
+        if (restaurantId) {
+          kitchenOrder.restaurant_id = restaurantId
+        }
+
+        const { error: insertError } = await supabase
           .from('kitchen_board')
-          .insert({
-            order_id: orderId,
-            items: order.items,
-            table_id: order.table_id,
-            restaurant_id: restaurantId,
-            status: 'pending',
-            created_at: new Date().toISOString()
-          })
-        showToast('Order sent to kitchen')
+          .insert(kitchenOrder)
+        
+        if (insertError) {
+          console.error('Kitchen insert error:', insertError)
+          // If it's just a duplicate (unique constraint), we can ignore it
+          if (insertError.code !== '23505') {
+            showToast('Failed to send to kitchen', 'error')
+          }
+        } else {
+          showToast('Order sent to kitchen')
+        }
       }
     } catch (err) {
       console.error('Error in handleAccept:', err)
