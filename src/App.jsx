@@ -966,8 +966,7 @@ function App() {
                     className={`filter-btn ${orderFilter === 'live' ? 'active' : ''}`}
                     onClick={() => setOrderFilter('live')}
                   >
-                    <span className="live-dot"></span>
-                    Live
+                    <span className="live-dot"></span> Live
                   </button>
                   <button 
                     className={`filter-btn ${orderFilter === 'today' ? 'active' : ''}`}
@@ -979,7 +978,13 @@ function App() {
                     className={`filter-btn ${orderFilter === '7days' ? 'active' : ''}`}
                     onClick={() => setOrderFilter('7days')}
                   >
-                    Last 7 Days
+                    7 Days
+                  </button>
+                  <button 
+                    className={`filter-btn ${orderFilter === '30days' ? 'active' : ''}`}
+                    onClick={() => setOrderFilter('30days')}
+                  >
+                    30 Days
                   </button>
                 </div>
                 <button onClick={loadOrders} className="refresh-btn">
