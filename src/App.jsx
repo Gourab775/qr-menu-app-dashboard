@@ -296,24 +296,24 @@ function App() {
 
     switch (filter) {
       case 'live':
-        // Today's orders from 12:00 AM to current moment
+        // Live: From today 12:00 AM until current moment
         startDate = todayStart
         endDate = now
         break
       case 'today':
-        // "Last Day" - Previous full calendar day (yesterday 12:00 AM to today 12:00 AM)
+        // Last Day: From yesterday 12:00 AM until yesterday 11:59:59 PM
         startDate = new Date(todayStart)
         startDate.setDate(todayStart.getDate() - 1)
-        endDate = todayStart
+        endDate = new Date(todayStart.getTime() - 1) // One millisecond before today
         break
       case '7days':
-        // Last 7 calendar days including today (Start of 6 days ago to current moment)
+        // Last 7 Days: Range of 7 calendar days including today
         startDate = new Date(todayStart)
         startDate.setDate(todayStart.getDate() - 6)
         endDate = now
         break
       case '30days':
-        // Last 30 calendar days including today (Start of 29 days ago to current moment)
+        // Last 30 Days: Range of 30 calendar days including today
         startDate = new Date(todayStart)
         startDate.setDate(todayStart.getDate() - 29)
         endDate = now
