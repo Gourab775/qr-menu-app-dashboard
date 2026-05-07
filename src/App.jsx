@@ -13,6 +13,7 @@ import CategoriesPage from './pages/CategoriesPage'
 import OverviewPage from './pages/OverviewPage'
 import SettingsPage from './pages/SettingsPage'
 import TablesPage from './pages/TablesPage'
+import KitchenPage from './pages/KitchenPage'
 import { formatDateTime } from './utils/formatDateTime'
 import './App.css'
 import './theme.css'
@@ -620,15 +621,46 @@ function App() {
   }, [isLoggedIn, preferences.autoDeclineTimeout])
 
   const handleAccept = async (orderId) => {
+    const order = orders.find(o => o.id === orderId)
+    if (!order) return
+
     setOrders(prev =>
-      prev.map(order =>
-        order.id === orderId ? { ...order, status: 'accepted' } : order
+      prev.map(o =>
+        o.id === orderId ? { ...o, status: 'accepted' } : o
       )
     )
-    await supabase
-      .from('live_orders')
-      .update({ status: 'accepted' })
-      .eq('id', orderId)
+
+    try {
+      // Update live_orders status
+      await supabase
+        .from('live_orders')
+        .update({ status: 'accepted' })
+        .eq('id', orderId)
+
+      // Insert into kitchen_board if not already exists
+      const { data: existing } = await supabase
+        .from('kitchen_board')
+        .select('id')
+        .eq('order_id', orderId)
+        .maybeSingle()
+
+      if (!existing) {
+        await supabase
+          .from('kitchen_board')
+          .insert({
+            order_id: orderId,
+            items: order.items,
+            table_id: order.table_id,
+            restaurant_id: restaurantId,
+            status: 'pending',
+            created_at: new Date().toISOString()
+          })
+        showToast('Order sent to kitchen')
+      }
+    } catch (err) {
+      console.error('Error in handleAccept:', err)
+      showToast('Failed to process order', 'error')
+    }
   }
 
   const handleDecline = async (orderId, orderCode) => {
@@ -832,6 +864,7 @@ function App() {
         <h2 className="header-title">
           {activeTab === 'analytics' && '📊 Analytics'}
           {activeTab === 'orders' && '📦 Orders'}
+          {activeTab === 'kitchen' && '🍳 Kitchen'}
           {activeTab === 'menu_items' && '🍽️ Menu Items'}
           {activeTab === 'categories' && '📂 Categories'}
           {activeTab === 'tables' && '🪑 Tables'}
@@ -1146,6 +1179,8 @@ function App() {
 
         {activeTab === 'tables' && <TablesPage restaurantId={restaurantId} restaurantSlug={restaurantSlug} />}
 
+        {activeTab === 'kitchen' && <KitchenPage restaurantId={restaurantId} />}
+
         {activeTab === 'settings' && <SettingsPage preferences={preferences} setPreferences={setPreferences} onToast={showToast} restaurantId={restaurantId} />}
 
         {activeTab === 'featured' && <FeaturedItemsPanel restaurantId={restaurantId} />}
@@ -1193,6 +1228,12 @@ function Sidebar({ isOpen, onClose, activeTab, setActiveTab }) {
             onClick={() => { setActiveTab('orders'); onClose(); }}
           >
             📦 Orders
+          </button>
+          <button 
+            className={`nav-item ${activeTab === 'kitchen' ? 'active' : ''}`}
+            onClick={() => { setActiveTab('kitchen'); onClose(); }}
+          >
+            🍳 Kitchen
           </button>
           <button 
             className={`nav-item ${activeTab === 'menu_items' ? 'active' : ''}`}
