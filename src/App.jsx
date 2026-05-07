@@ -147,12 +147,10 @@ function App() {
       if (restaurantData?.slug) {
         setRestaurantSlug(restaurantData.slug)
       } else if (restaurantIdValue) {
-        // Fallback fetch slug if missing
         const { data: slugData } = await supabase.from('restaurants').select('slug').eq('id', restaurantIdValue).single()
         if (slugData?.slug) setRestaurantSlug(slugData.slug)
       }
     } catch (err) {
-      console.error('Initialize error:', err)
       setInitError('Failed to initialize. Please try again.')
     } finally {
       setIsInitializing(false)
@@ -164,7 +162,6 @@ function App() {
   useEffect(() => {
     const initTimeout = setTimeout(() => {
       if (initializingRef.current) {
-        console.warn('[INIT] Timeout - proceeding anyway')
         setIsInitializing(false)
         initializingRef.current = false
       }
@@ -244,7 +241,6 @@ function App() {
       
       return playTone
     } catch (err) {
-      console.warn('Web Audio API not supported:', err)
       return null
     }
   }, [preferences.notificationSound])
@@ -258,7 +254,6 @@ function App() {
       playNotificationToneRef.current = createNotificationSound()
       setSoundReady(true)
     } catch (err) {
-      console.warn('Failed to initialize audio:', err)
     }
   }, [soundReady, createNotificationSound, preferences.notificationSound])
 
@@ -270,7 +265,6 @@ function App() {
         playNotificationToneRef.current()
       }
     } catch (err) {
-      console.warn('Sound play error:', err)
     }
   }, [preferences.soundEnabled])
 
@@ -293,17 +287,19 @@ function App() {
   }, [isLoggedIn, initAudio])
 
   const getDateFilter = (filter) => {
-    const now = new Date()
-    let startDate = null
-    let endDate = null
-    
+    let startDate = new Date()
+    let endDate = new Date()
+
+    const todayStart = new Date()
+    todayStart.setHours(0, 0, 0, 0)
+
     switch (filter) {
       case 'live':
-        startDate = new Date(Date.now() - (24 * 60 * 60 * 1000))
+        startDate = todayStart
         break
       case 'today':
-        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0)
-        endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999)
+        startDate = new Date(todayStart.getTime() - (24 * 60 * 60 * 1000))
+        endDate = todayStart
         break
       case '7days':
         startDate = new Date(Date.now() - (7 * 24 * 60 * 60 * 1000))
@@ -311,31 +307,23 @@ function App() {
       case '30days':
         startDate = new Date(Date.now() - (30 * 24 * 60 * 60 * 1000))
         break
-      case 'all':
       default:
-        return null
+        startDate = new Date(Date.now() - (24 * 60 * 60 * 1000))
     }
-    
-    if (startDate && !isNaN(startDate.getTime())) {
-      const result = { start: startDate.toISOString() }
-      if (endDate && !isNaN(endDate.getTime())) {
-        result.end = endDate.toISOString()
-      }
-      return result
-    }
-    return null
+
+    return { startDate, endDate }
   }
 
   const loadOrders = async (isInitialLoad = false) => {
     const restId = restaurantId
     
     if (!restId) {
-      console.warn('[LOAD] No restaurant ID defined')
       setLoading(false)
       return
     }
     
-    console.log('[LOAD] Using restaurant ID:', restId, 'Filter:', orderFilter)
+    setLoading(true)
+    const { startDate, endDate } = getDateFilter(orderFilter)
     
     try {
       const { data: restaurantData } = await supabase
@@ -498,7 +486,6 @@ function App() {
         { event: 'INSERT', schema: 'public', table: 'live_orders' },
         (payload) => {
           const newOrderId = payload.new.id
-          console.log('New order received:', { id: newOrderId, payment_mode: payload.new.payment_mode })
           
           if (lastPlayedOrderRef.current === newOrderId) {
             return
@@ -964,7 +951,7 @@ function App() {
         {activeTab === 'orders' && (
           <div className="orders-section">
             <div className="sticky-header">
-              <div className="orders-controls">
+              <div className="orders-header-row">
                 <div className="order-search-box">
                   <span className="search-icon">🔍</span>
                   <input
@@ -974,35 +961,29 @@ function App() {
                     onChange={(e) => setOrderSearch(e.target.value)}
                   />
                 </div>
+                <div className="order-filters">
+                  <button 
+                    className={`filter-btn ${orderFilter === 'live' ? 'active' : ''}`}
+                    onClick={() => setOrderFilter('live')}
+                  >
+                    <span className="live-dot"></span>
+                    Live
+                  </button>
+                  <button 
+                    className={`filter-btn ${orderFilter === 'today' ? 'active' : ''}`}
+                    onClick={() => setOrderFilter('today')}
+                  >
+                    Last Day
+                  </button>
+                  <button 
+                    className={`filter-btn ${orderFilter === '7days' ? 'active' : ''}`}
+                    onClick={() => setOrderFilter('7days')}
+                  >
+                    Last 7 Days
+                  </button>
+                </div>
                 <button onClick={loadOrders} className="refresh-btn">
                   🔄 Refresh
-                </button>
-              </div>
-              <div className="order-filters">
-                <button 
-                  className={`filter-btn ${orderFilter === 'live' ? 'active' : ''}`}
-                  onClick={() => setOrderFilter('live')}
-                >
-                  <span className="live-dot"></span>
-                  Live
-                </button>
-                <button 
-                  className={`filter-btn ${orderFilter === 'today' ? 'active' : ''}`}
-                  onClick={() => setOrderFilter('today')}
-                >
-                  Last Day
-                </button>
-                <button 
-                  className={`filter-btn ${orderFilter === '7days' ? 'active' : ''}`}
-                  onClick={() => setOrderFilter('7days')}
-                >
-                  Last 7 Days
-                </button>
-                <button 
-                  className={`filter-btn ${orderFilter === '30days' ? 'active' : ''}`}
-                  onClick={() => setOrderFilter('30days')}
-                >
-                  Last 30 Days
                 </button>
               </div>
             </div>
@@ -1055,7 +1036,7 @@ function App() {
                           <div style={{ display: 'flex', gap: '4px' }}>
                             {isCash && <span className="p-badge counter">Cash</span>}
                             {isCard && <span className="p-badge card">Card</span>}
-                            {isOnline && <span className="p-badge online">Paid</span>}
+                            {isOnline && <span className="p-badge online">Online</span>}
                           </div>
                         </div>
                       </div>

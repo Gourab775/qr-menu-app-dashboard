@@ -263,6 +263,27 @@ body {
   padding: 0 20px;
 }
 
+.orders-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  width: 100%;
+  padding: 12px 0;
+}
+
+.order-search-box {
+  flex: 1;
+  max-width: 400px;
+}
+
+.order-filters {
+  display: flex;
+  gap: 8px;
+  flex: 2;
+  justify-content: center;
+}
+
 .orders-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr); /* 4 columns on PC */
@@ -368,11 +389,13 @@ body {
   gap: 6px;
 }
 
-.ready-badge.pending { background: rgba(59, 130, 246, 0.2); color: var(--blue); border: 1px solid rgba(59, 130, 246, 0.3); }
+.ready-badge.pending { background: rgba(239, 68, 68, 0.15); color: var(--red); border: 1px solid rgba(239, 68, 68, 0.3); }
 .ready-badge.preparing { background: rgba(249, 115, 22, 0.2); color: var(--orange); border: 1px solid rgba(249, 115, 22, 0.3); box-shadow: 0 0 15px rgba(249, 115, 22, 0.2); }
 .ready-badge.ready { background: var(--green); color: white; box-shadow: 0 4px 12px rgba(34, 197, 94, 0.4); }
 
 .p-badge.card { background: rgba(59, 130, 246, 0.15); color: var(--blue); }
+.p-badge.online { background: rgba(249, 115, 22, 0.15); color: var(--orange); }
+.p-badge.counter { background: rgba(139, 69, 19, 0.15); color: #8B4513; }
 
 .p-badge {
   font-size: 10px;
@@ -7220,9 +7243,20 @@ body {
   transform: translateY(-1px);
 }
 
-@media (max-width: 640px) {
-  .kitchen-section { padding: 0 12px; }
-  .kitchen-grid { grid-template-columns: 1fr; }
+@media (max-width: 1024px) {
+  .orders-header-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  .order-search-box {
+    max-width: none;
+  }
+  .order-filters {
+    justify-content: flex-start;
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
 }
 
 /* Kitchen Card Improvements */

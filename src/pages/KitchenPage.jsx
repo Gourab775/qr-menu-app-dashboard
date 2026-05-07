@@ -14,7 +14,7 @@ export default function KitchenPage() {
       // Join with restaurant_tables if possible, else use fallback
       let { data, error } = await supabase
         .from('kitchen_board')
-        .select('*, restaurant_tables(table_number)')
+        .select('*, restaurant_tables(table_number), live_orders(order_code)')
         .neq('status', 'completed')
         .order('created_at', { ascending: true })
 
@@ -22,7 +22,7 @@ export default function KitchenPage() {
         console.warn('Initial fetch error, trying without join:', error.message)
         const fallbackRes = await supabase
           .from('kitchen_board')
-          .select('*')
+          .select('*, live_orders(order_code)')
           .neq('status', 'completed')
           .order('created_at', { ascending: true })
         data = fallbackRes.data
@@ -169,7 +169,7 @@ function KitchenOrderCard({ order, onUpdateStatus }) {
   return (
     <div className={`kitchen-card ${order.status}`}>
       <div className="kitchen-card-header-top">
-        <span className="k-order-badge">#{order.order_id?.slice(0, 8).toUpperCase() || 'N/A'}</span>
+        <span className="k-order-badge">#{order.live_orders?.order_code || order.order_id?.slice(0, 8).toUpperCase() || 'N/A'}</span>
       </div>
       <div className="kitchen-card-header">
         <div className="kitchen-table-info">
@@ -239,16 +239,8 @@ function KitchenTimer({ startTime }) {
       const start = new Date(startTime)
       const diff = Math.floor((now - start) / 1000)
       
-      if (diff < 60) setElapsed(`${diff}s`)
-      else if (diff < 3600) {
-        const mins = Math.floor(diff / 60)
-        const secs = diff % 60
-        setElapsed(`${mins}m ${secs}s`)
-      } else {
-        const hrs = Math.floor(diff / 3600)
-        const mins = Math.floor((diff % 3600) / 60)
-        setElapsed(`${hrs}h ${mins}m`)
-      }
+      const mins = Math.floor(diff / 60)
+      setElapsed(`${mins}m`)
     }
 
     update()
