@@ -286,44 +286,39 @@ function App() {
     }
   }, [isLoggedIn, initAudio])
 
+  const formatLocalDate = (date) => {
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }
+
   const getDateFilter = (filter) => {
     const now = new Date()
-    const todayStart = new Date()
-    todayStart.setHours(0, 0, 0, 0)
-    
-    let startDate = new Date()
-    let endDate = new Date()
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    const todayStr = formatLocalDate(today)
+    const yesterday = new Date(today)
+    yesterday.setDate(yesterday.getDate() - 1)
+    const yesterdayStr = formatLocalDate(yesterday)
 
     switch (filter) {
       case 'live':
-        // Live: From today 12:00 AM until current moment
-        startDate = todayStart
-        endDate = now
-        break
+        return { start: `${todayStr} 00:00:00`, end: null }
       case 'today':
-        // Last Day: From yesterday 12:00 AM until yesterday 11:59:59 PM
-        startDate = new Date(todayStart)
-        startDate.setDate(todayStart.getDate() - 1)
-        endDate = new Date(todayStart.getTime() - 1) // One millisecond before today
-        break
+        return { start: `${yesterdayStr} 00:00:00`, end: `${yesterdayStr} 23:59:59` }
       case '7days':
-        // Last 7 Days: Range of 7 calendar days including today
-        startDate = new Date(todayStart)
-        startDate.setDate(todayStart.getDate() - 6)
-        endDate = now
-        break
+        const sevenDaysAgo = new Date(today)
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+        const sevenDaysAgoStr = formatLocalDate(sevenDaysAgo)
+        return { start: `${sevenDaysAgoStr} 00:00:00`, end: `${yesterdayStr} 23:59:59` }
       case '30days':
-        // Last 30 Days: Range of 30 calendar days including today
-        startDate = new Date(todayStart)
-        startDate.setDate(todayStart.getDate() - 29)
-        endDate = now
-        break
+        const thirtyDaysAgo = new Date(today)
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+        const thirtyDaysAgoStr = formatLocalDate(thirtyDaysAgo)
+        return { start: `${thirtyDaysAgoStr} 00:00:00`, end: `${yesterdayStr} 23:59:59` }
       default:
-        startDate = todayStart
-        endDate = now
+        return { start: `${todayStr} 00:00:00`, end: null }
     }
-
-    return { startDate, endDate }
   }
 
   const loadOrders = async (isInitialLoad = false) => {
