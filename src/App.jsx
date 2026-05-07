@@ -287,28 +287,40 @@ function App() {
   }, [isLoggedIn, initAudio])
 
   const getDateFilter = (filter) => {
+    const now = new Date()
+    const todayStart = new Date()
+    todayStart.setHours(0, 0, 0, 0)
+    
     let startDate = new Date()
     let endDate = new Date()
 
-    const todayStart = new Date()
-    todayStart.setHours(0, 0, 0, 0)
-
     switch (filter) {
       case 'live':
+        // Today's orders from 12:00 AM to current moment
         startDate = todayStart
+        endDate = now
         break
       case 'today':
-        startDate = new Date(todayStart.getTime() - (24 * 60 * 60 * 1000))
+        // "Last Day" - Previous full calendar day (yesterday 12:00 AM to today 12:00 AM)
+        startDate = new Date(todayStart)
+        startDate.setDate(todayStart.getDate() - 1)
         endDate = todayStart
         break
       case '7days':
-        startDate = new Date(Date.now() - (7 * 24 * 60 * 60 * 1000))
+        // Last 7 calendar days including today (Start of 6 days ago to current moment)
+        startDate = new Date(todayStart)
+        startDate.setDate(todayStart.getDate() - 6)
+        endDate = now
         break
       case '30days':
-        startDate = new Date(Date.now() - (30 * 24 * 60 * 60 * 1000))
+        // Last 30 calendar days including today (Start of 29 days ago to current moment)
+        startDate = new Date(todayStart)
+        startDate.setDate(todayStart.getDate() - 29)
+        endDate = now
         break
       default:
-        startDate = new Date(Date.now() - (24 * 60 * 60 * 1000))
+        startDate = todayStart
+        endDate = now
     }
 
     return { startDate, endDate }
