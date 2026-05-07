@@ -357,19 +357,22 @@ body {
 }
 
 .ready-badge {
-  background: var(--green);
-  color: white;
   font-size: 10px;
   font-weight: 800;
-  padding: 4px 8px;
+  padding: 5px 10px;
   border-radius: 6px;
   text-transform: uppercase;
   letter-spacing: 1px;
-  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.4);
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
 }
+
+.ready-badge.pending { background: rgba(59, 130, 246, 0.2); color: var(--blue); border: 1px solid rgba(59, 130, 246, 0.3); }
+.ready-badge.preparing { background: rgba(249, 115, 22, 0.2); color: var(--orange); border: 1px solid rgba(249, 115, 22, 0.3); box-shadow: 0 0 15px rgba(249, 115, 22, 0.2); }
+.ready-badge.ready { background: var(--green); color: white; box-shadow: 0 4px 12px rgba(34, 197, 94, 0.4); }
+
+.p-badge.card { background: rgba(59, 130, 246, 0.15); color: var(--blue); }
 
 .p-badge {
   font-size: 10px;
@@ -7220,4 +7223,42 @@ body {
 @media (max-width: 640px) {
   .kitchen-section { padding: 0 12px; }
   .kitchen-grid { grid-template-columns: 1fr; }
+}
+
+/* Kitchen Card Improvements */
+.kitchen-card-header-top {
+  margin-bottom: -10px;
+}
+
+.k-order-badge {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--blue);
+  background: rgba(59, 130, 246, 0.1);
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(59, 130, 246, 0.2);
+}
+
+.kitchen-timer-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.2);
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.clock-icon {
+  font-size: 14px;
+}
+
+.timer-text {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
 }

@@ -168,6 +168,9 @@ function KitchenOrderCard({ order, onUpdateStatus }) {
 
   return (
     <div className={`kitchen-card ${order.status}`}>
+      <div className="kitchen-card-header-top">
+        <span className="k-order-badge">#{order.order_id?.slice(0, 8).toUpperCase() || 'N/A'}</span>
+      </div>
       <div className="kitchen-card-header">
         <div className="kitchen-table-info">
           <span className="info-label">TABLE</span>
@@ -175,9 +178,10 @@ function KitchenOrderCard({ order, onUpdateStatus }) {
         </div>
         <div className="kitchen-time-info">
           <span className="info-label">SINCE ACCEPTED</span>
-          <span className="kitchen-timer">
+          <div className="kitchen-timer-badge">
+            <span className="clock-icon">🕒</span>
             <KitchenTimer startTime={order.created_at} />
-          </span>
+          </div>
         </div>
       </div>
 
@@ -252,5 +256,5 @@ function KitchenTimer({ startTime }) {
     return () => clearInterval(interval)
   }, [startTime])
 
-  return <span>{elapsed}</span>
+  return <span className="timer-text">{elapsed}</span>
 }

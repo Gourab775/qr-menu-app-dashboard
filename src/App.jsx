@@ -366,7 +366,7 @@ function App() {
       const { data, error } = await query
 
       if (error) {
-        console.error('[LOAD] Orders fetch error:', error.message, '| Details:', error.details)
+        console.error('[LOAD] Orders fetch error:', error.message)
         
         if (error.code === 'PGRST116') {
           showToast('No orders found', 'info')
@@ -383,10 +383,16 @@ function App() {
         setLoading(false)
         return
       }
-       
-      console.log('Fetched orders:', data?.length || 0)
-      if (data?.length) {
-        console.log('table_id values:', data.map(o => ({ id: o.id, table_id: o.table_id, has_table_join: !!o.restaurant_tables })))
+
+      // --- Fetch Kitchen Statuses ---
+      const orderIds = (data || []).map(o => o.id)
+      let kitchenMap = {}
+      if (orderIds.length > 0) {
+        const { data: kitchenRows } = await supabase
+          .from('kitchen_board')
+          .select('order_id, status')
+          .in('order_id', orderIds)
+        ;(kitchenRows || []).forEach(k => { kitchenMap[k.order_id] = k.status })
       }
 
       // --- Fallback table resolution ---
@@ -406,8 +412,9 @@ function App() {
         ;(tableRows || []).forEach(t => { tableMap[t.id] = t.table_number })
       }
 
-      const mergeTableNumber = (order) => ({
+      const mergeTableNumberAndKitchen = (order) => ({
         ...order,
+        kitchen_status: kitchenMap[order.id] || null,
         restaurant_tables:
           order.restaurant_tables ??
           (order.table_id && tableMap[order.table_id]
@@ -415,7 +422,7 @@ function App() {
             : null),
       })
 
-      const resolvedData = (data || []).map(mergeTableNumber)
+      const resolvedData = (data || []).map(mergeTableNumberAndKitchen)
 
       if (isInitialLoad) {
         setOrders(resolvedData)
@@ -593,6 +600,33 @@ function App() {
       supabase.removeChannel(channel)
     }
   }, [isLoggedIn, preferences.soundEnabled, preferences.orderNotifications, playNotificationSound])
+
+  useEffect(() => {
+    if (!isLoggedIn) return
+
+    const kitchenChannel = supabase
+      .channel('kitchen-sync-for-orders')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'kitchen_board' },
+        (payload) => {
+          setOrders(prev => prev.map(order => {
+            if (payload.eventType === 'UPDATE' && order.id === payload.new.order_id) {
+              return { ...order, kitchen_status: payload.new.status }
+            }
+            if (payload.eventType === 'INSERT' && order.id === payload.new.order_id) {
+              return { ...order, kitchen_status: payload.new.status }
+            }
+            return order
+          }))
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(kitchenChannel)
+    }
+  }, [isLoggedIn])
 
   useEffect(() => {
     if (!isLoggedIn) return
@@ -987,9 +1021,10 @@ function App() {
                   </div>
                 )}
                 <div className="orders-grid">
-                  {filteredOrders.map(order => {
+                    {filteredOrders.map(order => {
                     const paymentMode = order.payment_mode?.toLowerCase()
-                    const isCounter = paymentMode === 'counter'
+                    const isCash = paymentMode === 'cash' || paymentMode === 'counter'
+                    const isCard = paymentMode === 'card'
                     const isOnline = paymentMode === 'online'
                     
                     const orderTime = new Date(order.created_at)
@@ -1013,12 +1048,13 @@ function App() {
                         </div>
                         <div className="order-status-group">
                           {order.status === 'accepted' && (
-                            <span className="ready-badge">
-                              <span className="dot">●</span> READY FOR SERVICE
+                            <span className={`ready-badge ${order.kitchen_status || 'pending'}`}>
+                              <span className="dot">●</span> {order.kitchen_status?.toUpperCase() || 'ACCEPTED'}
                             </span>
                           )}
                           <div style={{ display: 'flex', gap: '4px' }}>
-                            {isCounter && <span className="p-badge counter">Cash</span>}
+                            {isCash && <span className="p-badge counter">Cash</span>}
+                            {isCard && <span className="p-badge card">Card</span>}
                             {isOnline && <span className="p-badge online">Paid</span>}
                           </div>
                         </div>
@@ -1072,7 +1108,7 @@ function App() {
                         <div style={{ flex: 1, display: 'flex', gap: '8px' }}>
                           {order.status === 'accepted' ? (
                             <div className="acceptance-confirmed">
-                              <span className="check-icon">✓</span> Prepared
+                              <span className="check-icon">✓</span> Order Confirmed
                             </div>
                           ) : (
                             <>
