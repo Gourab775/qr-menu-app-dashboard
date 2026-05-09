@@ -960,7 +960,6 @@ function App() {
             <div className="sticky-header">
               <div className="orders-header-row">
                 <div className="order-search-box">
-                  <span className="search-icon">🔍</span>
                   <input
                     type="text"
                     placeholder="Search by Order ID..."
@@ -1003,7 +1002,12 @@ function App() {
             {orders.length === 0 ? (
               <div className="empty-state">
                 <div className="empty-icon">📦</div>
-                <p>No live orders</p>
+                <p>
+                  {orderFilter === 'live' && 'No live orders'}
+                  {orderFilter === 'today' && 'No last day orders'}
+                  {orderFilter === '7days' && 'No last 7 days orders'}
+                  {orderFilter === '30days' && 'No last 30 days orders'}
+                </p>
               </div>
             ) : (
               <>

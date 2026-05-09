@@ -268,17 +268,17 @@ body {
   justify-content: space-between;
   gap: 8px;
   width: 100%;
-  padding: 4px 0;
-  margin-bottom: 2px;
+  padding: 2px 0;
+  margin-bottom: 0;
 }
 
 .order-search-box {
-  flex: 0 1 280px;
+  flex: 0 1 240px;
 }
 
 .order-filters {
   display: flex;
-  gap: 4px;
+  gap: 2px;
   flex: 1;
   justify-content: center;
 }
@@ -3312,9 +3312,9 @@ body {
   position: sticky;
   top: 0;
   background: var(--bg);
-  padding: 16px 0;
+  padding: 8px 0;
   z-index: 10;
-  margin-bottom: 8px;
+  margin-bottom: 4px;
 }
 
 /* Analytics Page */
@@ -7246,7 +7246,7 @@ body {
   .orders-header-row {
     flex-direction: column;
     align-items: stretch;
-    gap: 12px;
+    gap: 8px;
   }
   .order-search-box {
     max-width: none;
@@ -7254,7 +7254,7 @@ body {
   .order-filters {
     justify-content: flex-start;
     overflow-x: auto;
-    padding-bottom: 4px;
+    padding-bottom: 2px;
   }
 }
 
