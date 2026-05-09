@@ -39,7 +39,7 @@ function App() {
   const [initError, setInitError] = useState(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [activeTab, setActiveTab] = useState('orders')
-  const [orderFilter, setOrderFilter] = useState('all')
+  const [orderFilter, setOrderFilter] = useState('live')
   const [showProfile, setShowProfile] = useState(false)
   const [showAddModal, setShowAddModal] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
