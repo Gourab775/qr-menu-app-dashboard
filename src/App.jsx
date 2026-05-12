@@ -18,8 +18,6 @@ import { formatDateTime } from './utils/formatDateTime'
 import './App.css'
 import './theme.css'
 
-const ORDER_CACHE_KEY = 'dashboard_orders'
-
 function App() {
   const { session, profile, loading: authLoading, initialized } = useAuth()
   const [resetMode, setResetMode] = useState(() => window.location.hash === '#reset-password')
@@ -58,10 +56,11 @@ function App() {
       return { soundEnabled: true, orderNotifications: true, autoDeclineTimeout: 10, theme: 'dark' }
     }
   })
+
   const profileRef = useRef(null)
   const initializedRef = useRef(false)
   const initTimeoutRef = useRef(null)
-  const initRef = useRef(null)
+  const dataInitRef = useRef(null)
 
   const userRole = profile?.role || 'staff'
   const userFullName = profile?.full_name || profile?.email || session?.user?.email || 'User'
@@ -154,115 +153,10 @@ function App() {
     initApp()
   }, [isLoggedIn, initialized, session?.user?.id, profileRestaurantId])
 
-  const loadOrders = useCallback(async (isInitial = false) => {
-    const rid = restaurantId
-    if (!rid) return
-    if (isInitial) setLoading(true)
-
-    const now = new Date()
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-    const formatDate = (d) => {
-      const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), day = String(d.getDate()).padStart(2, '0')
-      return `${y}-${m}-${day}`
-    }
-    const todayStr = formatDate(today)
-    const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1)
-    const yesterdayStr = formatDate(yesterday)
-
-    let bounds = { start: `${todayStr} 00:00:00`, end: null }
-    if (orderFilter === 'today') bounds = { start: `${yesterdayStr} 00:00:00`, end: `${yesterdayStr} 23:59:59` }
-    else if (orderFilter === '7days') {
-      const d = new Date(today); d.setDate(d.getDate() - 7)
-      bounds = { start: `${formatDate(d)} 00:00:00`, end: `${yesterdayStr} 23:59:59` }
-    } else if (orderFilter === '30days') {
-      const d = new Date(today); d.setDate(d.getDate() - 30)
-      bounds = { start: `${formatDate(d)} 00:00:00`, end: `${yesterdayStr} 23:59:59` }
-    }
-
-    try {
-      let query = supabase
-        .from('live_orders')
-        .select('id, restaurant_id, total_price, payment_mode, status, items, created_at, order_code, table_id, note, restaurant_tables(table_number)')
-        .eq('restaurant_id', rid)
-        .order('created_at', { ascending: false })
-        .limit(200)
-
-      if (bounds.start) query = query.gte('created_at', bounds.start)
-      if (bounds.end) query = query.lte('created_at', bounds.end)
-
-      const { data, error } = await query
-      if (error && error.code !== 'PGRST116') {
-        setToast ? setToast({ message: 'Failed to load orders', type: 'error' }) : null
-        setOrders([])
-      } else {
-        const ids = (data || []).map(o => o.id)
-        let kitchenMap = {}
-        if (ids.length > 0) {
-          const { data: kr } = await supabase.from('kitchen_board').select('order_id, status').in('order_id', ids)
-          ;(kr || []).forEach(k => { kitchenMap[k.order_id] = k.status })
-        }
-
-        const resolved = (data || []).map(o => ({
-          ...o,
-          kitchen_status: kitchenMap[o.id] || null,
-          restaurant_tables: o.restaurant_tables ||
-            (o.table_id ? { table_number: null } : null)
-        }))
-
-        const unresolvedIds = [...new Set((data || []).filter(o => o.table_id && !o.restaurant_tables?.table_number).map(o => o.table_id))]
-        if (unresolvedIds.length > 0) {
-          const { data: tr } = await supabase
-            .from('restaurant_tables').select('id, table_number').in('id', unresolvedIds)
-          const tMap = {}
-          ;(tr || []).forEach(t => { tMap[t.id] = t.table_number })
-          resolved.forEach(o => {
-            if (o.table_id && tMap[o.table_id] !== undefined) {
-              o.restaurant_tables = { table_number: tMap[o.table_id] }
-            }
-          })
-        }
-
-        setOrders(resolved)
-        initRef.current = true
-      }
-    } catch {
-      setToast ? setToast({ message: 'Failed to load orders', type: 'error' }) : null
-      setOrders([])
-    } finally {
-      setLoading(false)
-    }
-  }, [restaurantId, orderFilter])
-
-  const loadCategories = useCallback(async () => {
-    const rid = restaurantId
-    if (!rid) return
-    const { data } = await supabase
-      .from('categories').select('id, name, image, sort_order')
-      .eq('restaurant_id', rid).order('sort_order', { ascending: true })
-    if (data) setCategories(data || [])
-  }, [restaurantId])
-
-  const loadMenuItems = useCallback(async () => {
-    const rid = restaurantId
-    if (!rid) return
-    setMenuLoading(true)
-    try {
-      const { data, error } = await supabase
-        .from('menu_items').select('id, name, price, description, is_veg, is_available, category_id, image_url')
-        .eq('restaurant_id', rid).order('name', { ascending: true })
-      if (error) throw error
-      setMenuItems(data || [])
-    } catch {
-      setToast ? setToast({ message: 'Failed to load menu items', type: 'error' }) : null
-    } finally {
-      setMenuLoading(false)
-    }
-  }, [restaurantId])
-
   useEffect(() => {
     if (!isLoggedIn || !restaurantId || initStatus !== 'done') return
-    if (initRef.current === restaurantId) return
-    initRef.current = restaurantId
+    if (dataInitRef.current === restaurantId) return
+    dataInitRef.current = restaurantId
 
     const doLoad = async () => {
       setLoading(true)
@@ -336,12 +230,11 @@ function App() {
         setLoading(false)
       }
 
-      const rid = restaurantId
-      const { data: catData } = await supabase.from('categories').select('id, name, image, sort_order').eq('restaurant_id', rid).order('sort_order', { ascending: true })
+      const { data: catData } = await supabase.from('categories').select('id, name, image, sort_order').eq('restaurant_id', restaurantId).order('sort_order', { ascending: true })
       if (catData) setCategories(catData || [])
 
       setMenuLoading(true)
-      const { data: itemData, error: itemErr } = await supabase.from('menu_items').select('id, name, price, description, is_veg, is_available, category_id, image_url').eq('restaurant_id', rid).order('name', { ascending: true })
+      const { data: itemData, error: itemErr } = await supabase.from('menu_items').select('id, name, price, description, is_veg, is_available, category_id, image_url').eq('restaurant_id', restaurantId).order('name', { ascending: true })
       if (itemErr) {
         setToast ? setToast({ message: 'Failed to load menu items', type: 'error' }) : null
       } else {
@@ -352,87 +245,6 @@ function App() {
 
     doLoad()
   }, [isLoggedIn, restaurantId, initStatus, orderFilter])
-
-  const closeSidebar = useCallback(() => setSidebarOpen(false), [])
-
-  const filteredItems = menuItems.filter(item => {
-    const matchSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase())
-    const matchFilter = filterType === 'all' || (filterType === 'veg' && item.is_veg) || (filterType === 'nonveg' && !item.is_veg)
-    return matchSearch && matchFilter
-  })
-
-  const filteredOrders = orders.filter(order => {
-    if (!orderSearch) return true
-    const code = (order.order_code || '').toLowerCase()
-    const oid = (order.id || '').toLowerCase()
-    return code.includes(orderSearch.toLowerCase()) || oid.includes(orderSearch.toLowerCase())
-  })
-
-  if (resetMode) {
-    return <ResetPassword onDone={() => { setResetMode(false); window.location.hash = '' }} />
-  }
-
-  if (!isLoggedIn) return <Login />
-
-  if (authLoading || !initialized) {
-    return (
-      <div className="app">
-        <div className="login-page">
-          <div className="login-card skeleton-container">
-            <div className="skeleton skeleton-title" style={{ width: '60%', margin: '0 auto 24px' }}></div>
-            <div className="skeleton skeleton-text" style={{ width: '100%' }}></div>
-            <div className="skeleton skeleton-text" style={{ width: '80%' }}></div>
-            <div className="skeleton skeleton-button" style={{ width: '100%', marginTop: '16px' }}></div>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  if (initStatus === 'error' || initError) {
-    return (
-      <div className="app">
-        <div className="login-page">
-          <div className="login-card">
-            <div className="login-icon">⚠️</div>
-            <h1 className="login-title">Initialization Error</h1>
-            <p className="login-subtitle">{initError || 'Something went wrong'}</p>
-            <button className="login-btn" onClick={() => supabase.auth.signOut()}>Logout</button>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  if (initStatus === 'loading') {
-    return (
-      <div className="app">
-        <div className="login-page">
-          <div className="login-card skeleton-container">
-            <div className="skeleton skeleton-title" style={{ width: '60%', margin: '0 auto 24px' }}></div>
-            <div className="skeleton skeleton-text" style={{ width: '100%' }}></div>
-            <div className="skeleton skeleton-text" style={{ width: '80%' }}></div>
-            <div className="skeleton skeleton-button" style={{ width: '100%', marginTop: '16px' }}></div>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  if (!restaurantId) {
-    return (
-      <div className="app">
-        <div className="login-page">
-          <div className="login-card">
-            <div className="login-icon">🏪</div>
-            <h1 className="login-title">No Restaurant Found</h1>
-            <p className="login-subtitle">No restaurant available for your account</p>
-            <button className="login-btn" onClick={() => supabase.auth.signOut()}>Logout</button>
-          </div>
-        </div>
-      </div>
-    )
-  }
 
   useEffect(() => {
     if (!isLoggedIn || initStatus !== 'done') return
@@ -604,49 +416,105 @@ function App() {
     return () => { mounted = false; clearInterval(intervalId) }
   }, [isLoggedIn, initStatus, preferences.autoDeclineTimeout])
 
+  const closeSidebar = useCallback(() => setSidebarOpen(false), [])
+
+  const filteredItems = menuItems.filter(item => {
+    const matchSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase())
+    const matchFilter = filterType === 'all' || (filterType === 'veg' && item.is_veg) || (filterType === 'nonveg' && !item.is_veg)
+    return matchSearch && matchFilter
+  })
+
+  const filteredOrders = orders.filter(order => {
+    if (!orderSearch) return true
+    const code = (order.order_code || '').toLowerCase()
+    const oid = (order.id || '').toLowerCase()
+    return code.includes(orderSearch.toLowerCase()) || oid.includes(orderSearch.toLowerCase())
+  })
+
+  if (resetMode) {
+    return <ResetPassword onDone={() => { setResetMode(false); window.location.hash = '' }} />
+  }
+
+  if (!isLoggedIn) return <Login />
+
+  if (authLoading || !initialized) {
+    return (
+      <div className="app">
+        <div className="login-page">
+          <div className="login-card skeleton-container">
+            <div className="skeleton skeleton-title" style={{ width: '60%', margin: '0 auto 24px' }}></div>
+            <div className="skeleton skeleton-text" style={{ width: '100%' }}></div>
+            <div className="skeleton skeleton-text" style={{ width: '80%' }}></div>
+            <div className="skeleton skeleton-button" style={{ width: '100%', marginTop: '16px' }}></div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (initStatus === 'error' || initError) {
+    return (
+      <div className="app">
+        <div className="login-page">
+          <div className="login-card">
+            <div className="login-icon">⚠️</div>
+            <h1 className="login-title">Initialization Error</h1>
+            <p className="login-subtitle">{initError || 'Something went wrong'}</p>
+            <button className="login-btn" onClick={() => supabase.auth.signOut()}>Logout</button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (initStatus === 'loading') {
+    return (
+      <div className="app">
+        <div className="login-page">
+          <div className="login-card skeleton-container">
+            <div className="skeleton skeleton-title" style={{ width: '60%', margin: '0 auto 24px' }}></div>
+            <div className="skeleton skeleton-text" style={{ width: '100%' }}></div>
+            <div className="skeleton skeleton-text" style={{ width: '80%' }}></div>
+            <div className="skeleton skeleton-button" style={{ width: '100%', marginTop: '16px' }}></div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (!restaurantId) {
+    return (
+      <div className="app">
+        <div className="login-page">
+          <div className="login-card">
+            <div className="login-icon">🏪</div>
+            <h1 className="login-title">No Restaurant Found</h1>
+            <p className="login-subtitle">No restaurant available for your account</p>
+            <button className="login-btn" onClick={() => supabase.auth.signOut()}>Logout</button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   const handleAccept = async (orderId) => {
     const order = orders.find(o => o.id === orderId)
     if (!order) return
 
-    setOrders(prev =>
-      prev.map(o =>
-        o.id === orderId ? { ...o, status: 'accepted' } : o
-      )
-    )
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'accepted' } : o))
 
     try {
-      // Update live_orders status
-      await supabase
-        .from('live_orders')
-        .update({ status: 'accepted' })
-        .eq('id', orderId)
+      await supabase.from('live_orders').update({ status: 'accepted' }).eq('id', orderId)
 
-      // Insert into kitchen_board if not already exists
-      const { data: existing } = await supabase
-        .from('kitchen_board')
-        .select('id')
-        .eq('order_id', orderId)
-        .maybeSingle()
+      const { data: existing } = await supabase.from('kitchen_board').select('id').eq('order_id', orderId).maybeSingle()
 
       if (!existing) {
-        const kitchenOrder = {
-          order_id: orderId,
-          items: order.items,
-          table_id: order.table_id,
-          status: 'pending',
-          created_at: new Date().toISOString()
-        }
-        
-        const { error: insertError } = await supabase
-          .from('kitchen_board')
-          .insert(kitchenOrder)
-        
-        if (insertError) {
-          console.error('Kitchen insert error:', insertError)
-          // If it's just a duplicate (unique constraint), we can ignore it
-          if (insertError.code !== '23505') {
-            showToast('Failed to send to kitchen', 'error')
-          }
+        const { error: insertError } = await supabase.from('kitchen_board').insert({
+          order_id: orderId, items: order.items, table_id: order.table_id, status: 'pending', created_at: new Date().toISOString()
+        })
+
+        if (insertError && insertError.code !== '23505') {
+          showToast('Failed to send to kitchen', 'error')
         } else {
           showToast('Order sent to kitchen')
         }
@@ -658,16 +526,11 @@ function App() {
   }
 
   const handleDecline = async (orderId, orderCode) => {
-    const confirmDelete = window.confirm(
-      `Decline order #${orderCode || orderId.slice(0, 8)}?\n\nThis cannot be undone.`
-    )
+    const confirmDelete = window.confirm(`Decline order #${orderCode || orderId.slice(0, 8)}?\n\nThis cannot be undone.`)
     if (!confirmDelete) return
 
     try {
-      const { error } = await supabase
-        .from('live_orders')
-        .delete()
-        .eq('id', orderId)
+      const { error } = await supabase.from('live_orders').delete().eq('id', orderId)
 
       if (error) throw error
       setOrders(prev => prev.filter(o => o.id !== orderId))
@@ -679,15 +542,10 @@ function App() {
 
   const handleSaveItem = async (id, updates) => {
     const prevItems = [...menuItems]
-    setMenuItems(prev =>
-      prev.map(item => item.id === id ? { ...item, ...updates } : item)
-    )
+    setMenuItems(prev => prev.map(item => item.id === id ? { ...item, ...updates } : item))
     try {
-      const { error } = await supabase
-        .from('menu_items')
-        .update(updates)
-        .eq('id', id)
-      
+      const { error } = await supabase.from('menu_items').update(updates).eq('id', id)
+
       if (error) throw error
     } catch (err) {
       setMenuItems(prevItems)
@@ -699,11 +557,8 @@ function App() {
     const prevItems = [...menuItems]
     setMenuItems(prev => prev.filter(item => item.id !== id))
     try {
-      const { error } = await supabase
-        .from('menu_items')
-        .delete()
-        .eq('id', id)
-      
+      const { error } = await supabase.from('menu_items').delete().eq('id', id)
+
       if (error) throw error
       showToast('Item deleted successfully')
     } catch (err) {
@@ -724,13 +579,13 @@ function App() {
           is_veg: itemData.is_veg,
           is_available: itemData.is_available,
           category_id: itemData.category_id || null,
-          restaurant_id: restaurantId || RESTAURANT_ID
+          restaurant_id: restaurantId
         })
         .select()
         .single()
-      
+
       if (error) throw error
-      
+
       setMenuItems(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)))
       setShowAddModal(false)
       showToast('Item added successfully')
@@ -748,7 +603,7 @@ function App() {
         </div>
       )}
       <OfflineBanner />
-      
+
       <header className="header">
         <button className="menu-btn" onClick={() => setSidebarOpen(true)}>☰</button>
         <h2 className="header-title">
@@ -778,7 +633,7 @@ function App() {
                 } catch (e) {
                   console.warn('SignOut error:', e.message)
                 }
-                
+
                 localStorage.removeItem('dashboard_preferences')
                 setShowProfile(false)
               }}>Logout</button>
@@ -786,7 +641,7 @@ function App() {
           )}
         </div>
       </header>
-      
+
       <main className="main-content">
         {activeTab === 'analytics' && <OverviewPage restaurantId={restaurantId} />}
 
@@ -803,37 +658,53 @@ function App() {
                   />
                 </div>
                 <div className="order-filters">
-                  <button 
+                  <button
                     className={`filter-btn ${orderFilter === 'live' ? 'active' : ''}`}
                     onClick={() => setOrderFilter('live')}
                   >
                     <span className="live-dot"></span> Live
                   </button>
-                  <button 
+                  <button
                     className={`filter-btn ${orderFilter === 'today' ? 'active' : ''}`}
                     onClick={() => setOrderFilter('today')}
                   >
                     Last Day
                   </button>
-                  <button 
+                  <button
                     className={`filter-btn ${orderFilter === '7days' ? 'active' : ''}`}
                     onClick={() => setOrderFilter('7days')}
                   >
                     7 Days
                   </button>
-                  <button 
+                  <button
                     className={`filter-btn ${orderFilter === '30days' ? 'active' : ''}`}
                     onClick={() => setOrderFilter('30days')}
                   >
                     30 Days
                   </button>
                 </div>
-                <button onClick={loadOrders} className="refresh-btn">
+                <button onClick={() => {
+                  dataInitRef.current = null
+                  setInitStatus('idle')
+                  setTimeout(() => {
+                    const user = session?.user
+                    if (user) {
+                      initializedRef.current = false
+                      setInitStatus('loading')
+                      supabase.from('restaurants').select('id, slug').eq('user_id', user.id).maybeSingle()
+                        .then(({ data }) => {
+                          if (data?.id) setRestaurantId(data.id)
+                          setInitStatus('done')
+                        })
+                        .catch(() => setInitStatus('error'))
+                    }
+                  }, 50)
+                }} className="refresh-btn">
                   🔄 Refresh
                 </button>
               </div>
             </div>
-            
+
             {orders.length === 0 ? (
               <div className="empty-state">
                 <div className="empty-icon">📦</div>
@@ -853,105 +724,102 @@ function App() {
                   </div>
                 )}
                 <div className="orders-grid">
-                    {filteredOrders.map(order => {
+                  {filteredOrders.map(order => {
                     const paymentMode = order.payment_mode?.toLowerCase()
                     const isCash = paymentMode === 'cash' || paymentMode === 'counter'
                     const isCard = paymentMode === 'card'
                     const isOnline = paymentMode === 'online'
-                    
+
                     const orderTime = new Date(order.created_at)
                     const now = new Date()
                     const minutesOld = Math.floor((now - orderTime) / 60000)
                     const isTimeout = minutesOld >= 10 && order.status !== 'accepted'
                     const isWarning = minutesOld >= 8 && minutesOld < 10 && order.status !== 'accepted'
-                    
+
                     const tableNum = order.restaurant_tables?.table_number;
 
                     return (
-                    <div 
-                      key={order.id} 
-                      className={`order-card-new ${order.status === 'accepted' ? 'accepted' : ''} ${isTimeout ? 'timeout' : ''} ${isWarning ? 'warning' : ''}`}
-                    >
-                      {/* Card Header */}
-                      <div className="card-top-bar">
-                        <div className="order-id-group">
-                          <span className="order-badge">#{order.order_code || order.id.slice(0, 8).toUpperCase()}</span>
-                          <span className="order-timestamp">{formatDateTime(order.created_at)}</span>
-                        </div>
-                        <div className="order-status-group">
-                          {order.status === 'accepted' && (
-                            <span className={`ready-badge ${order.kitchen_status || 'pending'}`}>
-                              <span className="dot">●</span> {order.kitchen_status?.toUpperCase() || 'ACCEPTED'}
-                            </span>
-                          )}
-                          <div style={{ display: 'flex', gap: '4px' }}>
-                            {isCash && <span className="p-badge counter">Cash</span>}
-                            {isCard && <span className="p-badge card">Card</span>}
-                            {isOnline && <span className="p-badge online">Online</span>}
+                      <div
+                        key={order.id}
+                        className={`order-card-new ${order.status === 'accepted' ? 'accepted' : ''} ${isTimeout ? 'timeout' : ''} ${isWarning ? 'warning' : ''}`}
+                      >
+                        <div className="card-top-bar">
+                          <div className="order-id-group">
+                            <span className="order-badge">#{order.order_code || order.id.slice(0, 8).toUpperCase()}</span>
+                            <span className="order-timestamp">{formatDateTime(order.created_at)}</span>
+                          </div>
+                          <div className="order-status-group">
+                            {order.status === 'accepted' && (
+                              <span className={`ready-badge ${order.kitchen_status || 'pending'}`}>
+                                <span className="dot">●</span> {order.kitchen_status?.toUpperCase() || 'ACCEPTED'}
+                              </span>
+                            )}
+                            <div style={{ display: 'flex', gap: '4px' }}>
+                              {isCash && <span className="p-badge counter">Cash</span>}
+                              {isCard && <span className="p-badge card">Card</span>}
+                              {isOnline && <span className="p-badge online">Online</span>}
+                            </div>
                           </div>
                         </div>
-                      </div>
 
-                      {/* Main Info Section */}
-                      <div className="card-main-info">
-                        <div className="info-item">
-                          <span className="info-label">Table</span>
-                          <span className="info-value highlighted">{tableNum || 'N/A'}</span>
+                        <div className="card-main-info">
+                          <div className="info-item">
+                            <span className="info-label">Table</span>
+                            <span className="info-value highlighted">{tableNum || 'N/A'}</span>
+                          </div>
+                          <div className="info-item" style={{ alignItems: 'flex-end' }}>
+                            <span className="info-label">Total</span>
+                            <span className="info-value price">₹{order.total_price}</span>
+                          </div>
+                          {order.status !== 'accepted' && (
+                            <div className="info-item" style={{ gridColumn: 'span 2', marginTop: '4px' }}>
+                              <span className="info-label">Time Elapsed</span>
+                              <span className={`info-value ${minutesOld >= 8 ? 'urgent' : ''}`} style={{ fontSize: '13px' }}>
+                                ⏱️ <RunningTimer createdAt={order.created_at} />
+                              </span>
+                            </div>
+                          )}
                         </div>
-                        <div className="info-item" style={{ alignItems: 'flex-end' }}>
-                          <span className="info-label">Total</span>
-                          <span className="info-value price">₹{order.total_price}</span>
-                        </div>
-                        {order.status !== 'accepted' && (
-                          <div className="info-item" style={{ gridColumn: 'span 2', marginTop: '4px' }}>
-                            <span className="info-label">Time Elapsed</span>
-                            <span className={`info-value ${minutesOld >= 8 ? 'urgent' : ''}`} style={{ fontSize: '13px' }}>
-                              ⏱️ <RunningTimer createdAt={order.created_at} />
-                            </span>
+
+                        {order.note && (
+                          <div className="order-special-note" style={{ fontSize: '12px', padding: '8px', borderRadius: '8px' }}>
+                            <strong>Note:</strong> {order.note}
                           </div>
                         )}
-                      </div>
 
-                      {order.note && (
-                        <div className="order-special-note" style={{ fontSize: '12px', padding: '8px', borderRadius: '8px' }}>
-                          <strong>Note:</strong> {order.note}
-                        </div>
-                      )}
-                      
-                      {/* Items Section */}
-                      <div className="order-items-container">
-                        <div className="items-header">Order Items ({order.items?.length || 0})</div>
-                        <div className="items-list-new">
-                          {order.items?.map((item, i) => (
-                            <div key={i} className="item-row-new">
-                              <div className="item-main-desc">
-                                <span className={`veg-indicator ${item.is_veg ? 'veg' : 'non-veg'}`} style={{ color: item.is_veg ? 'var(--green)' : 'var(--red)' }}></span>
-                                <span className="item-name-text">{item.name}</span>
+                        <div className="order-items-container">
+                          <div className="items-header">Order Items ({order.items?.length || 0})</div>
+                          <div className="items-list-new">
+                            {order.items?.map((item, i) => (
+                              <div key={i} className="item-row-new">
+                                <div className="item-main-desc">
+                                  <span className={`veg-indicator ${item.is_veg ? 'veg' : 'non-veg'}`} style={{ color: item.is_veg ? 'var(--green)' : 'var(--red)' }}></span>
+                                  <span className="item-name-text">{item.name}</span>
+                                </div>
+                                <div className="item-qty-tag">x{item.quantity}</div>
                               </div>
-                              <div className="item-qty-tag">x{item.quantity}</div>
-                            </div>
-                          ))}
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="card-actions-new">
+                          <button className="action-btn icon" onClick={() => setSelectedOrder(order)} title="View Bill">🧾</button>
+                          <div style={{ flex: 1, display: 'flex', gap: '8px' }}>
+                            {order.status === 'accepted' ? (
+                              <div className="acceptance-confirmed">
+                                <span className="check-icon">✓</span> Order Confirmed
+                              </div>
+                            ) : (
+                              <>
+                                <button className="action-btn decline" onClick={() => handleDecline(order.id, order.order_code)}>Decline</button>
+                                <button className="action-btn accept" onClick={() => handleAccept(order.id)}>Accept</button>
+                              </>
+                            )}
+                          </div>
                         </div>
                       </div>
-                      
-                      {/* Actions Footer */}
-                      <div className="card-actions-new">
-                        <button className="action-btn icon" onClick={() => setSelectedOrder(order)} title="View Bill">🧾</button>
-                        <div style={{ flex: 1, display: 'flex', gap: '8px' }}>
-                          {order.status === 'accepted' ? (
-                            <div className="acceptance-confirmed">
-                              <span className="check-icon">✓</span> Order Confirmed
-                            </div>
-                          ) : (
-                            <>
-                              <button className="action-btn decline" onClick={() => handleDecline(order.id, order.order_code)}>Decline</button>
-                              <button className="action-btn accept" onClick={() => handleAccept(order.id)}>Accept</button>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                    )})}
+                    )
+                  })}
                 </div>
               </>
             )}
@@ -965,7 +833,19 @@ function App() {
                 <span className="stat-label">Total Items</span>
                 <span className="stat-value">{menuItems.length}</span>
               </div>
-              <button onClick={loadMenuItems} className="refresh-btn-glass">
+              <button onClick={() => {
+                dataInitRef.current = null
+                setMenuLoading(true)
+                supabase.from('menu_items').select('id, name, price, description, is_veg, is_available, category_id, image_url').eq('restaurant_id', restaurantId).order('name', { ascending: true })
+                  .then(({ data, error }) => {
+                    if (error) {
+                      setToast ? setToast({ message: 'Failed to load menu items', type: 'error' }) : null
+                    } else {
+                      setMenuItems(data || [])
+                    }
+                    setMenuLoading(false)
+                  })
+              }} className="refresh-btn-glass">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M23 4v6h-6M1 20v-6h6"/>
                   <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
@@ -983,7 +863,7 @@ function App() {
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
               </div>
-              
+
               <div className="filter-tabs">
                 <button
                   className={`filter-tab ${filterType === 'all' ? 'active' : ''}`}
@@ -1004,7 +884,7 @@ function App() {
                   🔴 Non-Veg
                 </button>
               </div>
-              
+
               <button className="add-btn" onClick={() => setShowAddModal(true)}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                   <line x1="12" y1="5" x2="12" y2="19"/>
@@ -1013,7 +893,7 @@ function App() {
                 Add Item
               </button>
             </div>
-            
+
             {menuLoading ? (
               <div className="loading-grid">
                 {[1, 2, 3, 4].map(i => (
@@ -1028,15 +908,15 @@ function App() {
               <div className="empty-state">
                 <div className="empty-icon">{searchQuery || filterType !== 'all' ? '🔍' : '🍽️'}</div>
                 <h3>{searchQuery || filterType !== 'all' ? 'No items found' : 'No menu items yet'}</h3>
-                <p>{searchQuery || filterType !== 'all' 
-                  ? 'Try adjusting your search or filter to find what you\'re looking for.' 
-                  : 'Start building your menu by adding your first item. It\'s quick and easy!'}</p>
+                <p>{searchQuery || filterType !== 'all'
+                  ? 'Try adjusting your search or filter to find what you\'re looking for.'
+                  : 'Start building your menu by adding your first item.'}</p>
                 <button className="add-btn" onClick={() => {
                   if (searchQuery || filterType !== 'all') {
-                    setSearchQuery('');
-                    setFilterType('all');
+                    setSearchQuery('')
+                    setFilterType('all')
                   } else {
-                    setShowAddModal(true);
+                    setShowAddModal(true)
                   }
                 }}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -1083,9 +963,9 @@ function App() {
 
         {activeTab === 'featured' && <FeaturedItemsPanel restaurantId={restaurantId} />}
       </main>
-      
+
       <Sidebar isOpen={sidebarOpen} onClose={closeSidebar} activeTab={activeTab} setActiveTab={setActiveTab} />
-      
+
       {showAddModal && (
         <AddItemModal
           onSave={handleAddItem}
@@ -1115,49 +995,49 @@ function Sidebar({ isOpen, onClose, activeTab, setActiveTab }) {
           <button className="close-btn" onClick={onClose}>×</button>
         </div>
         <nav className="sidebar-nav">
-          <button 
+          <button
             className={`nav-item ${activeTab === 'analytics' ? 'active' : ''}`}
             onClick={() => { setActiveTab('analytics'); onClose(); }}
           >
             📊 Analytics
           </button>
-          <button 
+          <button
             className={`nav-item ${activeTab === 'orders' ? 'active' : ''}`}
             onClick={() => { setActiveTab('orders'); onClose(); }}
           >
             📦 Orders
           </button>
-          <button 
+          <button
             className={`nav-item ${activeTab === 'kitchen' ? 'active' : ''}`}
             onClick={() => { setActiveTab('kitchen'); onClose(); }}
           >
             🍳 Kitchen
           </button>
-          <button 
+          <button
             className={`nav-item ${activeTab === 'menu_items' ? 'active' : ''}`}
             onClick={() => { setActiveTab('menu_items'); onClose(); }}
           >
             🍽️ Menu Items
           </button>
-          <button 
+          <button
             className={`nav-item ${activeTab === 'categories' ? 'active' : ''}`}
             onClick={() => { setActiveTab('categories'); onClose(); }}
           >
             📂 Categories
           </button>
-          <button 
+          <button
             className={`nav-item ${activeTab === 'featured' ? 'active' : ''}`}
             onClick={() => { setActiveTab('featured'); onClose(); }}
           >
             🎯 Featured
           </button>
-          <button 
+          <button
             className={`nav-item ${activeTab === 'tables' ? 'active' : ''}`}
             onClick={() => { setActiveTab('tables'); onClose(); }}
           >
             🪑 Tables
           </button>
-          <button 
+          <button
             className={`nav-item ${activeTab === 'settings' ? 'active' : ''}`}
             onClick={() => { setActiveTab('settings'); onClose(); }}
           >
@@ -1170,24 +1050,24 @@ function Sidebar({ isOpen, onClose, activeTab, setActiveTab }) {
 }
 
 function RunningTimer({ createdAt }) {
-  const [elapsed, setElapsed] = useState('');
+  const [elapsed, setElapsed] = useState('')
 
   useEffect(() => {
     const update = () => {
-      const now = new Date();
-      const start = new Date(createdAt);
-      const diff = Math.floor((now - start) / 1000);
-      if (diff < 60) setElapsed(`${diff}s ago`);
-      else if (diff < 3600) setElapsed(`${Math.floor(diff / 60)}m ago`);
-      else setElapsed(`${Math.floor(diff / 3600)}h ${Math.floor((diff % 3600) / 60)}m ago`);
-    };
+      const now = new Date()
+      const start = new Date(createdAt)
+      const diff = Math.floor((now - start) / 1000)
+      if (diff < 60) setElapsed(`${diff}s ago`)
+      else if (diff < 3600) setElapsed(`${Math.floor(diff / 60)}m ago`)
+      else setElapsed(`${Math.floor(diff / 3600)}h ${Math.floor((diff % 3600) / 60)}m ago`)
+    }
 
-    update();
-    const interval = setInterval(update, 1000);
-    return () => clearInterval(interval);
-  }, [createdAt]);
+    update()
+    const interval = setInterval(update, 1000)
+    return () => clearInterval(interval)
+  }, [createdAt])
 
-  return <span>{elapsed}</span>;
+  return <span>{elapsed}</span>
 }
 
 export default App
