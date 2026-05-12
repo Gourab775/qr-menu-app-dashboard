@@ -122,11 +122,20 @@ export function AuthProvider({ children }) {
   }, [fetchProfile])
 
   const signOut = useCallback(async () => {
-    const { error } = await supabase.auth.signOut()
-    if (error) throw error
-    setSession(null)
-    setProfile(null)
-    fetchedProfileRef.current = null
+    try {
+      fetchedProfileRef.current = null
+      isFetchingProfile.current = false
+      setSession(null)
+      setProfile(null)
+      setLoading(false)
+      setInitialized(false)
+      const { error } = await supabase.auth.signOut()
+      if (error) console.warn('Supabase signOut warning:', error.message)
+    } catch (err) {
+      console.error('signOut error:', err)
+      setSession(null)
+      setProfile(null)
+    }
   }, [])
 
   const resetPassword = useCallback(async (email) => {

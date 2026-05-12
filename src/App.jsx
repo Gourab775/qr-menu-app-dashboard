@@ -19,7 +19,7 @@ import './App.css'
 import './theme.css'
 
 function App() {
-  const { session, profile, loading: authLoading, initialized } = useAuth()
+  const { session, profile, loading: authLoading, initialized, signOut } = useAuth()
   const [resetMode, setResetMode] = useState(() => window.location.hash === '#reset-password')
   const [restaurantId, setRestaurantId] = useState(null)
   const [restaurantSlug, setRestaurantSlug] = useState('')
@@ -61,6 +61,7 @@ function App() {
   const initializedRef = useRef(false)
   const initTimeoutRef = useRef(null)
   const dataInitRef = useRef(null)
+  const logoutRef = useRef(false)
 
   const userRole = profile?.role || 'staff'
   const userFullName = profile?.full_name || profile?.email || session?.user?.email || 'User'
@@ -104,6 +105,37 @@ function App() {
     }, 10000)
     return () => { if (initTimeoutRef.current) clearTimeout(initTimeoutRef.current) }
   }, [initStatus])
+
+  const handleLogout = useCallback(async () => {
+    if (logoutRef.current) return
+    logoutRef.current = true
+
+    try {
+      localStorage.removeItem('dashboard_preferences')
+      localStorage.removeItem('dashboard_keepLoggedIn')
+      setShowProfile(false)
+      await signOut()
+
+      setRestaurantId(null)
+      setRestaurantSlug('')
+      setRestaurantName('')
+      setOrders([])
+      setMenuItems([])
+      setCategories([])
+      initializedRef.current = false
+      dataInitRef.current = null
+      setInitStatus('idle')
+      setInitError(null)
+
+      window.location.hash = ''
+      window.location.reload()
+    } catch (err) {
+      console.error('Logout error:', err)
+      window.location.reload()
+    } finally {
+      logoutRef.current = false
+    }
+  }, [signOut])
 
   useEffect(() => {
     if (!isLoggedIn || initializedRef.current) return
@@ -460,7 +492,9 @@ function App() {
             <div className="login-icon">⚠️</div>
             <h1 className="login-title">Initialization Error</h1>
             <p className="login-subtitle">{initError || 'Something went wrong'}</p>
-            <button className="login-btn" onClick={() => supabase.auth.signOut()}>Logout</button>
+            <button className="login-btn" onClick={() => {
+                signOut().then(() => window.location.reload()).catch(() => window.location.reload())
+              }}>Logout</button>
           </div>
         </div>
       </div>
@@ -490,7 +524,9 @@ function App() {
             <div className="login-icon">🏪</div>
             <h1 className="login-title">No Restaurant Found</h1>
             <p className="login-subtitle">No restaurant available for your account</p>
-            <button className="login-btn" onClick={() => supabase.auth.signOut()}>Logout</button>
+            <button className="login-btn" onClick={() => {
+                signOut().then(() => window.location.reload()).catch(() => window.location.reload())
+              }}>Logout</button>
           </div>
         </div>
       </div>
@@ -627,16 +663,7 @@ function App() {
                 <p className="profile-id">ID: {(profile?.id || session?.user?.id || '').slice(0, 8)}...</p>
               </div>
               <div className="profile-divider"></div>
-              <button className="profile-btn" onClick={async () => {
-                try {
-                  await supabase.auth.signOut()
-                } catch (e) {
-                  console.warn('SignOut error:', e.message)
-                }
-
-                localStorage.removeItem('dashboard_preferences')
-                setShowProfile(false)
-              }}>Logout</button>
+              <button className="profile-btn" onClick={handleLogout}>Logout</button>
             </div>
           )}
         </div>

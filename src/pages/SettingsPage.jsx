@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { supabase, RESTAURANT_ID } from '../lib/supabase'
+import { useAuth } from '../contexts/AuthContext'
 
 const SOUND_OPTIONS = [
   { id: 'beep', name: 'Default Beep', freq: [800, 1000], duration: 0.3 },
@@ -268,6 +269,7 @@ Limitation of Liability
  We are not liable for indirect or consequential damages`
 
 export default function SettingsPage({ preferences, setPreferences, onToast, restaurantId }) {
+  const { signOut } = useAuth()
   const [restaurant, setRestaurant] = useState(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -527,21 +529,20 @@ const handlePasswordChange = async (e) => {
       setFormData({})
       
       console.log('[Password Change] Step 3: Signing out from Supabase...')
-      
-      await supabase.auth.signOut()
+
+      await signOut()
       console.log('[Password Change] Signed out from Supabase')
-      
-      localStorage.removeItem('dashboard_auth')
-      localStorage.removeItem('dashboard_password')
+
       localStorage.removeItem('dashboard_preferences')
-      
+      localStorage.removeItem('dashboard_keepLoggedIn')
+
       showToast('Password updated. Please login with new password.')
       closeModal()
-      
+
       setTimeout(() => {
         console.log('[Password Change] Redirecting to login...')
-        window.location.href = '/'
-      }, 1500)
+        window.location.reload()
+      }, 100)
       
     } catch (err) {
       console.error('[Password Change] Error:', err)
@@ -554,14 +555,13 @@ const handlePasswordChange = async (e) => {
   const handleLogout = async (forceLogout = false) => {
     if (forceLogout || window.confirm('Are you sure you want to logout?')) {
       try {
-        localStorage.removeItem('dashboard_auth')
-        localStorage.removeItem('dashboard_password')
         localStorage.removeItem('dashboard_preferences')
-        showToast('Logged out successfully')
-        window.location.href = '/'
+        localStorage.removeItem('dashboard_keepLoggedIn')
+        await signOut()
+        setTimeout(() => window.location.reload(), 100)
       } catch (err) {
         console.error('Logout error:', err)
-        window.location.href = '/'
+        setTimeout(() => window.location.reload(), 100)
       }
     }
   }
