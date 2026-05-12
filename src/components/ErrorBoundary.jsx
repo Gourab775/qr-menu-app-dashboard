@@ -1,9 +1,6 @@
-import React from 'react'
-import ReactDOM from 'react-dom/client'
-import { AuthProvider } from './contexts/AuthContext.jsx'
-import App from './App.jsx'
+import { Component } from 'react'
 
-class ErrorBoundary extends React.Component {
+export class ErrorBoundary extends Component {
   constructor(props) {
     super(props)
     this.state = { hasError: false, error: null, errorInfo: null }
@@ -14,7 +11,7 @@ class ErrorBoundary extends React.Component {
   }
 
   componentDidCatch(error, errorInfo) {
-    console.error('App Error:', error, errorInfo)
+    console.error('ErrorBoundary caught an error:', error, errorInfo)
     this.setState({ errorInfo })
   }
 
@@ -60,7 +57,7 @@ class ErrorBoundary extends React.Component {
             </button>
             {process.env.NODE_ENV === 'development' && this.state.errorInfo && (
               <details style={{ marginTop: '24px', textAlign: 'left', color: '#a0a0a0' }}>
-                <summary style={{ cursor: 'pointer', marginBottom: '8px' }}>Error Details (Dev Only)</summary>
+                <summary style={{ cursor: 'pointer', marginBottom: '8px' }}>Error Details</summary>
                 <pre style={{ fontSize: '12px', overflow: 'auto', padding: '12px', backgroundColor: '#0f0f23', borderRadius: '8px' }}>
                   {this.state.error?.stack}
                   {'\n\nComponent Stack:\n'}
@@ -77,12 +74,4 @@ class ErrorBoundary extends React.Component {
   }
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(
-  <React.StrictMode>
-    <ErrorBoundary>
-      <AuthProvider>
-        <App />
-      </AuthProvider>
-    </ErrorBoundary>
-  </React.StrictMode>,
-)
+export default ErrorBoundary

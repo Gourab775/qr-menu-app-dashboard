@@ -61,7 +61,7 @@ function App() {
   const profileRef = useRef(null)
   const initializedRef = useRef(false)
   const initTimeoutRef = useRef(null)
-  const ordersLoadedRef = useRef(false)
+  const initRef = useRef(null)
 
   const userRole = profile?.role || 'staff'
   const userFullName = profile?.full_name || profile?.email || session?.user?.email || 'User'
@@ -192,7 +192,7 @@ function App() {
 
       const { data, error } = await query
       if (error && error.code !== 'PGRST116') {
-        showToast('Failed to load orders', 'error')
+        setToast ? setToast({ message: 'Failed to load orders', type: 'error' }) : null
         setOrders([])
       } else {
         const ids = (data || []).map(o => o.id)
@@ -209,9 +209,10 @@ function App() {
             (o.table_id ? { table_number: null } : null)
         }))
 
-        if (o.table_id && !resolved.find(r => r.id === o.id)?.restaurant_tables?.table_number) {
+        const unresolvedIds = [...new Set((data || []).filter(o => o.table_id && !o.restaurant_tables?.table_number).map(o => o.table_id))]
+        if (unresolvedIds.length > 0) {
           const { data: tr } = await supabase
-            .from('restaurant_tables').select('id, table_number').in('id', [...new Set((data || []).filter(o => o.table_id && !o.restaurant_tables?.table_number).map(o => o.table_id))])
+            .from('restaurant_tables').select('id, table_number').in('id', unresolvedIds)
           const tMap = {}
           ;(tr || []).forEach(t => { tMap[t.id] = t.table_number })
           resolved.forEach(o => {
@@ -222,15 +223,15 @@ function App() {
         }
 
         setOrders(resolved)
-        ordersLoadedRef.current = true
+        initRef.current = true
       }
     } catch {
-      showToast('Failed to load orders', 'error')
+      setToast ? setToast({ message: 'Failed to load orders', type: 'error' }) : null
       setOrders([])
     } finally {
       setLoading(false)
     }
-  }, [restaurantId, orderFilter, showToast])
+  }, [restaurantId, orderFilter])
 
   const loadCategories = useCallback(async () => {
     const rid = restaurantId
@@ -252,28 +253,105 @@ function App() {
       if (error) throw error
       setMenuItems(data || [])
     } catch {
-      showToast('Failed to load menu items', 'error')
+      setToast ? setToast({ message: 'Failed to load menu items', type: 'error' }) : null
     } finally {
       setMenuLoading(false)
     }
-  }, [restaurantId, showToast])
-
-  const initRef = useRef(null)
+  }, [restaurantId])
 
   useEffect(() => {
     if (!isLoggedIn || !restaurantId || initStatus !== 'done') return
     if (initRef.current === restaurantId) return
     initRef.current = restaurantId
 
-    loadOrders(true)
-    loadCategories()
-    loadMenuItems()
-  }, [isLoggedIn, restaurantId, initStatus])
+    const doLoad = async () => {
+      setLoading(true)
+      const now = new Date()
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+      const formatDate = (d) => {
+        const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), day = String(d.getDate()).padStart(2, '0')
+        return `${y}-${m}-${day}`
+      }
+      const todayStr = formatDate(today)
+      const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1)
+      const yesterdayStr = formatDate(yesterday)
 
-  useEffect(() => {
-    if (!restaurantId || initStatus !== 'done') return
-    loadOrders(true)
-  }, [orderFilter])
+      let bounds = { start: `${todayStr} 00:00:00`, end: null }
+      if (orderFilter === 'today') bounds = { start: `${yesterdayStr} 00:00:00`, end: `${yesterdayStr} 23:59:59` }
+      else if (orderFilter === '7days') {
+        const d = new Date(today); d.setDate(d.getDate() - 7)
+        bounds = { start: `${formatDate(d)} 00:00:00`, end: `${yesterdayStr} 23:59:59` }
+      } else if (orderFilter === '30days') {
+        const d = new Date(today); d.setDate(d.getDate() - 30)
+        bounds = { start: `${formatDate(d)} 00:00:00`, end: `${yesterdayStr} 23:59:59` }
+      }
+
+      try {
+        let query = supabase
+          .from('live_orders')
+          .select('id, restaurant_id, total_price, payment_mode, status, items, created_at, order_code, table_id, note, restaurant_tables(table_number)')
+          .eq('restaurant_id', restaurantId)
+          .order('created_at', { ascending: false })
+          .limit(200)
+
+        if (bounds.start) query = query.gte('created_at', bounds.start)
+        if (bounds.end) query = query.lte('created_at', bounds.end)
+
+        const { data, error } = await query
+        if (error && error.code !== 'PGRST116') {
+          setToast ? setToast({ message: 'Failed to load orders', type: 'error' }) : null
+          setOrders([])
+        } else {
+          const ids = (data || []).map(o => o.id)
+          let kitchenMap = {}
+          if (ids.length > 0) {
+            const { data: kr } = await supabase.from('kitchen_board').select('order_id, status').in('order_id', ids)
+            ;(kr || []).forEach(k => { kitchenMap[k.order_id] = k.status })
+          }
+
+          const resolved = (data || []).map(o => ({
+            ...o,
+            kitchen_status: kitchenMap[o.id] || null,
+            restaurant_tables: o.restaurant_tables || (o.table_id ? { table_number: null } : null)
+          }))
+
+          const unresolvedIds = [...new Set((data || []).filter(o => o.table_id && !o.restaurant_tables?.table_number).map(o => o.table_id))]
+          if (unresolvedIds.length > 0) {
+            const { data: tr } = await supabase.from('restaurant_tables').select('id, table_number').in('id', unresolvedIds)
+            const tMap = {}
+            ;(tr || []).forEach(t => { tMap[t.id] = t.table_number })
+            resolved.forEach(o => {
+              if (o.table_id && tMap[o.table_id] !== undefined) {
+                o.restaurant_tables = { table_number: tMap[o.table_id] }
+              }
+            })
+          }
+
+          setOrders(resolved)
+        }
+      } catch {
+        setToast ? setToast({ message: 'Failed to load orders', type: 'error' }) : null
+        setOrders([])
+      } finally {
+        setLoading(false)
+      }
+
+      const rid = restaurantId
+      const { data: catData } = await supabase.from('categories').select('id, name, image, sort_order').eq('restaurant_id', rid).order('sort_order', { ascending: true })
+      if (catData) setCategories(catData || [])
+
+      setMenuLoading(true)
+      const { data: itemData, error: itemErr } = await supabase.from('menu_items').select('id, name, price, description, is_veg, is_available, category_id, image_url').eq('restaurant_id', rid).order('name', { ascending: true })
+      if (itemErr) {
+        setToast ? setToast({ message: 'Failed to load menu items', type: 'error' }) : null
+      } else {
+        setMenuItems(itemData || [])
+      }
+      setMenuLoading(false)
+    }
+
+    doLoad()
+  }, [isLoggedIn, restaurantId, initStatus, orderFilter])
 
   const closeSidebar = useCallback(() => setSidebarOpen(false), [])
 
