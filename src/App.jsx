@@ -42,6 +42,7 @@ function App() {
   const [orderSearch, setOrderSearch] = useState('')
   const [filterType, setFilterType] = useState('all')
   const [toast, setToast] = useState(null)
+  const [newOrderToast, setNewOrderToast] = useState(null)
   const [selectedOrder, setSelectedOrder] = useState(null)
   const [isOnline, setIsOnline] = useState(navigator.onLine)
   const [preferences, setPreferences] = useState(() => {
@@ -443,7 +444,8 @@ function App() {
               if (preferences.soundEnabled) playSound()
               if (preferences.orderNotifications) {
                 const code = resolved.order_code || newOrderId.slice(0, 8).toUpperCase()
-                setToast ? setToast({ message: `📦 New Order #${code}`, type: 'success' }) : null
+                setNewOrderToast(`📦 New Order #${code}`)
+                setTimeout(() => setNewOrderToast(null), 4000)
               }
               return [resolved, ...prev].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
             })
@@ -657,110 +659,6 @@ function App() {
     } catch (err) {
       showToast('Failed to add item', 'error')
     }
-  }
-
-  const closeSidebar = () => setSidebarOpen(false)
-
-  const filteredItems = menuItems.filter(item => {
-    const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase())
-    const matchesFilter =
-      filterType === 'all' ||
-      (filterType === 'veg' && item.is_veg) ||
-      (filterType === 'nonveg' && !item.is_veg)
-    return matchesSearch && matchesFilter
-  })
-
-  const filteredOrders = orders.filter(order => {
-    if (!orderSearch) return true
-    const orderCode = order.order_code || ''
-    const orderId = order.id || ''
-    return (
-      orderCode.toLowerCase().includes(orderSearch.toLowerCase()) ||
-      orderId.toLowerCase().includes(orderSearch.toLowerCase())
-    )
-  })
-
-  if (resetMode) {
-    return <ResetPassword onDone={() => { setResetMode(false); window.location.hash = ''; }} />
-  }
-
-  if (!isLoggedIn) {
-    return <Login />
-  }
-
-  if (authLoading || isInitializing) {
-    return (
-      <div className="app">
-        <div className="login-page">
-          <div className="login-card skeleton-container">
-            <div className="skeleton skeleton-title" style={{ width: '60%', margin: '0 auto 24px' }}></div>
-            <div className="skeleton skeleton-text" style={{ width: '100%' }}></div>
-            <div className="skeleton skeleton-text" style={{ width: '100%' }}></div>
-            <div className="skeleton skeleton-button" style={{ width: '100%', marginTop: '16px' }}></div>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  if (initError) {
-    return (
-      <div className="app">
-        <div className="login-page">
-          <div className="login-card">
-            <div className="login-icon">⚠️</div>
-            <h1 className="login-title">Initialization Error</h1>
-            <p className="login-subtitle">{initError}</p>
-            <button className="login-btn" onClick={async () => {
-              await supabase.auth.signOut()
-            }}>
-              Logout
-            </button>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  if (!restaurantId) {
-    return (
-      <div className="app">
-        <div className="login-page">
-          <div className="login-card">
-            <div className="login-icon">🏪</div>
-            <h1 className="login-title">No Restaurant Found</h1>
-            <p className="login-subtitle">No restaurant available</p>
-            <button className="login-btn" onClick={async () => {
-              await supabase.auth.signOut()
-            }}>
-              Logout
-            </button>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  if (loading) {
-    return (
-      <div className="app">
-        <header className="header">
-          <button className="menu-btn" onClick={() => setSidebarOpen(true)}>☰</button>
-          <h2 className="header-title">Dashboard</h2>
-          <div className="profile-icon">👤</div>
-        </header>
-        <main className="main-content">
-          <div className="skeleton-container" style={{maxWidth: '800px', margin: '0 auto'}}>
-            <div className="skeleton-grid">
-              <div className="skeleton skeleton-card"></div>
-              <div className="skeleton skeleton-card"></div>
-              <div className="skeleton skeleton-card"></div>
-              <div className="skeleton skeleton-card"></div>
-            </div>
-          </div>
-        </main>
-      </div>
-    )
   }
 
   return (
