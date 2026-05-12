@@ -60,7 +60,6 @@ function App() {
   const profileRef = useRef(null)
   const initializedRef = useRef(false)
   const initTimeoutRef = useRef(null)
-  const dataInitRef = useRef(null)
   const logoutRef = useRef(false)
 
   const userRole = profile?.role || 'staff'
@@ -123,7 +122,6 @@ function App() {
       setMenuItems([])
       setCategories([])
       initializedRef.current = false
-      dataInitRef.current = null
       setInitStatus('idle')
       setInitError(null)
 
@@ -187,8 +185,6 @@ function App() {
 
   useEffect(() => {
     if (!isLoggedIn || !restaurantId || initStatus !== 'done') return
-    if (dataInitRef.current === restaurantId) return
-    dataInitRef.current = restaurantId
 
     const doLoad = async () => {
       await loadOrders()
@@ -851,7 +847,6 @@ function App() {
                 <span className="stat-value">{menuItems.length}</span>
               </div>
               <button onClick={() => {
-                dataInitRef.current = null
                 setMenuLoading(true)
                 supabase.from('menu_items').select('id, name, price, description, is_veg, is_available, category_id, image_url').eq('restaurant_id', restaurantId).order('name', { ascending: true })
                   .then(({ data, error }) => {
