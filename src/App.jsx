@@ -21,20 +21,17 @@ import './theme.css'
 const ORDER_CACHE_KEY = 'dashboard_orders'
 
 function App() {
-  const { session, profile, loading: authLoading } = useAuth()
-  const isLoggedIn = !!session
-  const [resetMode, setResetMode] = useState(() => {
-    return window.location.hash === '#reset-password'
-  })
+  const { session, profile, loading: authLoading, initialized } = useAuth()
+  const [resetMode, setResetMode] = useState(() => window.location.hash === '#reset-password')
   const [restaurantId, setRestaurantId] = useState(null)
   const [restaurantSlug, setRestaurantSlug] = useState('')
   const [restaurantName, setRestaurantName] = useState('')
   const [orders, setOrders] = useState([])
   const [menuItems, setMenuItems] = useState([])
   const [categories, setCategories] = useState([])
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
   const [menuLoading, setMenuLoading] = useState(false)
-  const [isInitializing, setIsInitializing] = useState(true)
+  const [initStatus, setInitStatus] = useState('idle')
   const [initError, setInitError] = useState(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [activeTab, setActiveTab] = useState('orders')
@@ -56,45 +53,38 @@ function App() {
         autoDeclineTimeout: 10,
         theme: 'dark'
       }
-    } catch (e) {
-      return {
-        soundEnabled: true,
-        orderNotifications: true,
-        autoDeclineTimeout: 10,
-        theme: 'dark'
-      }
+    } catch {
+      return { soundEnabled: true, orderNotifications: true, autoDeclineTimeout: 10, theme: 'dark' }
     }
   })
   const profileRef = useRef(null)
-  const prevOrderCount = useRef(0)
-  const audioRef = useRef(null)
+  const initializedRef = useRef(false)
+  const initTimeoutRef = useRef(null)
+  const ordersLoadedRef = useRef(false)
 
   const userRole = profile?.role || 'staff'
   const userFullName = profile?.full_name || profile?.email || session?.user?.email || 'User'
   const profileRestaurantId = profile?.restaurant_id || null
+  const isLoggedIn = !!session
 
-  const showToast = (message, type = 'success') => {
+  const showToast = useCallback((message, type = 'success') => {
     setToast({ message, type })
     setTimeout(() => setToast(null), 3000)
-  }
+  }, [])
 
   const isAdmin = userRole === 'admin' || userRole === 'owner'
   const isManager = userRole === 'manager' || isAdmin
 
   useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (profileRef.current && !profileRef.current.contains(e.target)) {
-        setShowProfile(false)
-      }
+    const handleClick = (e) => {
+      if (profileRef.current && !profileRef.current.contains(e.target)) setShowProfile(false)
     }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
   }, [])
 
   useEffect(() => {
-    const handleOnline = () => {
-      setIsOnline(true)
-    }
+    const handleOnline = () => setIsOnline(true)
     const handleOffline = () => setIsOnline(false)
     window.addEventListener('online', handleOnline)
     window.addEventListener('offline', handleOffline)
@@ -102,519 +92,398 @@ function App() {
       window.removeEventListener('online', handleOnline)
       window.removeEventListener('offline', handleOffline)
     }
-}, [])
+  }, [])
 
-  const initializeApp = useCallback(async (user) => {
+  useEffect(() => {
+    if (initTimeoutRef.current) clearTimeout(initTimeoutRef.current)
+    initTimeoutRef.current = setTimeout(() => {
+      if (initStatus === 'loading') {
+        console.warn('Init timeout reached, forcing completion')
+        setInitStatus('done')
+      }
+    }, 10000)
+    return () => { if (initTimeoutRef.current) clearTimeout(initTimeoutRef.current) }
+  }, [initStatus])
+
+  useEffect(() => {
+    if (!isLoggedIn || initializedRef.current) return
+    if (!initialized) return
+
+    const user = session?.user
     if (!user) return
-    
-    setIsInitializing(true)
-    setInitError(null)
-    
-    try {
-      let restaurantIdValue = null
-      
-      if (profileRestaurantId) {
-        const { data: restData } = await supabase
-          .from('restaurants')
-          .select('id, slug')
-          .eq('id', profileRestaurantId)
-          .maybeSingle()
-        
-        if (restData) {
-          restaurantIdValue = restData.id
-          setRestaurantSlug(restData.slug || '')
+
+    initializedRef.current = true
+    setInitStatus('loading')
+
+    const initApp = async () => {
+      try {
+        let rid = profileRestaurantId
+        if (!rid) {
+          const { data } = await supabase
+            .from('restaurants')
+            .select('id, slug')
+            .eq('user_id', user.id)
+            .maybeSingle()
+          rid = data?.id
+          if (data?.slug) setRestaurantSlug(data.slug)
         }
-      }
-      
-      if (!restaurantIdValue) {
-        const { data: userRest } = await supabase
-          .from('restaurants')
-          .select('id, slug')
-          .eq('user_id', user.id)
-          .maybeSingle()
-        
-        if (userRest) {
-          restaurantIdValue = userRest.id
-          setRestaurantSlug(userRest.slug || '')
+        if (!rid) {
+          const { data: fb } = await supabase.from('restaurants').select('id, slug').limit(1).maybeSingle()
+          rid = fb?.id
+          if (fb?.slug && !restaurantSlug) setRestaurantSlug(fb.slug)
         }
-      }
-      
-      if (!restaurantIdValue) {
-        const { data: fallback } = await supabase.from('restaurants').select('id').limit(1).maybeSingle()
-        restaurantIdValue = fallback?.id
-      }
-      
-      if (!restaurantIdValue) {
-        setInitError('No restaurant found. Please contact support.')
-        setIsInitializing(false)
-        return
-      }
-      
-      setRestaurantId(restaurantIdValue)
-      
-      if (!profileRestaurantId && restaurantIdValue) {
-        const { data: restData } = await supabase.from('restaurants').select('slug').eq('id', restaurantIdValue).maybeSingle()
-        if (restData?.slug) setRestaurantSlug(restData.slug)
-      }
-    } catch (err) {
-      setInitError('Failed to initialize. Please try again.')
-    } finally {
-      setIsInitializing(false)
-    }
-  }, [profileRestaurantId])
-
-  const initializingRef = useRef(true)
-  
-  useEffect(() => {
-    const initTimeout = setTimeout(() => {
-      if (initializingRef.current) {
-        setIsInitializing(false)
-        initializingRef.current = false
-      }
-    }, 8000)
-    
-    if (session?.user) {
-      initializeApp(session.user).finally(() => {
-        clearTimeout(initTimeout)
-        initializingRef.current = false
-      })
-    } else if (!session && !authLoading) {
-      clearTimeout(initTimeout)
-      initializingRef.current = false
-      setIsInitializing(false)
-    }
-    
-    return () => {
-      clearTimeout(initTimeout)
-    }
-  }, [session, authLoading, initializeApp])
-
-  const [soundReady, setSoundReady] = useState(false)
-  const [newOrderToast, setNewOrderToast] = useState(null)
-  const lastPlayedOrderRef = useRef(null)
-  const audioContextRef = useRef(null)
-
-  const SOUND_OPTIONS = [
-    { id: 'beep', name: 'Default Beep', freq: [800, 1000], duration: 0.3 },
-    { id: 'chime', name: 'Soft Chime', freq: [600, 800, 1000], duration: 0.5 },
-    { id: 'bell', name: 'Bell Ring', freq: [500, 700], duration: 0.6 },
-    { id: 'alert', name: 'Alert Tone', freq: [1000, 1200, 800], duration: 0.4 },
-    { id: 'digital', name: 'Digital Ping', freq: [1500, 2000], duration: 0.2 },
-    { id: 'pop', name: 'Notification Pop', freq: [400, 600], duration: 0.25 },
-    { id: 'ding', name: 'Classic Ding', freq: [700, 900], duration: 0.35 },
-    { id: 'subtle', name: 'Subtle Click', freq: [300], duration: 0.15 },
-    { id: 'triple', name: 'Triple Alert', freq: [800, 800, 800], duration: 0.45 },
-    { id: 'ascend', name: 'Ascending Tone', freq: [400, 600, 800], duration: 0.4 }
-  ]
-
-  const createNotificationSound = useCallback(() => {
-    try {
-      const AudioContext = window.AudioContext || window.webkitAudioContext
-      if (!AudioContext) return null
-      
-      const ctx = new AudioContext()
-      audioContextRef.current = ctx
-      
-      const selectedSound = SOUND_OPTIONS.find(s => s.id === preferences.notificationSound) || SOUND_OPTIONS[0]
-      
-      const playTone = () => {
-        if (ctx.state === 'suspended') {
-          ctx.resume()
+        if (!rid) {
+          setInitError('No restaurant found. Please contact support.')
+          setInitStatus('error')
+          return
         }
-        
-        let delay = 0
-        selectedSound.freq.forEach((freq, i) => {
-          setTimeout(() => {
-            const oscillator = ctx.createOscillator()
-            const gainNode = ctx.createGain()
-            
-            oscillator.connect(gainNode)
-            gainNode.connect(ctx.destination)
-            
-            oscillator.frequency.value = freq
-            oscillator.type = 'sine'
-            
-            const toneDuration = selectedSound.duration / selectedSound.freq.length
-            gainNode.gain.setValueAtTime(0.25, ctx.currentTime)
-            gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + toneDuration)
-            
-            oscillator.start(ctx.currentTime)
-            oscillator.stop(ctx.currentTime + toneDuration)
-          }, delay)
-          delay += (selectedSound.duration * 1000) / selectedSound.freq.length
-        })
+        setRestaurantId(rid)
+        const { data: rData } = await supabase.from('restaurants').select('name, slug').eq('id', rid).maybeSingle()
+        if (rData) {
+          setRestaurantName(rData.name || '')
+          if (rData.slug && !restaurantSlug) setRestaurantSlug(rData.slug)
+        }
+        setInitStatus('done')
+      } catch {
+        setInitError('Failed to initialize. Please try again.')
+        setInitStatus('error')
       }
-      
-      return playTone
-    } catch (err) {
-      return null
-    }
-  }, [preferences.notificationSound])
-
-  const playNotificationToneRef = useRef(null)
-
-  const initAudio = useCallback(() => {
-    if (soundReady) return
-    
-    try {
-      playNotificationToneRef.current = createNotificationSound()
-      setSoundReady(true)
-    } catch (err) {
-    }
-  }, [soundReady, createNotificationSound, preferences.notificationSound])
-
-  const playNotificationSound = useCallback(() => {
-    if (!preferences.soundEnabled) return
-    
-    try {
-      if (playNotificationToneRef.current) {
-        playNotificationToneRef.current()
-      }
-    } catch (err) {
-    }
-  }, [preferences.soundEnabled])
-
-  useEffect(() => {
-    if (!isLoggedIn) return
-
-    const handleUserGesture = () => {
-      initAudio()
-      document.removeEventListener('click', handleUserGesture)
-      document.removeEventListener('keydown', handleUserGesture)
     }
 
-    document.addEventListener('click', handleUserGesture)
-    document.addEventListener('keydown', handleUserGesture)
+    initApp()
+  }, [isLoggedIn, initialized, session?.user?.id, profileRestaurantId])
 
-    return () => {
-      document.removeEventListener('click', handleUserGesture)
-      document.removeEventListener('keydown', handleUserGesture)
-    }
-  }, [isLoggedIn, initAudio])
+  const loadOrders = useCallback(async (isInitial = false) => {
+    const rid = restaurantId
+    if (!rid) return
+    if (isInitial) setLoading(true)
 
-  const formatLocalDate = (date) => {
-    const year = date.getFullYear()
-    const month = String(date.getMonth() + 1).padStart(2, '0')
-    const day = String(date.getDate()).padStart(2, '0')
-    return `${year}-${month}-${day}`
-  }
-
-  const getDateFilter = (filter) => {
     const now = new Date()
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-    const todayStr = formatLocalDate(today)
-    const yesterday = new Date(today)
-    yesterday.setDate(yesterday.getDate() - 1)
-    const yesterdayStr = formatLocalDate(yesterday)
-
-    switch (filter) {
-      case 'live':
-        return { start: `${todayStr} 00:00:00`, end: null }
-      case 'today':
-        return { start: `${yesterdayStr} 00:00:00`, end: `${yesterdayStr} 23:59:59` }
-      case '7days':
-        const sevenDaysAgo = new Date(today)
-        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
-        const sevenDaysAgoStr = formatLocalDate(sevenDaysAgo)
-        return { start: `${sevenDaysAgoStr} 00:00:00`, end: `${yesterdayStr} 23:59:59` }
-      case '30days':
-        const thirtyDaysAgo = new Date(today)
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
-        const thirtyDaysAgoStr = formatLocalDate(thirtyDaysAgo)
-        return { start: `${thirtyDaysAgoStr} 00:00:00`, end: `${yesterdayStr} 23:59:59` }
-      default:
-        return { start: `${todayStr} 00:00:00`, end: null }
+    const formatDate = (d) => {
+      const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), day = String(d.getDate()).padStart(2, '0')
+      return `${y}-${m}-${day}`
     }
-  }
+    const todayStr = formatDate(today)
+    const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1)
+    const yesterdayStr = formatDate(yesterday)
 
-  const loadOrders = async (isInitialLoad = false) => {
-    const restId = restaurantId
-    
-    if (!restId) {
-      setLoading(false)
-      return
+    let bounds = { start: `${todayStr} 00:00:00`, end: null }
+    if (orderFilter === 'today') bounds = { start: `${yesterdayStr} 00:00:00`, end: `${yesterdayStr} 23:59:59` }
+    else if (orderFilter === '7days') {
+      const d = new Date(today); d.setDate(d.getDate() - 7)
+      bounds = { start: `${formatDate(d)} 00:00:00`, end: `${yesterdayStr} 23:59:59` }
+    } else if (orderFilter === '30days') {
+      const d = new Date(today); d.setDate(d.getDate() - 30)
+      bounds = { start: `${formatDate(d)} 00:00:00`, end: `${yesterdayStr} 23:59:59` }
     }
-    
-    setLoading(true)
-    const { startDate, endDate } = getDateFilter(orderFilter)
-    
+
     try {
-      const { data: restaurantData } = await supabase
-        .from('restaurants')
-        .select('name')
-        .eq('id', restId)
-        .single()
-      
-      if (restaurantData?.name) {
-        setRestaurantName(restaurantData.name)
-      }
-
       let query = supabase
         .from('live_orders')
         .select('id, restaurant_id, total_price, payment_mode, status, items, created_at, order_code, table_id, note, restaurant_tables(table_number)')
-        .eq('restaurant_id', restId)
+        .eq('restaurant_id', rid)
         .order('created_at', { ascending: false })
         .limit(200)
 
-      // Apply date filter
-      const filterBounds = getDateFilter(orderFilter)
-      if (filterBounds) {
-        if (filterBounds.start) query = query.gte('created_at', filterBounds.start)
-        if (filterBounds.end) query = query.lte('created_at', filterBounds.end)
-      }
+      if (bounds.start) query = query.gte('created_at', bounds.start)
+      if (bounds.end) query = query.lte('created_at', bounds.end)
 
-      console.log('[LOAD] Executing query with restId:', restId, 'Filter bounds:', filterBounds)
       const { data, error } = await query
-
-      if (error) {
-        console.error('[LOAD] Orders fetch error:', error.message)
-        
-        if (error.code === 'PGRST116') {
-          showToast('No orders found', 'info')
-        } else if (error.code === '42P01') {
-          showToast('Table live_orders does not exist in database', 'error')
-        } else if (error.message?.includes('network')) {
-          showToast('Network error. Check connection.', 'error')
-        } else {
-          showToast('Failed to load orders', 'error')
-        }
-        if (isInitialLoad) {
-          setOrders([])
-        }
-        setLoading(false)
-        return
-      }
-
-      // --- Fetch Kitchen Statuses ---
-      const orderIds = (data || []).map(o => o.id)
-      let kitchenMap = {}
-      if (orderIds.length > 0) {
-        const { data: kitchenRows } = await supabase
-          .from('kitchen_board')
-          .select('order_id, status')
-          .in('order_id', orderIds)
-        ;(kitchenRows || []).forEach(k => { kitchenMap[k.order_id] = k.status })
-      }
-
-      // --- Fallback table resolution ---
-      // The PostgREST join (restaurant_tables(table_number)) only works when the
-      // FK constraint exists. This direct query works regardless of schema state.
-      const unresolvedIds = [...new Set(
-        (data || [])
-          .filter(o => o.table_id && !o.restaurant_tables?.table_number)
-          .map(o => o.table_id)
-      )]
-      let tableMap = {}
-      if (unresolvedIds.length > 0) {
-        const { data: tableRows } = await supabase
-          .from('restaurant_tables')
-          .select('id, table_number')
-          .in('id', unresolvedIds)
-        ;(tableRows || []).forEach(t => { tableMap[t.id] = t.table_number })
-      }
-
-      const mergeTableNumberAndKitchen = (order) => ({
-        ...order,
-        kitchen_status: kitchenMap[order.id] || null,
-        restaurant_tables:
-          order.restaurant_tables ??
-          (order.table_id && tableMap[order.table_id]
-            ? { table_number: tableMap[order.table_id] }
-            : null),
-      })
-
-      const resolvedData = (data || []).map(mergeTableNumberAndKitchen)
-
-      if (isInitialLoad) {
-        setOrders(resolvedData)
+      if (error && error.code !== 'PGRST116') {
+        showToast('Failed to load orders', 'error')
+        setOrders([])
       } else {
-        setOrders(prev => {
-          const existingIds = new Set(prev.map(o => o.id))
-          const newOrders = resolvedData.filter(o => !existingIds.has(o.id))
-          const updatedOrders = prev.map(existing => {
-            const updated = resolvedData.find(d => d.id === existing.id)
-            return updated ? { ...existing, ...updated } : existing
+        const ids = (data || []).map(o => o.id)
+        let kitchenMap = {}
+        if (ids.length > 0) {
+          const { data: kr } = await supabase.from('kitchen_board').select('order_id, status').in('order_id', ids)
+          ;(kr || []).forEach(k => { kitchenMap[k.order_id] = k.status })
+        }
+
+        const resolved = (data || []).map(o => ({
+          ...o,
+          kitchen_status: kitchenMap[o.id] || null,
+          restaurant_tables: o.restaurant_tables ||
+            (o.table_id ? { table_number: null } : null)
+        }))
+
+        if (o.table_id && !resolved.find(r => r.id === o.id)?.restaurant_tables?.table_number) {
+          const { data: tr } = await supabase
+            .from('restaurant_tables').select('id, table_number').in('id', [...new Set((data || []).filter(o => o.table_id && !o.restaurant_tables?.table_number).map(o => o.table_id))])
+          const tMap = {}
+          ;(tr || []).forEach(t => { tMap[t.id] = t.table_number })
+          resolved.forEach(o => {
+            if (o.table_id && tMap[o.table_id] !== undefined) {
+              o.restaurant_tables = { table_number: tMap[o.table_id] }
+            }
           })
-          return [...updatedOrders, ...newOrders].sort((a, b) =>
-            new Date(b.created_at) - new Date(a.created_at)
-          )
-        })
+        }
+
+        setOrders(resolved)
+        ordersLoadedRef.current = true
       }
-    } catch (err) {
-      console.error('[LOAD] Orders load exception:', err)
+    } catch {
       showToast('Failed to load orders', 'error')
+      setOrders([])
     } finally {
       setLoading(false)
     }
-  }
+  }, [restaurantId, orderFilter, showToast])
 
-  const loadCategories = async () => {
-    const restId = restaurantId || RESTAURANT_ID
-    try {
-      const { data, error } = await supabase
-        .from('categories')
-        .select('id, name, image, sort_order')
-        .eq('restaurant_id', restId)
-        .order('sort_order', { ascending: true })
+  const loadCategories = useCallback(async () => {
+    const rid = restaurantId
+    if (!rid) return
+    const { data } = await supabase
+      .from('categories').select('id, name, image, sort_order')
+      .eq('restaurant_id', rid).order('sort_order', { ascending: true })
+    if (data) setCategories(data || [])
+  }, [restaurantId])
 
-      if (!error) setCategories(data || [])
-    } catch (err) {
-    }
-  }
-
-  const loadMenuItems = async () => {
+  const loadMenuItems = useCallback(async () => {
+    const rid = restaurantId
+    if (!rid) return
     setMenuLoading(true)
-    const restId = restaurantId || RESTAURANT_ID
-    
     try {
       const { data, error } = await supabase
-        .from('menu_items')
-        .select('id, name, price, description, is_veg, is_available, category_id, image_url')
-        .eq('restaurant_id', restId)
-        .order('name', { ascending: true })
-
+        .from('menu_items').select('id, name, price, description, is_veg, is_available, category_id, image_url')
+        .eq('restaurant_id', rid).order('name', { ascending: true })
       if (error) throw error
       setMenuItems(data || [])
-    } catch (err) {
+    } catch {
       showToast('Failed to load menu items', 'error')
     } finally {
       setMenuLoading(false)
     }
-  }
+  }, [restaurantId, showToast])
+
+  const initRef = useRef(null)
 
   useEffect(() => {
-    if (!isLoggedIn || !restaurantId) return
+    if (!isLoggedIn || !restaurantId || initStatus !== 'done') return
+    if (initRef.current === restaurantId) return
+    initRef.current = restaurantId
+
     loadOrders(true)
     loadCategories()
     loadMenuItems()
-  }, [isLoggedIn, restaurantId, orderFilter])
+  }, [isLoggedIn, restaurantId, initStatus])
 
   useEffect(() => {
-    if (!isLoggedIn) return
+    if (!restaurantId || initStatus !== 'done') return
+    loadOrders(true)
+  }, [orderFilter])
+
+  const closeSidebar = useCallback(() => setSidebarOpen(false), [])
+
+  const filteredItems = menuItems.filter(item => {
+    const matchSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase())
+    const matchFilter = filterType === 'all' || (filterType === 'veg' && item.is_veg) || (filterType === 'nonveg' && !item.is_veg)
+    return matchSearch && matchFilter
+  })
+
+  const filteredOrders = orders.filter(order => {
+    if (!orderSearch) return true
+    const code = (order.order_code || '').toLowerCase()
+    const oid = (order.id || '').toLowerCase()
+    return code.includes(orderSearch.toLowerCase()) || oid.includes(orderSearch.toLowerCase())
+  })
+
+  if (resetMode) {
+    return <ResetPassword onDone={() => { setResetMode(false); window.location.hash = '' }} />
+  }
+
+  if (!isLoggedIn) return <Login />
+
+  if (authLoading || !initialized) {
+    return (
+      <div className="app">
+        <div className="login-page">
+          <div className="login-card skeleton-container">
+            <div className="skeleton skeleton-title" style={{ width: '60%', margin: '0 auto 24px' }}></div>
+            <div className="skeleton skeleton-text" style={{ width: '100%' }}></div>
+            <div className="skeleton skeleton-text" style={{ width: '80%' }}></div>
+            <div className="skeleton skeleton-button" style={{ width: '100%', marginTop: '16px' }}></div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (initStatus === 'error' || initError) {
+    return (
+      <div className="app">
+        <div className="login-page">
+          <div className="login-card">
+            <div className="login-icon">⚠️</div>
+            <h1 className="login-title">Initialization Error</h1>
+            <p className="login-subtitle">{initError || 'Something went wrong'}</p>
+            <button className="login-btn" onClick={() => supabase.auth.signOut()}>Logout</button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (initStatus === 'loading') {
+    return (
+      <div className="app">
+        <div className="login-page">
+          <div className="login-card skeleton-container">
+            <div className="skeleton skeleton-title" style={{ width: '60%', margin: '0 auto 24px' }}></div>
+            <div className="skeleton skeleton-text" style={{ width: '100%' }}></div>
+            <div className="skeleton skeleton-text" style={{ width: '80%' }}></div>
+            <div className="skeleton skeleton-button" style={{ width: '100%', marginTop: '16px' }}></div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (!restaurantId) {
+    return (
+      <div className="app">
+        <div className="login-page">
+          <div className="login-card">
+            <div className="login-icon">🏪</div>
+            <h1 className="login-title">No Restaurant Found</h1>
+            <p className="login-subtitle">No restaurant available for your account</p>
+            <button className="login-btn" onClick={() => supabase.auth.signOut()}>Logout</button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  useEffect(() => {
+    if (!isLoggedIn || initStatus !== 'done') return
+
+    const lastPlayedOrderRef = { current: null }
+    const soundReadyRef = { current: false }
+    const audioCtxRef = { current: null }
+
+    const SOUND_OPTIONS = [
+      { id: 'beep', name: 'Default Beep', freq: [800, 1000], duration: 0.3 },
+      { id: 'chime', name: 'Soft Chime', freq: [600, 800, 1000], duration: 0.5 },
+      { id: 'bell', name: 'Bell Ring', freq: [500, 700], duration: 0.6 },
+      { id: 'alert', name: 'Alert Tone', freq: [1000, 1200, 800], duration: 0.4 },
+      { id: 'digital', name: 'Digital Ping', freq: [1500, 2000], duration: 0.2 },
+      { id: 'pop', name: 'Notification Pop', freq: [400, 600], duration: 0.25 },
+      { id: 'ding', name: 'Classic Ding', freq: [700, 900], duration: 0.35 },
+      { id: 'subtle', name: 'Subtle Click', freq: [300], duration: 0.15 },
+      { id: 'triple', name: 'Triple Alert', freq: [800, 800, 800], duration: 0.45 },
+      { id: 'ascend', name: 'Ascending Tone', freq: [400, 600, 800], duration: 0.4 }
+    ]
+
+    const createSound = () => {
+      const AudioContext = window.AudioContext || window.webkitAudioContext
+      if (!AudioContext) return null
+      try {
+        const ctx = new AudioContext()
+        audioCtxRef.current = ctx
+        const selSound = SOUND_OPTIONS.find(s => s.id === preferences.notificationSound) || SOUND_OPTIONS[0]
+        return () => {
+          if (ctx.state === 'suspended') ctx.resume()
+          let delay = 0
+          selSound.freq.forEach((freq, i) => {
+            setTimeout(() => {
+              const osc = ctx.createOscillator()
+              const gain = ctx.createGain()
+              osc.connect(gain); gain.connect(ctx.destination)
+              osc.frequency.value = freq; osc.type = 'sine'
+              const td = selSound.duration / selSound.freq.length
+              gain.gain.setValueAtTime(0.25, ctx.currentTime)
+              gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + td)
+              osc.start(ctx.currentTime); osc.stop(ctx.currentTime + td)
+            }, delay)
+            delay += (selSound.duration * 1000) / selSound.freq.length
+          })
+        }
+      } catch { return null }
+    }
+
+    let playFn = null
+    const initAudio = () => {
+      if (soundReadyRef.current) return
+      playFn = createSound()
+      soundReadyRef.current = true
+    }
+
+    const handleGesture = () => { initAudio(); document.removeEventListener('click', handleGesture); document.removeEventListener('keydown', handleGesture) }
+    document.addEventListener('click', handleGesture)
+    document.addEventListener('keydown', handleGesture)
+
+    const playSound = () => {
+      if (!preferences.soundEnabled || !playFn) return
+      try { playFn() } catch {}
+    }
 
     const channel = supabase
       .channel('live-orders')
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'live_orders' },
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'live_orders' },
         (payload) => {
           const newOrderId = payload.new.id
-          
-          if (lastPlayedOrderRef.current === newOrderId) {
-            return
-          }
+          if (lastPlayedOrderRef.current === newOrderId) return
           lastPlayedOrderRef.current = newOrderId
-          
-          // Fetch table number for the new order to ensure it displays correctly.
-          // Falls back to a direct restaurant_tables query if the FK join is absent.
-          const fetchNewOrderWithTable = async () => {
-            const { data: freshOrder } = await supabase
-              .from('live_orders')
-              .select('*, restaurant_tables(table_number)')
-              .eq('id', newOrderId)
-              .single()
 
+          const fetchAndAddOrder = async () => {
+            const { data: freshOrder } = await supabase
+              .from('live_orders').select('*, restaurant_tables(table_number)')
+              .eq('id', newOrderId).single()
             if (!freshOrder) return
 
-            // Fallback: if FK join didn't return table_number, fetch it directly
             let resolved = freshOrder
             if (freshOrder.table_id && !freshOrder.restaurant_tables?.table_number) {
-              const { data: tableRow } = await supabase
-                .from('restaurant_tables')
-                .select('id, table_number')
-                .eq('id', freshOrder.table_id)
-                .maybeSingle()
-              if (tableRow) {
-                resolved = { ...freshOrder, restaurant_tables: { table_number: tableRow.table_number } }
-              }
+              const { data: tr } = await supabase.from('restaurant_tables').select('id, table_number').eq('id', freshOrder.table_id).maybeSingle()
+              if (tr) resolved = { ...freshOrder, restaurant_tables: { table_number: tr.table_number } }
             }
 
             setOrders(prev => {
-              const exists = prev.some(o => o.id === newOrderId)
-              if (exists) {
-                return prev.map(o => o.id === newOrderId ? { ...o, ...resolved } : o)
-              }
-
-              if (preferences.soundEnabled) {
-                playNotificationSound()
-              }
-
+              if (prev.some(o => o.id === newOrderId)) return prev.map(o => o.id === newOrderId ? { ...o, ...resolved } : o)
+              if (preferences.soundEnabled) playSound()
               if (preferences.orderNotifications) {
-                const orderCode = resolved.order_code || newOrderId.slice(0, 8).toUpperCase()
-                setNewOrderToast(`📦 New Order #${orderCode}`)
-                setTimeout(() => setNewOrderToast(null), 4000)
+                const code = resolved.order_code || newOrderId.slice(0, 8).toUpperCase()
+                setToast ? setToast({ message: `📦 New Order #${code}`, type: 'success' }) : null
               }
-
-              return [resolved, ...prev].sort((a, b) =>
-                new Date(b.created_at) - new Date(a.created_at)
-              )
+              return [resolved, ...prev].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
             })
           }
-
-          fetchNewOrderWithTable()
+          fetchAndAddOrder()
         }
       )
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'live_orders' },
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'live_orders' },
         async (payload) => {
-          // If order just became accepted, ensure it is in kitchen_board
           if (payload.new.status === 'accepted' && payload.old.status !== 'accepted') {
-            const { data: existing } = await supabase
-              .from('kitchen_board')
-              .select('id')
-              .eq('order_id', payload.new.id)
-              .maybeSingle()
-            
-            if (!existing) {
-              await supabase
-                .from('kitchen_board')
-                .insert({
-                  order_id: payload.new.id,
-                  items: payload.new.items,
-                  table_id: payload.new.table_id,
-                  status: 'pending',
-                  created_at: new Date().toISOString()
-                })
-            }
+            const { data: ex } = await supabase.from('kitchen_board').select('id').eq('order_id', payload.new.id).maybeSingle()
+            if (!ex) await supabase.from('kitchen_board').insert({
+              order_id: payload.new.id, items: payload.new.items, table_id: payload.new.table_id, status: 'pending', created_at: new Date().toISOString()
+            })
           }
-          setOrders(prev =>
-            prev.map(order =>
-              order.id === payload.new.id ? { ...order, ...payload.new } : order
-            )
-          )
+          setOrders(prev => prev.map(o => o.id === payload.new.id ? { ...o, ...payload.new } : o))
         }
       )
-      .on(
-        'postgres_changes',
-        { event: 'DELETE', schema: 'public', table: 'live_orders' },
-        (payload) => {
-          setOrders(prev =>
-            prev.filter(order => order.id !== payload.old.id)
-          )
-        }
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'live_orders' },
+        (payload) => { setOrders(prev => prev.filter(o => o.id !== payload.old.id)) }
       )
       .subscribe()
 
     return () => {
+      document.removeEventListener('click', handleGesture)
+      document.removeEventListener('keydown', handleGesture)
+      if (audioCtxRef.current) { try { audioCtxRef.current.close() } catch {} }
       supabase.removeChannel(channel)
     }
-  }, [isLoggedIn, preferences.soundEnabled, preferences.orderNotifications, playNotificationSound])
+  }, [isLoggedIn, initStatus, preferences.soundEnabled, preferences.orderNotifications, preferences.notificationSound])
 
   useEffect(() => {
-    if (!isLoggedIn) return
+    if (!isLoggedIn || initStatus !== 'done') return
 
     const kitchenChannel = supabase
       .channel('kitchen-sync-for-orders')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'kitchen_board' },
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'kitchen_board' },
         (payload) => {
           setOrders(prev => prev.map(order => {
-            if (payload.eventType === 'UPDATE' && order.id === payload.new.order_id) {
-              return { ...order, kitchen_status: payload.new.status }
-            }
-            if (payload.eventType === 'INSERT' && order.id === payload.new.order_id) {
+            if ((payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') && order.id === payload.new?.order_id) {
               return { ...order, kitchen_status: payload.new.status }
             }
             return order
@@ -623,56 +492,37 @@ function App() {
       )
       .subscribe()
 
-    return () => {
-      supabase.removeChannel(kitchenChannel)
-    }
-  }, [isLoggedIn])
+    return () => supabase.removeChannel(kitchenChannel)
+  }, [isLoggedIn, initStatus])
 
   useEffect(() => {
-    if (!isLoggedIn) return
+    if (!isLoggedIn || initStatus !== 'done') return
 
     let mounted = true
-    let intervalId = null
-
-    const checkPendingOrders = async () => {
+    const intervalId = setInterval(() => {
       if (!mounted) return
-      
       setOrders(prev => {
         const timeoutMs = (preferences.autoDeclineTimeout || 10) * 60 * 1000
-        const thresholdTime = new Date(Date.now() - timeoutMs)
+        const threshold = new Date(Date.now() - timeoutMs)
+        const timedOut = prev.filter(o => {
+          if (o.status === 'accepted' || o.status === 'rejected') return false
+          return new Date(o.created_at) < threshold
+        })
+        if (timedOut.length === 0) return prev
 
-        const pendingOrders = prev.filter(order => {
-          if (order.status === 'accepted' || order.status === 'rejected') return false
-          const orderTime = new Date(order.created_at)
-          return orderTime < thresholdTime
+        timedOut.forEach(o => {
+          supabase.from('live_orders').delete().eq('id', o.id).then(({ error }) => {
+            if (!error && setToast) setToast({ message: `Order #${o.order_code || o.id.slice(0, 8)} auto-declined`, type: 'info' })
+          })
         })
 
-        if (pendingOrders.length === 0) return prev
-
-        pendingOrders.forEach(order => {
-          supabase
-            .from('live_orders')
-            .delete()
-            .eq('id', order.id)
-            .then(({ error }) => {
-              if (!error) {
-                showToast(`Order #${order.order_code || order.id.slice(0, 8)} auto-declined (timeout)`)
-              }
-            })
-        })
-
-        const declinedIds = new Set(pendingOrders.map(o => o.id))
-        return prev.filter(o => !declinedIds.has(o.id))
+        const ids = new Set(timedOut.map(o => o.id))
+        return prev.filter(o => !ids.has(o.id))
       })
-    }
+    }, 30000)
 
-    intervalId = setInterval(checkPendingOrders, 30000)
-
-    return () => {
-      mounted = false
-      if (intervalId) clearInterval(intervalId)
-    }
-  }, [isLoggedIn, preferences.autoDeclineTimeout])
+    return () => { mounted = false; clearInterval(intervalId) }
+  }, [isLoggedIn, initStatus, preferences.autoDeclineTimeout])
 
   const handleAccept = async (orderId) => {
     const order = orders.find(o => o.id === orderId)
