@@ -21,12 +21,11 @@ import './theme.css'
 const ORDER_CACHE_KEY = 'dashboard_orders'
 
 function App() {
-  const { session, loading: authLoading } = useAuth()
+  const { session, profile, loading: authLoading } = useAuth()
   const isLoggedIn = !!session
   const [resetMode, setResetMode] = useState(() => {
     return window.location.hash === '#reset-password'
   })
-  const [currentUser, setCurrentUser] = useState(null)
   const [restaurantId, setRestaurantId] = useState(null)
   const [restaurantSlug, setRestaurantSlug] = useState('')
   const [restaurantName, setRestaurantName] = useState('')
@@ -70,10 +69,17 @@ function App() {
   const prevOrderCount = useRef(0)
   const audioRef = useRef(null)
 
+  const userRole = profile?.role || 'staff'
+  const userFullName = profile?.full_name || profile?.email || session?.user?.email || 'User'
+  const profileRestaurantId = profile?.restaurant_id || null
+
   const showToast = (message, type = 'success') => {
     setToast({ message, type })
     setTimeout(() => setToast(null), 3000)
   }
+
+  const isAdmin = userRole === 'admin' || userRole === 'owner'
+  const isManager = userRole === 'manager' || isAdmin
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -105,31 +111,32 @@ function App() {
     setInitError(null)
     
     try {
-      setCurrentUser(user)
+      let restaurantIdValue = null
       
-      const { data: restaurantData, error: restError } = await supabase
-        .from('restaurants')
-        .select('id, slug')
-        .eq('user_id', user.id)
-        .maybeSingle()
-      
-      if (restError) {
-        console.error('Error fetching restaurant:', restError)
-      }
-      
-      let restaurantIdValue = restaurantData?.id
-      
-      if (!restaurantIdValue) {
-        const { data: newRest, error: insertError } = await supabase
+      if (profileRestaurantId) {
+        const { data: restData } = await supabase
           .from('restaurants')
-          .insert({ name: user.email.split('@')[0] + "'s Restaurant", user_id: user.id })
-          .select()
+          .select('id, slug')
+          .eq('id', profileRestaurantId)
           .maybeSingle()
         
-        if (insertError) {
-          console.error('Error creating restaurant:', insertError)
+        if (restData) {
+          restaurantIdValue = restData.id
+          setRestaurantSlug(restData.slug || '')
         }
-        restaurantIdValue = newRest?.id
+      }
+      
+      if (!restaurantIdValue) {
+        const { data: userRest } = await supabase
+          .from('restaurants')
+          .select('id, slug')
+          .eq('user_id', user.id)
+          .maybeSingle()
+        
+        if (userRest) {
+          restaurantIdValue = userRest.id
+          setRestaurantSlug(userRest.slug || '')
+        }
       }
       
       if (!restaurantIdValue) {
@@ -144,18 +151,17 @@ function App() {
       }
       
       setRestaurantId(restaurantIdValue)
-      if (restaurantData?.slug) {
-        setRestaurantSlug(restaurantData.slug)
-      } else if (restaurantIdValue) {
-        const { data: slugData } = await supabase.from('restaurants').select('slug').eq('id', restaurantIdValue).single()
-        if (slugData?.slug) setRestaurantSlug(slugData.slug)
+      
+      if (!profileRestaurantId && restaurantIdValue) {
+        const { data: restData } = await supabase.from('restaurants').select('slug').eq('id', restaurantIdValue).maybeSingle()
+        if (restData?.slug) setRestaurantSlug(restData.slug)
       }
     } catch (err) {
       setInitError('Failed to initialize. Please try again.')
     } finally {
       setIsInitializing(false)
     }
-  }, [])
+  }, [profileRestaurantId])
 
   const initializingRef = useRef(true)
   
@@ -929,12 +935,15 @@ function App() {
           {activeTab === 'settings' && '⚙️ Settings'}
         </h2>
         <div className="profile-wrapper" ref={profileRef}>
-          <div className="profile-icon" onClick={() => setShowProfile(!showProfile)}>👤</div>
+          <div className="profile-icon" onClick={() => setShowProfile(!showProfile)} title={userFullName}>
+            {userFullName ? userFullName.charAt(0).toUpperCase() : '👤'}
+          </div>
           {showProfile && (
             <div className="profile-dropdown">
               <div className="profile-info">
-                <p className="profile-name"><strong>Restaurant</strong></p>
-                <p className="profile-id">ID: {(restaurantId || RESTAURANT_ID).slice(0, 8)}...</p>
+                <p className="profile-name"><strong>{userFullName}</strong></p>
+                <p className="profile-role">{userRole.charAt(0).toUpperCase() + userRole.slice(1)}</p>
+                <p className="profile-id">ID: {(profile?.id || session?.user?.id || '').slice(0, 8)}...</p>
               </div>
               <div className="profile-divider"></div>
               <button className="profile-btn" onClick={async () => {

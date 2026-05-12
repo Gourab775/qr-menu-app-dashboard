@@ -2,10 +2,9 @@ import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 
 export default function Login() {
-  const { signIn, signUp, resetPassword, isAuthenticated, session, loading: authLoading } = useAuth()
+  const { signIn, resetPassword, isAuthenticated, session, loading: authLoading } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
@@ -69,10 +68,6 @@ export default function Login() {
     if (field === 'password') {
       if (!value.trim()) return 'Password is required'
     }
-    if (field === 'confirmPassword') {
-      if (!value.trim()) return 'Please confirm your password'
-      if (value !== password) return 'Passwords do not match'
-    }
     return null
   }
 
@@ -82,7 +77,6 @@ export default function Login() {
 
     const emailVal = email.trim()
     const pwdVal = password.trim()
-    const confirmPwdVal = confirmPassword.trim()
 
     if (mode === 'login') {
       const emailErr = getInputError('email', emailVal)
@@ -93,25 +87,6 @@ export default function Login() {
       const pwdErr = getInputError('password', pwdVal)
       if (pwdErr) {
         setError(pwdErr)
-        return
-      }
-    } else if (mode === 'signup') {
-      const emailErr = getInputError('email', emailVal)
-      if (emailErr) {
-        setError(emailErr)
-        return
-      }
-      if (!pwdVal) {
-        setError('Password is required')
-        return
-      }
-      if (pwdVal.length < 6) {
-        setError('Password must be at least 6 characters')
-        return
-      }
-      const confirmErr = getInputError('confirmPassword', confirmPwdVal)
-      if (confirmErr) {
-        setError(confirmErr)
         return
       }
     } else if (mode === 'forgot') {
@@ -130,13 +105,6 @@ export default function Login() {
         await resetPassword(emailVal)
         clearTimeoutAndReset()
         setMode('reset-sent')
-        return
-      }
-
-      if (mode === 'signup') {
-        await signUp(emailVal, pwdVal)
-        clearTimeoutAndReset()
-        setMode('confirm-sent')
         return
       }
 
@@ -177,24 +145,6 @@ export default function Login() {
           <p className="login-subtitle">Password reset link sent to {email}</p>
           <p style={{ marginTop: '16px', color: '#666', fontSize: '14px' }}>
             Click the link in the email to reset your password.
-          </p>
-          <button className="login-btn" onClick={() => setMode('login')} style={{ marginTop: '24px' }}>
-            Back to Login
-          </button>
-        </div>
-      </div>
-    )
-  }
-
-  if (mode === 'confirm-sent') {
-    return (
-      <div className="login-page">
-        <div className="login-card">
-          <div className="login-icon">📧</div>
-          <h1 className="login-title">Check Your Email</h1>
-          <p className="login-subtitle">Confirmation link sent to {email}</p>
-          <p style={{ marginTop: '16px', color: '#666', fontSize: '14px' }}>
-            Click the link in the email to verify your account, then login.
           </p>
           <button className="login-btn" onClick={() => setMode('login')} style={{ marginTop: '24px' }}>
             Back to Login
@@ -247,80 +197,6 @@ export default function Login() {
             style={{ marginTop: '16px' }}
           >
             Back to Login
-          </button>
-        </div>
-      </div>
-    )
-  }
-
-  if (mode === 'signup') {
-    return (
-      <div className="login-page">
-        <div className="login-card">
-          <div className="login-icon">🍽️</div>
-          <h1 className="login-title">Create Account</h1>
-          <p className="login-subtitle">Start managing your restaurant</p>
-
-          <form onSubmit={handleSubmit} className="login-form">
-            <div className="form-group">
-              <label className="form-label">Email</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => { setEmail(e.target.value); setError(''); }}
-                placeholder="Enter your email"
-                className="login-input"
-                autoFocus
-                disabled={loading}
-                autoComplete="email"
-              />
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Password</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => { setPassword(e.target.value); setError(''); }}
-                placeholder="Create password (min 6 chars)"
-                className="login-input"
-                disabled={loading}
-                autoComplete="new-password"
-              />
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Confirm Password</label>
-              <input
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => { setConfirmPassword(e.target.value); setError(''); }}
-                placeholder="Confirm password"
-                className="login-input"
-                disabled={loading}
-                autoComplete="new-password"
-              />
-            </div>
-
-            {error && <p className="login-error">{error}</p>}
-
-            <button type="submit" className="login-btn" disabled={loading || !email || !password}>
-              {loading ? (
-                <span className="loading-content">
-                  <span className="loading-spinner-small"></span>
-                  Creating...
-                </span>
-              ) : (
-                'Create Account'
-              )}
-            </button>
-          </form>
-
-          <button 
-            className="forgot-link" 
-            onClick={() => { setMode('login'); setError(''); setPassword(''); setConfirmPassword(''); }}
-          >
-            Already have an account? Login
           </button>
         </div>
       </div>
@@ -414,14 +290,6 @@ export default function Login() {
           onClick={() => { setMode('forgot'); setError(''); setPassword(''); }}
         >
           Forgot Password?
-        </button>
-
-        <button 
-          className="forgot-link" 
-          onClick={() => { setMode('signup'); setError(''); setPassword(''); setConfirmPassword(''); }}
-          style={{ marginTop: '8px' }}
-        >
-          Don't have an account? Sign up
         </button>
       </div>
     </div>
