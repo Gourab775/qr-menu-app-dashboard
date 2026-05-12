@@ -191,76 +191,7 @@ function App() {
     dataInitRef.current = restaurantId
 
     const doLoad = async () => {
-      setLoading(true)
-      const now = new Date()
-      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-      const formatDate = (d) => {
-        const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), day = String(d.getDate()).padStart(2, '0')
-        return `${y}-${m}-${day}`
-      }
-      const todayStr = formatDate(today)
-      const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1)
-      const yesterdayStr = formatDate(yesterday)
-
-      let bounds = { start: `${todayStr} 00:00:00`, end: null }
-      if (orderFilter === 'today') bounds = { start: `${yesterdayStr} 00:00:00`, end: `${yesterdayStr} 23:59:59` }
-      else if (orderFilter === '7days') {
-        const d = new Date(today); d.setDate(d.getDate() - 7)
-        bounds = { start: `${formatDate(d)} 00:00:00`, end: `${yesterdayStr} 23:59:59` }
-      } else if (orderFilter === '30days') {
-        const d = new Date(today); d.setDate(d.getDate() - 30)
-        bounds = { start: `${formatDate(d)} 00:00:00`, end: `${yesterdayStr} 23:59:59` }
-      }
-
-      try {
-        let query = supabase
-          .from('live_orders')
-          .select('id, restaurant_id, total_price, payment_mode, status, items, created_at, order_code, table_id, note, restaurant_tables(table_number)')
-          .eq('restaurant_id', restaurantId)
-          .order('created_at', { ascending: false })
-          .limit(200)
-
-        if (bounds.start) query = query.gte('created_at', bounds.start)
-        if (bounds.end) query = query.lte('created_at', bounds.end)
-
-        const { data, error } = await query
-        if (error && error.code !== 'PGRST116') {
-          setToast ? setToast({ message: 'Failed to load orders', type: 'error' }) : null
-          setOrders([])
-        } else {
-          const ids = (data || []).map(o => o.id)
-          let kitchenMap = {}
-          if (ids.length > 0) {
-            const { data: kr } = await supabase.from('kitchen_board').select('order_id, status').in('order_id', ids)
-            ;(kr || []).forEach(k => { kitchenMap[k.order_id] = k.status })
-          }
-
-          const resolved = (data || []).map(o => ({
-            ...o,
-            kitchen_status: kitchenMap[o.id] || null,
-            restaurant_tables: o.restaurant_tables || (o.table_id ? { table_number: null } : null)
-          }))
-
-          const unresolvedIds = [...new Set((data || []).filter(o => o.table_id && !o.restaurant_tables?.table_number).map(o => o.table_id))]
-          if (unresolvedIds.length > 0) {
-            const { data: tr } = await supabase.from('restaurant_tables').select('id, table_number').in('id', unresolvedIds)
-            const tMap = {}
-            ;(tr || []).forEach(t => { tMap[t.id] = t.table_number })
-            resolved.forEach(o => {
-              if (o.table_id && tMap[o.table_id] !== undefined) {
-                o.restaurant_tables = { table_number: tMap[o.table_id] }
-              }
-            })
-          }
-
-          setOrders(resolved)
-        }
-      } catch {
-        setToast ? setToast({ message: 'Failed to load orders', type: 'error' }) : null
-        setOrders([])
-      } finally {
-        setLoading(false)
-      }
+      await loadOrders()
 
       const { data: catData } = await supabase.from('categories').select('id, name, image, sort_order').eq('restaurant_id', restaurantId).order('sort_order', { ascending: true })
       if (catData) setCategories(catData || [])
@@ -447,6 +378,81 @@ function App() {
 
     return () => { mounted = false; clearInterval(intervalId) }
   }, [isLoggedIn, initStatus, preferences.autoDeclineTimeout])
+
+  const loadOrders = useCallback(async () => {
+    if (!restaurantId) return
+    setLoading(true)
+
+    const now = new Date()
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    const formatDate = (d) => {
+      const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), day = String(d.getDate()).padStart(2, '0')
+      return `${y}-${m}-${day}`
+    }
+    const todayStr = formatDate(today)
+    const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1)
+    const yesterdayStr = formatDate(yesterday)
+
+    let bounds = { start: `${todayStr} 00:00:00`, end: null }
+    if (orderFilter === 'today') bounds = { start: `${yesterdayStr} 00:00:00`, end: `${yesterdayStr} 23:59:59` }
+    else if (orderFilter === '7days') {
+      const d = new Date(today); d.setDate(d.getDate() - 7)
+      bounds = { start: `${formatDate(d)} 00:00:00`, end: `${yesterdayStr} 23:59:59` }
+    } else if (orderFilter === '30days') {
+      const d = new Date(today); d.setDate(d.getDate() - 30)
+      bounds = { start: `${formatDate(d)} 00:00:00`, end: `${yesterdayStr} 23:59:59` }
+    }
+
+    try {
+      let query = supabase
+        .from('live_orders')
+        .select('id, restaurant_id, total_price, payment_mode, status, items, created_at, order_code, table_id, note, restaurant_tables(table_number)')
+        .eq('restaurant_id', restaurantId)
+        .order('created_at', { ascending: false })
+        .limit(200)
+
+      if (bounds.start) query = query.gte('created_at', bounds.start)
+      if (bounds.end) query = query.lte('created_at', bounds.end)
+
+      const { data, error } = await query
+      if (error && error.code !== 'PGRST116') {
+        setToast ? setToast({ message: 'Failed to load orders', type: 'error' }) : null
+        setOrders([])
+      } else {
+        const ids = (data || []).map(o => o.id)
+        let kitchenMap = {}
+        if (ids.length > 0) {
+          const { data: kr } = await supabase.from('kitchen_board').select('order_id, status').in('order_id', ids)
+          ;(kr || []).forEach(k => { kitchenMap[k.order_id] = k.status })
+        }
+
+        const resolved = (data || []).map(o => ({
+          ...o,
+          kitchen_status: kitchenMap[o.id] || null,
+          restaurant_tables: o.restaurant_tables || (o.table_id ? { table_number: null } : null)
+        }))
+
+        const unresolvedIds = [...new Set((data || []).filter(o => o.table_id && !o.restaurant_tables?.table_number).map(o => o.table_id))]
+        if (unresolvedIds.length > 0) {
+          const { data: tr } = await supabase.from('restaurant_tables').select('id, table_number').in('id', unresolvedIds)
+          const tMap = {}
+          ;(tr || []).forEach(t => { tMap[t.id] = t.table_number })
+          resolved.forEach(o => {
+            if (o.table_id && tMap[o.table_id] !== undefined) {
+              o.restaurant_tables = { table_number: tMap[o.table_id] }
+            }
+          })
+        }
+
+        setOrders(resolved)
+      }
+    } catch {
+      setToast ? setToast({ message: 'Failed to load orders', type: 'error' }) : null
+      setOrders([])
+    } finally {
+      setLoading(false)
+    }
+  }, [restaurantId, orderFilter])
 
   const closeSidebar = useCallback(() => setSidebarOpen(false), [])
 
@@ -710,23 +716,7 @@ function App() {
                     30 Days
                   </button>
                 </div>
-                <button onClick={() => {
-                  dataInitRef.current = null
-                  setInitStatus('idle')
-                  setTimeout(() => {
-                    const user = session?.user
-                    if (user) {
-                      initializedRef.current = false
-                      setInitStatus('loading')
-                      supabase.from('restaurants').select('id, slug').eq('user_id', user.id).maybeSingle()
-                        .then(({ data }) => {
-                          if (data?.id) setRestaurantId(data.id)
-                          setInitStatus('done')
-                        })
-                        .catch(() => setInitStatus('error'))
-                    }
-                  }, 50)
-                }} className="refresh-btn">
+                <button onClick={() => loadOrders()} className="refresh-btn">
                   🔄 Refresh
                 </button>
               </div>
