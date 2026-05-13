@@ -4,7 +4,7 @@ import { fetchWithTimeout } from '../lib/apiUtils'
 
 const API_TIMEOUT = 15000
 
-export default function KitchenPage() {
+export default function KitchenPage({ restaurantId }) {
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -12,6 +12,7 @@ export default function KitchenPage() {
   const abortControllerRef = useRef(null)
 
   const fetchKitchenOrders = useCallback(async (signal = null) => {
+    if (!restaurantId) return
     if (!signal && mountedRef.current) setLoading(true)
     
     try {
@@ -82,9 +83,10 @@ export default function KitchenPage() {
         setLoading(false)
       }
     }
-  }, [])
+  }, [restaurantId])
 
   useEffect(() => {
+    if (!restaurantId) return
     mountedRef.current = true
 
     const controller = new AbortController()

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import ConfirmModal from './ConfirmModal'
 
@@ -30,15 +30,25 @@ export default function MenuItemCard({ item, onSave, onDelete, categories = [] }
   const [imageError, setImageError] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const debouncedSaveRef = useRef(null)
 
-  const debouncedSave = useCallback(
-    debounce(async (id, updates) => {
+  useEffect(() => {
+    debouncedSaveRef.current = debounce(async (id, updates) => {
       setSaving(true)
       await onSave(id, updates)
       setSaving(false)
-    }, 500),
-    [onSave]
-  )
+    }, 500)
+
+    return () => {
+      if (debouncedSaveRef.current) {
+        debouncedSaveRef.current.cancel?.()
+      }
+    }
+  }, [onSave])
+
+  const debouncedSave = useCallback((id, updates) => {
+    debouncedSaveRef.current?.(id, updates)
+  }, [])
 
   const handleChange = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }))
@@ -234,7 +244,7 @@ export default function MenuItemCard({ item, onSave, onDelete, categories = [] }
 
 function debounce(func, wait) {
   let timeout
-  return function executedFunction(...args) {
+  const debounced = function executedFunction(...args) {
     const later = () => {
       clearTimeout(timeout)
       func(...args)
@@ -242,4 +252,9 @@ function debounce(func, wait) {
     clearTimeout(timeout)
     timeout = setTimeout(later, wait)
   }
+  debounced.cancel = () => {
+    clearTimeout(timeout)
+    timeout = null
+  }
+  return debounced
 }

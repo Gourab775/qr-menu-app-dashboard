@@ -1,3 +1,5 @@
+import { supabase } from './supabase'
+
 const DEFAULT_TIMEOUT = 15000
 const REQUEST_CACHE = new Map()
 const ACTIVE_REQUESTS = new Map()

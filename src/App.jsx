@@ -290,7 +290,7 @@ function App() {
       abortControllerRef.current = null
       ordersLoadingRef.current = false
     }
-  }, [isLoggedIn, restaurantId, initStatus, setToast])
+  }, [isLoggedIn, restaurantId, initStatus, loadOrders, setToast])
 
   useEffect(() => {
     orderFilterRef.current = orderFilter
@@ -315,8 +315,9 @@ function App() {
 
     return () => {
       controller.abort()
+      ordersLoadingRef.current = false
     }
-  }, [isLoggedIn, restaurantId, initStatus, orderFilter])
+  }, [isLoggedIn, restaurantId, initStatus, orderFilter, loadOrders])
 
   useEffect(() => {
     if (!isLoggedIn || initStatus !== 'done') {
@@ -774,7 +775,7 @@ function App() {
     }
   }
 
-  const handleSaveItem = async (id, updates) => {
+  const handleSaveItem = useCallback(async (id, updates) => {
     const prevItems = [...menuItems]
     setMenuItems(prev => prev.map(item => item.id === id ? { ...item, ...updates } : item))
     try {
@@ -785,9 +786,9 @@ function App() {
       setMenuItems(prevItems)
       showToast('Failed to update item', 'error')
     }
-  }
+  }, [menuItems, showToast])
 
-  const handleDeleteItem = async (id) => {
+  const handleDeleteItem = useCallback(async (id) => {
     const prevItems = [...menuItems]
     setMenuItems(prev => prev.filter(item => item.id !== id))
     try {
@@ -799,7 +800,7 @@ function App() {
       setMenuItems(prevItems)
       showToast('Failed to delete item', 'error')
     }
-  }
+  }, [menuItems, showToast])
 
   const handleAddItem = async (itemData) => {
     try {
