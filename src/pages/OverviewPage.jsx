@@ -4,7 +4,8 @@ import {
   BarChart, Bar, PieChart, Pie, Cell, Legend, AreaChart, Area
 } from 'recharts'
 import { supabase } from '../lib/supabase'
-import { fetchWithTimeout } from '../lib/apiUtils'
+import { fetchWithTimeout, deduplicateRequest } from '../lib/apiUtils'
+import { useAuth } from '../contexts/AuthContext'
 import './OverviewPage.css'
 
 const API_TIMEOUT = 15000
@@ -54,6 +55,7 @@ function getDaysInRange(startDate, endDate) {
 }
 
 export default function OverviewPage({ restaurantId }) {
+  const { initialized, isAuthenticated } = useAuth()
   const [filter, setFilter] = useState('7days')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -61,8 +63,9 @@ export default function OverviewPage({ restaurantId }) {
 
   const mountedRef = useRef(false)
   const abortControllerRef = useRef(null)
-  const filterRef = useRef(filter)
+  const currentFilterRef = useRef('7days')
   const isFetchingRef = useRef(false)
+  const initialFetchDoneRef = useRef(false)
 
   const getDateRange = useCallback((range) => {
     const now = new Date()
@@ -80,31 +83,40 @@ export default function OverviewPage({ restaurantId }) {
   }, [])
 
   const fetchAnalytics = useCallback(async (signal = null) => {
-    const currentFilter = filterRef.current
-    if (!mountedRef.current && !signal) return
-
+    const filterKey = currentFilterRef.current
+    
     if (isFetchingRef.current && !signal) return
-
+    
     isFetchingRef.current = true
-
+    
     if (!signal) {
       setLoading(true)
       setError(null)
     }
 
+    const requestKey = `analytics-${restaurantId}-${filterKey}`
+
     try {
-      const { start, end, startDate, endDate } = getDateRange(currentFilter)
+      const fetchFn = async () => {
+        const { start, end, startDate, endDate } = getDateRange(filterKey)
 
-      const ordersPromise = supabase
-        .from('live_orders')
-        .select('*')
-        .gte('created_at', start)
-        .lte('created_at', end)
-        .order('created_at', { ascending: false })
+        const ordersPromise = supabase
+          .from('live_orders')
+          .select('*')
+          .gte('created_at', start)
+          .lte('created_at', end)
+          .order('created_at', { ascending: false })
 
-      const { data: orders, error: queryError } = await fetchWithTimeout(ordersPromise, API_TIMEOUT)
+        return await fetchWithTimeout(ordersPromise, API_TIMEOUT)
+      }
 
-      if (!mountedRef.current || signal?.aborted) return
+      const executeFetch = signal 
+        ? fetchFn 
+        : () => deduplicateRequest(requestKey, fetchFn)
+
+      const { data: orders, error: queryError } = await executeFetch()
+
+      if (!mountedRef.current) return
 
       if (queryError) throw new Error(queryError.message)
 
@@ -129,7 +141,7 @@ export default function OverviewPage({ restaurantId }) {
         dailyOrd[day] = (dailyOrd[day] || 0) + 1
       })
 
-      if (!mountedRef.current || signal?.aborted) return
+      if (!mountedRef.current) return
 
       const completed = list.filter(o => o.status === 'accepted')
       const pending = list.filter(o => o.status !== 'accepted' && o.status !== 'rejected')
@@ -170,7 +182,7 @@ export default function OverviewPage({ restaurantId }) {
         { name: 'Online', value: payments.online, fill: CHART_COLORS.online }
       ].filter(d => d.value > 0)
 
-      if (!mountedRef.current || signal?.aborted) return
+      if (!mountedRef.current) return
 
       setMetrics({
         ordersTotal: list.length,
@@ -186,16 +198,17 @@ export default function OverviewPage({ restaurantId }) {
       })
     } catch (err) {
       console.error('Analytics fetch failed:', err)
-      if (!mountedRef.current || signal?.aborted) return
+      if (!mountedRef.current) return
       setError(err.name === 'AbortError' ? 'Request cancelled' : err.message)
       setMetrics(emptyState())
     } finally {
-      if (mountedRef.current && !signal?.aborted) {
+      if (mountedRef.current) {
         isFetchingRef.current = false
         setLoading(false)
+        initialFetchDoneRef.current = true
       }
     }
-  }, [getDateRange])
+  }, [restaurantId, getDateRange])
 
   const emptyState = () => ({
     ordersTotal: 0, revenueTotal: 0, revenuePending: 0, avgOrder: 0, itemsSold: 0,
@@ -204,10 +217,22 @@ export default function OverviewPage({ restaurantId }) {
 
   useEffect(() => {
     mountedRef.current = true
-    filterRef.current = filter
+    currentFilterRef.current = filter
+
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+    }
 
     const controller = new AbortController()
     abortControllerRef.current = controller
+
+    if (!initialized || !isAuthenticated || !restaurantId) {
+      setLoading(false)
+      return () => {
+        mountedRef.current = false
+        controller.abort()
+      }
+    }
 
     fetchAnalytics(controller.signal)
 
@@ -217,7 +242,18 @@ export default function OverviewPage({ restaurantId }) {
       abortControllerRef.current = null
       isFetchingRef.current = false
     }
-  }, [filter, fetchAnalytics])
+  }, [filter, initialized, isAuthenticated, restaurantId, fetchAnalytics])
+
+  const handleFilterChange = useCallback((newFilter) => {
+    if (newFilter === filter) return
+    setFilter(newFilter)
+  }, [filter])
+
+  const handleRetry = useCallback(() => {
+    setError(null)
+    setLoading(true)
+    fetchAnalytics()
+  }, [fetchAnalytics])
 
   const fmtPct = (a, b) => b ? Math.round(a / b * 100) : 0
 
@@ -228,6 +264,21 @@ export default function OverviewPage({ restaurantId }) {
   ]
 
   const filterLabel = tabs.find(t => t.id === filter)?.label || 'Overview'
+
+  if (!initialized || !isAuthenticated) {
+    return (
+      <div className="analytics-dashboard">
+        <div className="skeleton-container">
+          <div className="skeleton-grid">
+            <div className="skeleton skeleton-card"></div>
+            <div className="skeleton skeleton-card"></div>
+            <div className="skeleton skeleton-card"></div>
+            <div className="skeleton skeleton-card"></div>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="analytics-dashboard">
@@ -241,7 +292,7 @@ export default function OverviewPage({ restaurantId }) {
             <button
               key={t.id}
               className={`analytics-filter-btn ${filter === t.id ? 'active' : ''}`}
-              onClick={() => setFilter(t.id)}
+              onClick={() => handleFilterChange(t.id)}
             >
               {t.label}
             </button>
@@ -249,7 +300,7 @@ export default function OverviewPage({ restaurantId }) {
         </div>
       </div>
 
-      {loading ? (
+      {loading && !metrics ? (
         <div className="skeleton-container">
           <div className="skeleton-grid">
             <div className="skeleton skeleton-card"></div>
@@ -262,11 +313,11 @@ export default function OverviewPage({ restaurantId }) {
             <div className="skeleton skeleton-card" style={{ height: '320px' }}></div>
           </div>
         </div>
-      ) : error ? (
+      ) : error && !metrics ? (
         <div className="analytics-empty">
           <h3>Failed to load analytics</h3>
           <p>{error}</p>
-          <button className="analytics-filter-btn active" style={{marginTop: '16px'}} onClick={fetchAnalytics}>Retry</button>
+          <button className="analytics-filter-btn active" style={{marginTop: '16px'}} onClick={handleRetry}>Retry</button>
         </div>
       ) : metrics ? (
         <>

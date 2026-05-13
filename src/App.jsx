@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from './lib/supabase'
 import { useAuth } from './contexts/AuthContext'
-import { validateSession, fetchWithTimeout } from './lib/apiUtils'
+import { validateSession, fetchWithTimeout, deduplicateRequest } from './lib/apiUtils'
 import MenuItemCard from './components/MenuItemCard'
 import AddItemModal from './components/AddItemModal'
 import Toast from './components/Toast'
@@ -71,6 +71,7 @@ function App() {
   const isMountedRef = useRef(true)
   const logoutRef = useRef(false)
   const initCompleteRef = useRef(false)
+  const lastFetchKeyRef = useRef(null)
 
   const userRole = profile?.role || 'staff'
   const userFullName = profile?.full_name || profile?.email || session?.user?.email || 'User'
@@ -121,13 +122,17 @@ function App() {
       setMenuItems([])
       setCategories([])
       initializedRef.current = false
+      initCompleteRef.current = false
       setInitStatus('idle')
       setInitError(null)
-
+      setOrders([])
+      setMenuItems([])
+      setCategories([])
+      
       window.location.hash = ''
-      window.location.reload()
     } catch (err) {
       console.error('Logout error:', err)
+      window.location.hash = ''
       window.location.reload()
     } finally {
       logoutRef.current = false
@@ -233,6 +238,10 @@ function App() {
     if (!isLoggedIn || !restaurantId || initStatus !== 'done') return
     isMountedRef.current = true
 
+    if (ordersLoadingRef.current) return
+    ordersLoadingRef.current = true
+    setLoading(true)
+
     const controller = new AbortController()
     abortControllerRef.current = controller
 
@@ -266,6 +275,10 @@ function App() {
         }
       } catch (err) {
         console.error('[DataLoad] Error:', err)
+      } finally {
+        if (!isMountedRef.current || controller.signal.aborted) return
+        ordersLoadingRef.current = false
+        setLoading(false)
       }
     }
 
@@ -275,12 +288,18 @@ function App() {
       isMountedRef.current = false
       controller.abort()
       abortControllerRef.current = null
+      ordersLoadingRef.current = false
     }
   }, [isLoggedIn, restaurantId, initStatus, setToast])
 
   useEffect(() => {
-    if (!isLoggedIn || !restaurantId || initStatus !== 'done') return
     orderFilterRef.current = orderFilter
+    
+    if (!isLoggedIn || !restaurantId || initStatus !== 'done') return
+    
+    const fetchKey = `${restaurantId}-${orderFilter}-${initStatus}`
+    if (lastFetchKeyRef.current === fetchKey) return
+    lastFetchKeyRef.current = fetchKey
 
     if (ordersLoadingRef.current) return
     ordersLoadingRef.current = true
@@ -316,11 +335,17 @@ function App() {
       return
     }
 
+    const pollKey = `poll-${restaurantId}`
+    
     const pollInterval = setInterval(() => {
-      if (!ordersLoadingRef.current && restaurantId && isMountedRef.current) {
+      if (ordersLoadingRef.current || !restaurantId || !isMountedRef.current) return
+      
+      const executePoll = async () => {
         const controller = new AbortController()
-        loadOrders(controller.signal).catch(() => {})
+        await loadOrders(controller.signal)
       }
+
+      deduplicateRequest(pollKey, executePoll).catch(() => {})
     }, 15000)
 
     ordersPollingRef.current = pollInterval
@@ -331,7 +356,7 @@ function App() {
         ordersPollingRef.current = null
       }
     }
-  }, [isLoggedIn, initStatus, orderFilter, restaurantId])
+  }, [isLoggedIn, initStatus, orderFilter, restaurantId, loadOrders])
 
   useEffect(() => {
     if (!isLoggedIn || initStatus !== 'done') return
@@ -506,10 +531,14 @@ function App() {
   const loadOrders = useCallback(async (signal = null, filterOverride = null) => {
     if (!restaurantId || !isMountedRef.current) return
 
-    const activeFilter = filterOverride !== null ? filterOverride : orderFilter
+    const activeFilter = filterOverride !== null ? filterOverride : orderFilterRef.current
     orderFilterRef.current = activeFilter
 
-    if (!signal) {
+    const fetchKey = `orders-${restaurantId}-${activeFilter}`
+    const isManualFetch = signal === null
+
+    if (isManualFetch) {
+      if (ordersLoadingRef.current) return
       ordersLoadingRef.current = true
       setLoading(true)
     }
@@ -534,27 +563,28 @@ function App() {
       bounds = { start: `${formatDate(d)}T00:00:00`, end: `${yesterdayStr}T23:59:59` }
     }
 
-    try {
-      let query = supabase
-        .from('live_orders')
-        .select('id, restaurant_id, total_price, payment_mode, status, items, created_at, order_code, table_id, note, restaurant_tables(table_number)')
-        .eq('restaurant_id', restaurantId)
-        .order('created_at', { ascending: false })
-        .limit(200)
+    const executeLoad = async () => {
+      try {
+        let query = supabase
+          .from('live_orders')
+          .select('id, restaurant_id, total_price, payment_mode, status, items, created_at, order_code, table_id, note, restaurant_tables(table_number)')
+          .eq('restaurant_id', restaurantId)
+          .order('created_at', { ascending: false })
+          .limit(200)
 
-      if (bounds.start) query = query.gte('created_at', bounds.start)
-      if (bounds.end) query = query.lte('created_at', bounds.end)
+        if (bounds.start) query = query.gte('created_at', bounds.start)
+        if (bounds.end) query = query.lte('created_at', bounds.end)
 
-      const fetchPromise = query
-      const { data, error } = await fetchWithTimeout(fetchPromise, API_TIMEOUT)
+        const fetchPromise = query
+        const { data, error } = await fetchWithTimeout(fetchPromise, API_TIMEOUT)
 
-      if (signal?.aborted || !isMountedRef.current) return
+        if (signal?.aborted || !isMountedRef.current) return { aborted: true }
 
-      if (error && error.code !== 'PGRST116') {
-        console.error('[Orders] Load error:', error)
-        setToast({ message: 'Failed to load orders', type: 'error' })
-        setOrders([])
-      } else {
+        if (error && error.code !== 'PGRST116') {
+          console.error('[Orders] Load error:', error)
+          return { error }
+        }
+
         const ids = (data || []).map(o => o.id)
         let kitchenMap = {}
         if (ids.length > 0) {
@@ -565,7 +595,7 @@ function App() {
           }
         }
 
-        if (signal?.aborted || !isMountedRef.current) return
+        if (signal?.aborted || !isMountedRef.current) return { aborted: true }
 
         const resolved = (data || []).map(o => ({
           ...o,
@@ -588,21 +618,31 @@ function App() {
           }
         }
 
-        if (!signal?.aborted && isMountedRef.current) {
-          setOrders(resolved)
-        }
+        return { data: resolved }
+      } catch (err) {
+        console.error('[Orders] Exception:', err)
+        return { error: err }
       }
-    } catch (err) {
-      console.error('[Orders] Exception:', err)
-      if (!signal?.aborted && isMountedRef.current && err.name !== 'AbortError') {
-        setToast({ message: 'Failed to load orders', type: 'error' })
-        setOrders([])
-      }
-    } finally {
-      if (!signal?.aborted && isMountedRef.current) {
-        ordersLoadingRef.current = false
-        setLoading(false)
-      }
+    }
+
+    const result = isManualFetch 
+      ? await deduplicateRequest(fetchKey, executeLoad)
+      : await executeLoad()
+
+    if (signal?.aborted || !isMountedRef.current) return
+
+    if (result.aborted) return
+
+    if (result.error) {
+      setToast({ message: 'Failed to load orders', type: 'error' })
+      setOrders([])
+    } else if (result.data) {
+      setOrders(result.data)
+    }
+
+    if (isManualFetch) {
+      ordersLoadingRef.current = false
+      setLoading(false)
     }
   }, [restaurantId, setToast])
 

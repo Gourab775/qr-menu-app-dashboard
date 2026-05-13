@@ -3,24 +3,29 @@ import { supabase } from '../lib/supabase'
 
 const AuthContext = createContext(null)
 
+let authListenerInitialized = false
+
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(null)
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
   const [initialized, setInitialized] = useState(false)
 
-  const initRef = useRef(false)
-  const fetchedProfileRef = useRef(null)
-  const isFetchingProfile = useRef(false)
+  const initCompleteRef = useRef(false)
+  const profileCacheRef = useRef(new Map())
+  const isFetchingProfileRef = useRef(false)
+  const subscriptionRef = useRef(null)
 
   const fetchProfile = useCallback(async (userId) => {
     if (!userId) return null
-    if (fetchedProfileRef.current?.id === userId && fetchedProfileRef.current?.data) {
-      return fetchedProfileRef.current.data
+    if (profileCacheRef.current.has(userId)) {
+      return profileCacheRef.current.get(userId)
     }
-    if (isFetchingProfile.current) return null
+    if (isFetchingProfileRef.current) {
+      return null
+    }
 
-    isFetchingProfile.current = true
+    isFetchingProfileRef.current = true
     try {
       const { data, error } = await supabase
         .from('profiles')
@@ -30,86 +35,86 @@ export function AuthProvider({ children }) {
 
       if (error) {
         console.error('Profile fetch error:', error)
-        isFetchingProfile.current = false
+        isFetchingProfileRef.current = false
         return null
       }
 
-      if (data) fetchedProfileRef.current = { id: userId, data }
-      isFetchingProfile.current = false
+      if (data) {
+        profileCacheRef.current.set(userId, data)
+      }
+      isFetchingProfileRef.current = false
       return data
     } catch (err) {
       console.error('Profile fetch exception:', err)
-      isFetchingProfile.current = false
+      isFetchingProfileRef.current = false
       return null
     }
   }, [])
 
-  const checkSession = useCallback(async () => {
-    try {
-      const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession()
-
-      if (sessionError) {
-        console.error('Session fetch error:', sessionError)
-        setSession(null)
-        setProfile(null)
-        fetchedProfileRef.current = null
-        return null
-      }
-
-      setSession(currentSession)
-
-      if (currentSession?.user) {
-        const userProfile = await fetchProfile(currentSession.user.id)
+  const handleAuthChange = useCallback(async (event, newSession) => {
+    if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+      setSession(newSession)
+      if (newSession?.user) {
+        const userProfile = await fetchProfile(newSession.user.id)
         setProfile(userProfile)
-      } else {
-        setProfile(null)
-        fetchedProfileRef.current = null
       }
-
-      return currentSession
-    } catch (err) {
-      console.error('Session check error:', err)
+    } else if (event === 'SIGNED_OUT') {
       setSession(null)
       setProfile(null)
-      fetchedProfileRef.current = null
-      return null
+      profileCacheRef.current.clear()
+    } else if (event === 'USER_UPDATED') {
+      setSession(newSession)
+      if (newSession?.user) {
+        profileCacheRef.current.delete(newSession.user.id)
+        const userProfile = await fetchProfile(newSession.user.id)
+        setProfile(userProfile)
+      }
     }
   }, [fetchProfile])
 
   useEffect(() => {
-    if (initRef.current) return
-    initRef.current = true
+    if (initCompleteRef.current) return
 
-    setLoading(true)
+    const initializeAuth = async () => {
+      setLoading(true)
 
-    checkSession().finally(() => {
-      setInitialized(true)
-      setLoading(false)
-    })
+      try {
+        const { data: { session: currentSession }, error: sessionError } = 
+          await supabase.auth.getSession()
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, newSession) => {
-      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-        setSession(newSession)
-        if (newSession?.user) {
-          const userProfile = await fetchProfile(newSession.user.id)
-          setProfile(userProfile)
+        if (sessionError) {
+          console.error('Session fetch error:', sessionError)
+          setSession(null)
+          setProfile(null)
+        } else {
+          setSession(currentSession)
+          if (currentSession?.user) {
+            const userProfile = await fetchProfile(currentSession.user.id)
+            setProfile(userProfile)
+          }
         }
-      } else if (event === 'SIGNED_OUT') {
+      } catch (err) {
+        console.error('Session check error:', err)
         setSession(null)
         setProfile(null)
-        fetchedProfileRef.current = null
-      } else if (event === 'USER_UPDATED') {
-        setSession(newSession)
-        if (newSession?.user) {
-          fetchedProfileRef.current = null
-          const userProfile = await fetchProfile(newSession.user.id)
-          setProfile(userProfile)
-        }
+      } finally {
+        setInitialized(true)
+        setLoading(false)
+        initCompleteRef.current = true
       }
-    })
+    }
 
-    return () => subscription.unsubscribe()
-  }, [checkSession, fetchProfile])
+    initializeAuth()
+
+    if (!authListenerInitialized) {
+      const { data: { subscription } } = supabase.auth.onAuthStateChange(handleAuthChange)
+      subscriptionRef.current = subscription
+      authListenerInitialized = true
+    }
+
+    return () => {
+    }
+  }, [fetchProfile, handleAuthChange])
 
   const signIn = useCallback(async (email, password) => {
     const { data, error } = await supabase.auth.signInWithPassword({
@@ -124,7 +129,7 @@ export function AuthProvider({ children }) {
 
     const userProfile = await fetchProfile(data.user.id)
     if (userProfile) {
-      fetchedProfileRef.current = { id: data.user.id, data: userProfile }
+      profileCacheRef.current.set(data.user.id, userProfile)
     }
     setProfile(userProfile)
 
@@ -133,12 +138,10 @@ export function AuthProvider({ children }) {
 
   const signOut = useCallback(async () => {
     try {
-      fetchedProfileRef.current = null
-      isFetchingProfile.current = false
+      profileCacheRef.current.clear()
+      isFetchingProfileRef.current = false
       setSession(null)
       setProfile(null)
-      setLoading(false)
-      setInitialized(false)
       const { error } = await supabase.auth.signOut()
       if (error) console.warn('Supabase signOut warning:', error.message)
     } catch (err) {
@@ -157,7 +160,7 @@ export function AuthProvider({ children }) {
 
   const refreshProfile = useCallback(async () => {
     if (!session?.user) return null
-    fetchedProfileRef.current = null
+    profileCacheRef.current.delete(session.user.id)
     const userProfile = await fetchProfile(session.user.id)
     setProfile(userProfile)
     return userProfile
@@ -172,7 +175,6 @@ export function AuthProvider({ children }) {
     signIn,
     signOut,
     resetPassword,
-    checkSession,
     refreshProfile,
   }
 
