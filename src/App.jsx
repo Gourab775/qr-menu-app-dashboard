@@ -83,6 +83,126 @@ function App() {
     setTimeout(() => setToast(null), 3000)
   }, [])
 
+  const loadOrders = useCallback(async (signal = null, filterOverride = null) => {
+    if (!restaurantId || !isMountedRef.current) return
+
+    const activeFilter = filterOverride !== null ? filterOverride : orderFilterRef.current
+    orderFilterRef.current = activeFilter
+
+    const fetchKey = `orders-${restaurantId}-${activeFilter}`
+    const isManualFetch = signal === null
+
+    if (isManualFetch) {
+      if (ordersLoadingRef.current) return
+      ordersLoadingRef.current = true
+      setLoading(true)
+    }
+
+    const now = new Date()
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    const formatDate = (d) => {
+      const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), day = String(d.getDate()).padStart(2, '0')
+      return `${y}-${m}-${day}`
+    }
+    const todayStr = formatDate(today)
+    const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1)
+    const yesterdayStr = formatDate(yesterday)
+
+    let bounds = { start: `${todayStr}T00:00:00`, end: null }
+    if (activeFilter === 'today') bounds = { start: `${yesterdayStr}T00:00:00`, end: `${yesterdayStr}T23:59:59` }
+    else if (activeFilter === '7days') {
+      const d = new Date(today); d.setDate(d.getDate() - 7)
+      bounds = { start: `${formatDate(d)}T00:00:00`, end: `${yesterdayStr}T23:59:59` }
+    } else if (activeFilter === '30days') {
+      const d = new Date(today); d.setDate(d.getDate() - 30)
+      bounds = { start: `${formatDate(d)}T00:00:00`, end: `${yesterdayStr}T23:59:59` }
+    }
+
+    const executeLoad = async () => {
+      try {
+        let query = supabase
+          .from('live_orders')
+          .select('id, restaurant_id, total_price, payment_mode, status, items, created_at, order_code, table_id, note, restaurant_tables(table_number)')
+          .eq('restaurant_id', restaurantId)
+          .order('created_at', { ascending: false })
+          .limit(200)
+
+        if (bounds.start) query = query.gte('created_at', bounds.start)
+        if (bounds.end) query = query.lte('created_at', bounds.end)
+
+        const fetchPromise = query
+        const { data, error } = await fetchWithTimeout(fetchPromise, API_TIMEOUT)
+
+        if (signal?.aborted || !isMountedRef.current) return { aborted: true }
+
+        if (error && error.code !== 'PGRST116') {
+          console.error('[Orders] Load error:', error)
+          return { error }
+        }
+
+        const ids = (data || []).map(o => o.id)
+        let kitchenMap = {}
+        if (ids.length > 0) {
+          const kitchenPromise = supabase.from('kitchen_board').select('order_id, status').in('order_id', ids)
+          const { data: kr } = await fetchWithTimeout(kitchenPromise, API_TIMEOUT)
+          if (!signal?.aborted && isMountedRef.current) {
+            (kr || []).forEach(k => { kitchenMap[k.order_id] = k.status })
+          }
+        }
+
+        if (signal?.aborted || !isMountedRef.current) return { aborted: true }
+
+        const resolved = (data || []).map(o => ({
+          ...o,
+          kitchen_status: kitchenMap[o.id] || null,
+          restaurant_tables: o.restaurant_tables || (o.table_id ? { table_number: null } : null)
+        }))
+
+        const unresolvedIds = [...new Set((data || []).filter(o => o.table_id && !o.restaurant_tables?.table_number).map(o => o.table_id))]
+        if (unresolvedIds.length > 0) {
+          const tablesPromise = supabase.from('restaurant_tables').select('id, table_number').in('id', unresolvedIds)
+          const { data: tr } = await fetchWithTimeout(tablesPromise, API_TIMEOUT)
+          if (!signal?.aborted && isMountedRef.current) {
+            const tMap = {}
+            ;(tr || []).forEach(t => { tMap[t.id] = t.table_number })
+            resolved.forEach(o => {
+              if (o.table_id && tMap[o.table_id] !== undefined) {
+                o.restaurant_tables = { table_number: tMap[o.table_id] }
+              }
+            })
+          }
+        }
+
+        return { data: resolved }
+      } catch (err) {
+        console.error('[Orders] Exception:', err)
+        return { error: err }
+      }
+    }
+
+    const result = isManualFetch 
+      ? await deduplicateRequest(fetchKey, executeLoad)
+      : await executeLoad()
+
+    if (signal?.aborted || !isMountedRef.current) return
+
+    if (result.aborted) return
+
+    if (result.error) {
+      setToast({ message: 'Failed to load orders', type: 'error' })
+      setOrders([])
+    } else if (result.data) {
+      setOrders(result.data)
+    }
+
+    if (isManualFetch) {
+      ordersLoadingRef.current = false
+      setLoading(false)
+    }
+  }, [restaurantId, setToast])
+
+  const closeSidebar = useCallback(() => setSidebarOpen(false), [])
+
   const isAdmin = userRole === 'admin' || userRole === 'owner'
   const isManager = userRole === 'manager' || isAdmin
 
@@ -529,125 +649,7 @@ function App() {
     return () => { mounted = false; clearInterval(intervalId) }
   }, [isLoggedIn, initStatus, preferences.autoDeclineTimeout])
 
-  const loadOrders = useCallback(async (signal = null, filterOverride = null) => {
-    if (!restaurantId || !isMountedRef.current) return
 
-    const activeFilter = filterOverride !== null ? filterOverride : orderFilterRef.current
-    orderFilterRef.current = activeFilter
-
-    const fetchKey = `orders-${restaurantId}-${activeFilter}`
-    const isManualFetch = signal === null
-
-    if (isManualFetch) {
-      if (ordersLoadingRef.current) return
-      ordersLoadingRef.current = true
-      setLoading(true)
-    }
-
-    const now = new Date()
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-    const formatDate = (d) => {
-      const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), day = String(d.getDate()).padStart(2, '0')
-      return `${y}-${m}-${day}`
-    }
-    const todayStr = formatDate(today)
-    const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1)
-    const yesterdayStr = formatDate(yesterday)
-
-    let bounds = { start: `${todayStr}T00:00:00`, end: null }
-    if (activeFilter === 'today') bounds = { start: `${yesterdayStr}T00:00:00`, end: `${yesterdayStr}T23:59:59` }
-    else if (activeFilter === '7days') {
-      const d = new Date(today); d.setDate(d.getDate() - 7)
-      bounds = { start: `${formatDate(d)}T00:00:00`, end: `${yesterdayStr}T23:59:59` }
-    } else if (activeFilter === '30days') {
-      const d = new Date(today); d.setDate(d.getDate() - 30)
-      bounds = { start: `${formatDate(d)}T00:00:00`, end: `${yesterdayStr}T23:59:59` }
-    }
-
-    const executeLoad = async () => {
-      try {
-        let query = supabase
-          .from('live_orders')
-          .select('id, restaurant_id, total_price, payment_mode, status, items, created_at, order_code, table_id, note, restaurant_tables(table_number)')
-          .eq('restaurant_id', restaurantId)
-          .order('created_at', { ascending: false })
-          .limit(200)
-
-        if (bounds.start) query = query.gte('created_at', bounds.start)
-        if (bounds.end) query = query.lte('created_at', bounds.end)
-
-        const fetchPromise = query
-        const { data, error } = await fetchWithTimeout(fetchPromise, API_TIMEOUT)
-
-        if (signal?.aborted || !isMountedRef.current) return { aborted: true }
-
-        if (error && error.code !== 'PGRST116') {
-          console.error('[Orders] Load error:', error)
-          return { error }
-        }
-
-        const ids = (data || []).map(o => o.id)
-        let kitchenMap = {}
-        if (ids.length > 0) {
-          const kitchenPromise = supabase.from('kitchen_board').select('order_id, status').in('order_id', ids)
-          const { data: kr } = await fetchWithTimeout(kitchenPromise, API_TIMEOUT)
-          if (!signal?.aborted && isMountedRef.current) {
-            (kr || []).forEach(k => { kitchenMap[k.order_id] = k.status })
-          }
-        }
-
-        if (signal?.aborted || !isMountedRef.current) return { aborted: true }
-
-        const resolved = (data || []).map(o => ({
-          ...o,
-          kitchen_status: kitchenMap[o.id] || null,
-          restaurant_tables: o.restaurant_tables || (o.table_id ? { table_number: null } : null)
-        }))
-
-        const unresolvedIds = [...new Set((data || []).filter(o => o.table_id && !o.restaurant_tables?.table_number).map(o => o.table_id))]
-        if (unresolvedIds.length > 0) {
-          const tablesPromise = supabase.from('restaurant_tables').select('id, table_number').in('id', unresolvedIds)
-          const { data: tr } = await fetchWithTimeout(tablesPromise, API_TIMEOUT)
-          if (!signal?.aborted && isMountedRef.current) {
-            const tMap = {}
-            ;(tr || []).forEach(t => { tMap[t.id] = t.table_number })
-            resolved.forEach(o => {
-              if (o.table_id && tMap[o.table_id] !== undefined) {
-                o.restaurant_tables = { table_number: tMap[o.table_id] }
-              }
-            })
-          }
-        }
-
-        return { data: resolved }
-      } catch (err) {
-        console.error('[Orders] Exception:', err)
-        return { error: err }
-      }
-    }
-
-    const result = isManualFetch 
-      ? await deduplicateRequest(fetchKey, executeLoad)
-      : await executeLoad()
-
-    if (signal?.aborted || !isMountedRef.current) return
-
-    if (result.aborted) return
-
-    if (result.error) {
-      setToast({ message: 'Failed to load orders', type: 'error' })
-      setOrders([])
-    } else if (result.data) {
-      setOrders(result.data)
-    }
-
-    if (isManualFetch) {
-      ordersLoadingRef.current = false
-      setLoading(false)
-    }
-  }, [restaurantId, setToast])
-
-  const closeSidebar = useCallback(() => setSidebarOpen(false), [])
 
   const filteredItems = menuItems.filter(item => {
     const matchSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase())
