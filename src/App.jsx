@@ -69,6 +69,8 @@ function App() {
   const ordersPollingRef = useRef(null)
   const orderFilterRef = useRef(orderFilter)
   const isMountedRef = useRef(true)
+  const logoutRef = useRef(false)
+  const initCompleteRef = useRef(false)
 
   const userRole = profile?.role || 'staff'
   const userFullName = profile?.full_name || profile?.email || session?.user?.email || 'User'
@@ -133,8 +135,8 @@ function App() {
   }, [signOut])
 
   useEffect(() => {
-    if (!isLoggedIn || initializedRef.current) return
-    if (!initialized) return
+    if (initCompleteRef.current) return
+    if (!isLoggedIn || !initialized) return
 
     const user = session?.user
     if (!user) return
@@ -145,7 +147,10 @@ function App() {
       return
     }
 
+    if (initializedRef.current) return
     initializedRef.current = true
+    initCompleteRef.current = true
+
     setInitStatus('loading')
     initAttemptRef.current++
 
@@ -165,6 +170,7 @@ function App() {
         }
 
         let rid = profileRestaurantId
+        let slug = ''
         if (!rid) {
           const fetchPromise = supabase
             .from('restaurants')
@@ -175,14 +181,16 @@ function App() {
           const { data } = await fetchWithTimeout(fetchPromise, API_TIMEOUT)
           if (!isMountedRef.current || controller.signal.aborted) return
           rid = data?.id
-          if (data?.slug) setRestaurantSlug(data.slug)
+          slug = data?.slug || ''
+          if (slug) setRestaurantSlug(slug)
         }
         if (!rid) {
           const fallbackPromise = supabase.from('restaurants').select('id, slug').limit(1).maybeSingle()
           const { data: fb } = await fetchWithTimeout(fallbackPromise, API_TIMEOUT)
           if (!isMountedRef.current || controller.signal.aborted) return
           rid = fb?.id
-          if (fb?.slug && !restaurantSlug) setRestaurantSlug(fb.slug)
+          slug = fb?.slug || ''
+          if (slug) setRestaurantSlug(slug)
         }
         if (!rid) {
           setInitError('No restaurant found. Please contact support.')
@@ -197,7 +205,7 @@ function App() {
         if (!isMountedRef.current || controller.signal.aborted) return
         if (rData) {
           setRestaurantName(rData.name || '')
-          if (rData.slug && !restaurantSlug) setRestaurantSlug(rData.slug)
+          if (rData.slug && !slug) setRestaurantSlug(rData.slug)
         }
         setInitStatus('done')
       } catch (err) {
@@ -219,7 +227,7 @@ function App() {
       controller.abort()
       abortControllerRef.current = null
     }
-  }, [isLoggedIn, initialized, session?.user?.id, profileRestaurantId, restaurantSlug])
+  }, [isLoggedIn, initialized, session?.user?.id, profileRestaurantId])
 
   useEffect(() => {
     if (!isLoggedIn || !restaurantId || initStatus !== 'done') return
@@ -271,6 +279,27 @@ function App() {
   }, [isLoggedIn, restaurantId, initStatus, setToast])
 
   useEffect(() => {
+    if (!isLoggedIn || !restaurantId || initStatus !== 'done') return
+    orderFilterRef.current = orderFilter
+
+    if (ordersLoadingRef.current) return
+    ordersLoadingRef.current = true
+
+    const controller = new AbortController()
+    abortControllerRef.current = controller
+
+    loadOrders(controller.signal).finally(() => {
+      if (isMountedRef.current) {
+        ordersLoadingRef.current = false
+      }
+    })
+
+    return () => {
+      controller.abort()
+    }
+  }, [isLoggedIn, restaurantId, initStatus, orderFilter])
+
+  useEffect(() => {
     if (!isLoggedIn || initStatus !== 'done') {
       if (ordersPollingRef.current) {
         clearInterval(ordersPollingRef.current)
@@ -303,26 +332,6 @@ function App() {
       }
     }
   }, [isLoggedIn, initStatus, orderFilter, restaurantId])
-
-  useEffect(() => {
-    if (!isLoggedIn || !restaurantId || initStatus !== 'done') return
-
-    if (ordersLoadingRef.current) return
-
-    const controller = new AbortController()
-    abortControllerRef.current = controller
-    ordersLoadingRef.current = true
-
-    loadOrders(controller.signal).finally(() => {
-      if (isMountedRef.current) {
-        ordersLoadingRef.current = false
-      }
-    })
-
-    return () => {
-      controller.abort()
-    }
-  }, [isLoggedIn, restaurantId, initStatus, orderFilter])
 
   useEffect(() => {
     if (!isLoggedIn || initStatus !== 'done') return
