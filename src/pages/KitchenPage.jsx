@@ -1,37 +1,47 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
+import { fetchWithTimeout } from '../lib/apiUtils'
+
+const API_TIMEOUT = 15000
 
 export default function KitchenPage() {
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
-  const isInitialFetch = useRef(true)
+  const [error, setError] = useState(null)
+  const mountedRef = useRef(false)
+  const abortControllerRef = useRef(null)
 
-  const fetchKitchenOrders = useCallback(async () => {
-    if (isInitialFetch.current) setLoading(true)
+  const fetchKitchenOrders = useCallback(async (signal = null) => {
+    if (!signal && mountedRef.current) setLoading(true)
     
     try {
-      // Fetch kitchen orders with basic columns to avoid 400 errors
-      // Join with restaurant_tables if possible, else use fallback
-      let { data, error } = await supabase
+      let kitchenPromise = supabase
         .from('kitchen_board')
         .select('*, restaurant_tables(table_number), live_orders(order_code)')
         .neq('status', 'completed')
         .order('created_at', { ascending: true })
 
+      let { data, error } = await fetchWithTimeout(kitchenPromise, API_TIMEOUT)
+
+      if (signal?.aborted) return
+
       if (error) {
         console.warn('Initial fetch error, trying without join:', error.message)
-        const fallbackRes = await supabase
+        const fallbackPromise = supabase
           .from('kitchen_board')
           .select('*, live_orders(order_code)')
           .neq('status', 'completed')
           .order('created_at', { ascending: true })
+        
+        const fallbackRes = await fetchWithTimeout(fallbackPromise, API_TIMEOUT)
         data = fallbackRes.data
         error = fallbackRes.error
       }
 
+      if (signal?.aborted) return
+
       if (error) throw error
 
-      // --- Fallback table resolution (same as App.jsx) ---
       const unresolvedIds = [...new Set(
         (data || [])
           .filter(o => o.table_id && !o.restaurant_tables?.table_number)
@@ -40,29 +50,47 @@ export default function KitchenPage() {
       
       let tableMap = {}
       if (unresolvedIds.length > 0) {
-        const { data: tableRows } = await supabase
+        const tablesPromise = supabase
           .from('restaurant_tables')
           .select('id, table_number')
           .in('id', unresolvedIds)
-        ;(tableRows || []).forEach(t => { tableMap[t.id] = t.table_number })
+        
+        const { data: tableRows } = await fetchWithTimeout(tablesPromise, API_TIMEOUT)
+        if (!signal?.aborted) {
+          (tableRows || []).forEach(t => { tableMap[t.id] = t.table_number })
+        }
       }
+
+      if (signal?.aborted) return
 
       const resolvedData = (data || []).map(order => ({
         ...order,
         restaurant_tables: order.restaurant_tables ?? (order.table_id && tableMap[order.table_id] ? { table_number: tableMap[order.table_id] } : null)
       }))
 
-      setOrders(resolvedData)
+      if (!signal?.aborted) {
+        setOrders(resolvedData)
+        setError(null)
+      }
     } catch (err) {
       console.error('Error fetching kitchen orders:', err)
+      if (!signal?.aborted) {
+        setError(err.name === 'AbortError' ? 'Request cancelled' : err.message)
+      }
     } finally {
-      setLoading(false)
-      isInitialFetch.current = false
+      if (!signal?.aborted) {
+        setLoading(false)
+      }
     }
   }, [])
 
   useEffect(() => {
-    fetchKitchenOrders()
+    mountedRef.current = true
+
+    const controller = new AbortController()
+    abortControllerRef.current = controller
+
+    fetchKitchenOrders(controller.signal)
 
     const channel = supabase
       .channel('kitchen-board-realtime')
@@ -71,7 +99,7 @@ export default function KitchenPage() {
         { event: '*', schema: 'public', table: 'kitchen_board' },
         (payload) => {
           if (payload.eventType === 'INSERT') {
-            fetchKitchenOrders() // Re-fetch to get table info correctly
+            fetchKitchenOrders(controller.signal)
           } else if (payload.eventType === 'UPDATE') {
             if (payload.new.status === 'completed') {
               setOrders(prev => prev.filter(o => o.id !== payload.new.id))
@@ -86,6 +114,9 @@ export default function KitchenPage() {
       .subscribe()
 
     return () => {
+      mountedRef.current = false
+      controller.abort()
+      abortControllerRef.current = null
       supabase.removeChannel(channel)
     }
   }, [fetchKitchenOrders])
@@ -126,12 +157,21 @@ export default function KitchenPage() {
           <span className="stat-label">🔥 Kitchen Queue</span>
           <span className="stat-value">{orders.length}</span>
         </div>
-        <button onClick={fetchKitchenOrders} className="refresh-btn-glass">
+        <button onClick={() => fetchKitchenOrders()} className="refresh-btn-glass">
           <span className="sync-icon">🔄</span> Sync
         </button>
       </div>
 
-      {orders.length === 0 ? (
+      {error ? (
+        <div className="empty-state">
+          <div className="empty-icon">⚠️</div>
+          <h3>Failed to load kitchen orders</h3>
+          <p>{error}</p>
+          <button onClick={() => fetchKitchenOrders()} className="refresh-btn-glass">
+            Retry
+          </button>
+        </div>
+      ) : orders.length === 0 ? (
         <div className="empty-state">
           <div className="empty-icon">👨‍🍳</div>
           <h3>All caught up!</h3>

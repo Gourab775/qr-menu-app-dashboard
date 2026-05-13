@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from './lib/supabase'
 import { useAuth } from './contexts/AuthContext'
+import { validateSession, fetchWithTimeout } from './lib/apiUtils'
 import MenuItemCard from './components/MenuItemCard'
 import AddItemModal from './components/AddItemModal'
 import Toast from './components/Toast'
@@ -17,6 +18,9 @@ import KitchenPage from './pages/KitchenPage'
 import { formatDateTime } from './utils/formatDateTime'
 import './App.css'
 import './theme.css'
+
+const API_TIMEOUT = 15000
+const MAX_RETRIES = 2
 
 function App() {
   const { session, profile, loading: authLoading, initialized, signOut } = useAuth()
@@ -61,6 +65,8 @@ function App() {
   const initializedRef = useRef(false)
   const initTimeoutRef = useRef(null)
   const logoutRef = useRef(false)
+  const abortControllerRef = useRef(null)
+  const initAttemptRef = useRef(0)
 
   const userRole = profile?.role || 'staff'
   const userFullName = profile?.full_name || profile?.email || session?.user?.email || 'User'
@@ -142,23 +148,43 @@ function App() {
     const user = session?.user
     if (!user) return
 
+    if (initAttemptRef.current >= MAX_RETRIES) {
+      setInitError('Maximum initialization attempts reached. Please refresh.')
+      setInitStatus('error')
+      return
+    }
+
     initializedRef.current = true
     setInitStatus('loading')
+    initAttemptRef.current++
+
+    const controller = new AbortController()
+    abortControllerRef.current = controller
 
     const initApp = async () => {
       try {
+        const sessionValidation = validateSession(session)
+        if (!sessionValidation.valid) {
+          setInitError(`Session invalid: ${sessionValidation.reason}. Please login again.`)
+          setInitStatus('error')
+          return
+        }
+
         let rid = profileRestaurantId
         if (!rid) {
-          const { data } = await supabase
+          const fetchPromise = supabase
             .from('restaurants')
             .select('id, slug')
             .eq('user_id', user.id)
             .maybeSingle()
+          
+          const { data } = await fetchWithTimeout(fetchPromise, API_TIMEOUT)
           rid = data?.id
           if (data?.slug) setRestaurantSlug(data.slug)
         }
         if (!rid) {
-          const { data: fb } = await supabase.from('restaurants').select('id, slug').limit(1).maybeSingle()
+          const fallbackPromise = supabase.from('restaurants').select('id, slug').limit(1).maybeSingle()
+          const { data: fb } = await fetchWithTimeout(fallbackPromise, API_TIMEOUT)
           rid = fb?.id
           if (fb?.slug && !restaurantSlug) setRestaurantSlug(fb.slug)
         }
@@ -168,42 +194,73 @@ function App() {
           return
         }
         setRestaurantId(rid)
-        const { data: rData } = await supabase.from('restaurants').select('name, slug').eq('id', rid).maybeSingle()
+        const restaurantPromise = supabase.from('restaurants').select('name, slug').eq('id', rid).maybeSingle()
+        const { data: rData } = await fetchWithTimeout(restaurantPromise, API_TIMEOUT)
         if (rData) {
           setRestaurantName(rData.name || '')
           if (rData.slug && !restaurantSlug) setRestaurantSlug(rData.slug)
         }
         setInitStatus('done')
-      } catch {
-        setInitError('Failed to initialize. Please try again.')
+      } catch (err) {
+        console.error('[Init] Error:', err)
+        if (err.name === 'AbortError') {
+          setInitError('Request cancelled. Please refresh.')
+        } else {
+          setInitError('Failed to initialize. Please try again.')
+        }
         setInitStatus('error')
       }
     }
 
     initApp()
+
+    return () => {
+      controller.abort()
+      abortControllerRef.current = null
+    }
   }, [isLoggedIn, initialized, session?.user?.id, profileRestaurantId])
 
   useEffect(() => {
     if (!isLoggedIn || !restaurantId || initStatus !== 'done') return
 
+    const controller = new AbortController()
+    abortControllerRef.current = controller
+
     const doLoad = async () => {
-      await loadOrders()
+      try {
+        await loadOrders(controller.signal)
 
-      const { data: catData } = await supabase.from('categories').select('id, name, image, sort_order').eq('restaurant_id', restaurantId).order('sort_order', { ascending: true })
-      if (catData) setCategories(catData || [])
+        const catPromise = supabase.from('categories').select('id, name, image, sort_order').eq('restaurant_id', restaurantId).order('sort_order', { ascending: true })
+        const { data: catData } = await fetchWithTimeout(catPromise, API_TIMEOUT)
+        if (!controller.signal.aborted && catData) setCategories(catData || [])
 
-      setMenuLoading(true)
-      const { data: itemData, error: itemErr } = await supabase.from('menu_items').select('id, name, price, description, is_veg, is_available, category_id, image_url').eq('restaurant_id', restaurantId).order('name', { ascending: true })
-      if (itemErr) {
-        setToast ? setToast({ message: 'Failed to load menu items', type: 'error' }) : null
-      } else {
-        setMenuItems(itemData || [])
+        setMenuLoading(true)
+        try {
+          const menuPromise = supabase.from('menu_items').select('id, name, price, description, is_veg, is_available, category_id, image_url').eq('restaurant_id', restaurantId).order('name', { ascending: true })
+          const { data: itemData, error: itemErr } = await fetchWithTimeout(menuPromise, API_TIMEOUT)
+          if (!controller.signal.aborted) {
+            if (itemErr) {
+              console.error('[Menu] Load error:', itemErr)
+              if (setToast) setToast({ message: 'Failed to load menu items', type: 'error' })
+            } else {
+              setMenuItems(itemData || [])
+            }
+          }
+        } finally {
+          if (!controller.signal.aborted) setMenuLoading(false)
+        }
+      } catch (err) {
+        console.error('[DataLoad] Error:', err)
       }
-      setMenuLoading(false)
     }
 
     doLoad()
-  }, [isLoggedIn, restaurantId, initStatus, orderFilter])
+
+    return () => {
+      controller.abort()
+      abortControllerRef.current = null
+    }
+  }, [isLoggedIn, restaurantId, initStatus])
 
   useEffect(() => {
     if (!isLoggedIn || initStatus !== 'done') return
@@ -375,8 +432,9 @@ function App() {
     return () => { mounted = false; clearInterval(intervalId) }
   }, [isLoggedIn, initStatus, preferences.autoDeclineTimeout])
 
-  const loadOrders = useCallback(async () => {
+  const loadOrders = useCallback(async (signal = null) => {
     if (!restaurantId) return
+
     setLoading(true)
 
     const now = new Date()
@@ -410,17 +468,27 @@ function App() {
       if (bounds.start) query = query.gte('created_at', bounds.start)
       if (bounds.end) query = query.lte('created_at', bounds.end)
 
-      const { data, error } = await query
+      const fetchPromise = query
+      const { data, error } = await fetchWithTimeout(fetchPromise, API_TIMEOUT)
+
+      if (signal?.aborted) return
+
       if (error && error.code !== 'PGRST116') {
+        console.error('[Orders] Load error:', error)
         setToast ? setToast({ message: 'Failed to load orders', type: 'error' }) : null
         setOrders([])
       } else {
         const ids = (data || []).map(o => o.id)
         let kitchenMap = {}
         if (ids.length > 0) {
-          const { data: kr } = await supabase.from('kitchen_board').select('order_id, status').in('order_id', ids)
-          ;(kr || []).forEach(k => { kitchenMap[k.order_id] = k.status })
+          const kitchenPromise = supabase.from('kitchen_board').select('order_id, status').in('order_id', ids)
+          const { data: kr } = await fetchWithTimeout(kitchenPromise, API_TIMEOUT)
+          if (!signal?.aborted) {
+            (kr || []).forEach(k => { kitchenMap[k.order_id] = k.status })
+          }
         }
+
+        if (signal?.aborted) return
 
         const resolved = (data || []).map(o => ({
           ...o,
@@ -430,23 +498,33 @@ function App() {
 
         const unresolvedIds = [...new Set((data || []).filter(o => o.table_id && !o.restaurant_tables?.table_number).map(o => o.table_id))]
         if (unresolvedIds.length > 0) {
-          const { data: tr } = await supabase.from('restaurant_tables').select('id, table_number').in('id', unresolvedIds)
-          const tMap = {}
-          ;(tr || []).forEach(t => { tMap[t.id] = t.table_number })
-          resolved.forEach(o => {
-            if (o.table_id && tMap[o.table_id] !== undefined) {
-              o.restaurant_tables = { table_number: tMap[o.table_id] }
-            }
-          })
+          const tablesPromise = supabase.from('restaurant_tables').select('id, table_number').in('id', unresolvedIds)
+          const { data: tr } = await fetchWithTimeout(tablesPromise, API_TIMEOUT)
+          if (!signal?.aborted) {
+            const tMap = {}
+            ;(tr || []).forEach(t => { tMap[t.id] = t.table_number })
+            resolved.forEach(o => {
+              if (o.table_id && tMap[o.table_id] !== undefined) {
+                o.restaurant_tables = { table_number: tMap[o.table_id] }
+              }
+            })
+          }
         }
 
-        setOrders(resolved)
+        if (!signal?.aborted) {
+          setOrders(resolved)
+        }
       }
-    } catch {
-      setToast ? setToast({ message: 'Failed to load orders', type: 'error' }) : null
-      setOrders([])
+    } catch (err) {
+      console.error('[Orders] Exception:', err)
+      if (err.name !== 'AbortError') {
+        setToast ? setToast({ message: 'Failed to load orders', type: 'error' }) : null
+        setOrders([])
+      }
     } finally {
-      setLoading(false)
+      if (!signal?.aborted) {
+        setLoading(false)
+      }
     }
   }, [restaurantId, orderFilter])
 

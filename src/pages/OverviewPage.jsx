@@ -1,10 +1,13 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
   BarChart, Bar, PieChart, Pie, Cell, Legend, AreaChart, Area
 } from 'recharts'
 import { supabase } from '../lib/supabase'
+import { fetchWithTimeout } from '../lib/apiUtils'
 import './OverviewPage.css'
+
+const API_TIMEOUT = 15000
 
 const ACCENT = {
   green: '#22c55e',
@@ -56,6 +59,9 @@ export default function OverviewPage({ restaurantId }) {
   const [error, setError] = useState(null)
   const [metrics, setMetrics] = useState(null)
 
+  const mountedRef = useRef(false)
+  const abortControllerRef = useRef(null)
+
   const getDateRange = useCallback((range) => {
     const now = new Date()
     const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999)
@@ -71,19 +77,25 @@ export default function OverviewPage({ restaurantId }) {
     return { start: start.toISOString(), end: end.toISOString(), startDate: start, endDate: end }
   }, [])
 
-  const fetchAnalytics = useCallback(async () => {
+  const fetchAnalytics = useCallback(async (signal = null) => {
+    if (!mountedRef.current && !signal) return
+
     setLoading(true)
     setError(null)
 
     try {
       const { start, end, startDate, endDate } = getDateRange(filter)
 
-      const { data: orders, error: queryError } = await supabase
+      const ordersPromise = supabase
         .from('live_orders')
         .select('*')
         .gte('created_at', start)
         .lte('created_at', end)
         .order('created_at', { ascending: false })
+
+      const { data: orders, error: queryError } = await fetchWithTimeout(ordersPromise, API_TIMEOUT)
+
+      if (!mountedRef.current || signal?.aborted) return
 
       if (queryError) throw new Error(queryError.message)
 
@@ -101,12 +113,14 @@ export default function OverviewPage({ restaurantId }) {
       
       list.forEach(o => {
         if (!o?.created_at) return
-        if (o.status === 'rejected') return // Exclude rejected orders from main revenue
+        if (o.status === 'rejected') return
 
         const day = new Date(o.created_at).toISOString().split('T')[0]
         dailyRev[day] = (dailyRev[day] || 0) + (Number(o.total_price) || 0)
         dailyOrd[day] = (dailyOrd[day] || 0) + 1
       })
+
+      if (!mountedRef.current || signal?.aborted) return
 
       const completed = list.filter(o => o.status === 'accepted')
       const pending = list.filter(o => o.status !== 'accepted' && o.status !== 'rejected')
@@ -147,6 +161,8 @@ export default function OverviewPage({ restaurantId }) {
         { name: 'Online', value: payments.online, fill: CHART_COLORS.online }
       ].filter(d => d.value > 0)
 
+      if (!mountedRef.current || signal?.aborted) return
+
       setMetrics({
         ordersTotal: list.length,
         revenueTotal: completed.reduce((s, o) => s + (Number(o.total_price) || 0), 0),
@@ -161,10 +177,13 @@ export default function OverviewPage({ restaurantId }) {
       })
     } catch (err) {
       console.error('Analytics fetch failed:', err)
-      setError(err.message)
+      if (!mountedRef.current || signal?.aborted) return
+      setError(err.name === 'AbortError' ? 'Request cancelled' : err.message)
       setMetrics(emptyState())
     } finally {
-      setLoading(false)
+      if (mountedRef.current && !signal?.aborted) {
+        setLoading(false)
+      }
     }
   }, [filter, getDateRange])
 
@@ -173,7 +192,20 @@ export default function OverviewPage({ restaurantId }) {
     completedOrders: 0, pendingOrders: 0, topItems: [], chartData: [], payData: []
   })
 
-  useEffect(() => { fetchAnalytics() }, [fetchAnalytics])
+  useEffect(() => {
+    mountedRef.current = true
+
+    const controller = new AbortController()
+    abortControllerRef.current = controller
+
+    fetchAnalytics(controller.signal)
+
+    return () => {
+      mountedRef.current = false
+      controller.abort()
+      abortControllerRef.current = null
+    }
+  }, [filter])
 
   const fmtPct = (a, b) => b ? Math.round(a / b * 100) : 0
 
