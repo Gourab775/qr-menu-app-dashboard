@@ -9,6 +9,7 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true)
   const [initialized, setInitialized] = useState(false)
 
+  const initRef = useRef(false)
   const fetchedProfileRef = useRef(null)
   const isFetchingProfile = useRef(false)
 
@@ -45,7 +46,16 @@ export function AuthProvider({ children }) {
 
   const checkSession = useCallback(async () => {
     try {
-      const { data: { session: currentSession } } = await supabase.auth.getSession()
+      const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession()
+
+      if (sessionError) {
+        console.error('Session fetch error:', sessionError)
+        setSession(null)
+        setProfile(null)
+        fetchedProfileRef.current = null
+        return null
+      }
+
       setSession(currentSession)
 
       if (currentSession?.user) {
@@ -66,16 +76,16 @@ export function AuthProvider({ children }) {
     }
   }, [fetchProfile])
 
-  const initialize = useCallback(async () => {
-    if (initialized) return
-    setLoading(true)
-    await checkSession()
-    setInitialized(true)
-    setLoading(false)
-  }, [initialized, checkSession])
-
   useEffect(() => {
-    initialize()
+    if (initRef.current) return
+    initRef.current = true
+
+    setLoading(true)
+
+    checkSession().finally(() => {
+      setInitialized(true)
+      setLoading(false)
+    })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, newSession) => {
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
@@ -99,7 +109,7 @@ export function AuthProvider({ children }) {
     })
 
     return () => subscription.unsubscribe()
-  }, [initialize, fetchProfile])
+  }, [checkSession, fetchProfile])
 
   const signIn = useCallback(async (email, password) => {
     const { data, error } = await supabase.auth.signInWithPassword({

@@ -1,16 +1,23 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase, RESTAURANT_ID } from '../lib/supabase'
+import { fetchWithTimeout } from '../lib/apiUtils'
 import ConfirmModal from '../components/ConfirmModal'
+
+const API_TIMEOUT = 15000
 
 export default function CategoriesPage({ restaurantId }) {
   const [categories, setCategories] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [showAddModal, setShowAddModal] = useState(false)
   const [newCategoryName, setNewCategoryName] = useState('')
   const [itemCounts, setItemCounts] = useState({})
   const [showToast, setShowToast] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [deleting, setDeleting] = useState(false)
+
+  const mountedRef = useRef(false)
+  const abortControllerRef = useRef(null)
 
   const currentRestId = restaurantId || RESTAURANT_ID
 
@@ -19,37 +26,67 @@ export default function CategoriesPage({ restaurantId }) {
     setTimeout(() => setShowToast(null), 3000)
   }
 
-  const loadCategories = async () => {
-    setLoading(true)
+  const loadCategories = async (signal = null) => {
+    if (!signal && mountedRef.current) setLoading(true);
+    setError(null);
+
     try {
-      const { data, error } = await supabase
+      const categoriesPromise = supabase
         .from('categories')
         .select('*')
         .eq('restaurant_id', currentRestId)
         .order('sort_order', { ascending: true })
+
+      const { data, error } = await fetchWithTimeout(categoriesPromise, API_TIMEOUT)
+
+      if (signal?.aborted) return;
 
       if (error) throw error
       setCategories(data || [])
 
       const counts = {}
       for (const cat of data || []) {
-        const { count } = await supabase
+        const countPromise = supabase
           .from('menu_items')
           .select('*', { count: 'exact', head: true })
           .eq('category_id', cat.id)
-        counts[cat.id] = count || 0
+        
+        const { count } = await fetchWithTimeout(countPromise, API_TIMEOUT)
+        if (!signal?.aborted) {
+          counts[cat.id] = count || 0
+        }
       }
-      setItemCounts(counts)
+
+      if (!signal?.aborted) {
+        setItemCounts(counts)
+      }
     } catch (err) {
-      showToastMsg('Failed to load categories', 'error')
+      console.error('Failed to load categories:', err);
+      if (!signal?.aborted) {
+        setError(err.name === 'AbortError' ? 'Request cancelled' : 'Failed to load categories');
+      }
     } finally {
-      setLoading(false)
+      if (!signal?.aborted) {
+        setLoading(false);
+      }
     }
   }
 
   useEffect(() => {
-    loadCategories()
-  }, [])
+    if (!currentRestId) return;
+
+    mountedRef.current = true;
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    loadCategories(controller.signal);
+
+    return () => {
+      mountedRef.current = false;
+      controller.abort();
+      abortControllerRef.current = null;
+    };
+  }, [currentRestId]);
 
   const handleAddCategory = async () => {
     if (!newCategoryName.trim()) return
@@ -141,7 +178,16 @@ export default function CategoriesPage({ restaurantId }) {
         </button>
       </div>
 
-      {categories.length === 0 ? (
+      {error ? (
+        <div className="empty-state">
+          <div className="empty-icon">⚠️</div>
+          <h3>Failed to load categories</h3>
+          <p>{error}</p>
+          <button className="add-btn" onClick={() => loadCategories()}>
+            Retry
+          </button>
+        </div>
+      ) : categories.length === 0 ? (
         <div className="empty-state">
           <div className="empty-icon-large">📂</div>
           <h3>No Categories Yet</h3>

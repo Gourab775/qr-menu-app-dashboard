@@ -1,9 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
+import { fetchWithTimeout } from '../lib/apiUtils';
+
+const API_TIMEOUT = 15000;
 
 export default function TablesPage({ restaurantId, restaurantSlug }) {
   const BASE_URL = `${window.location.origin.replace('5175', '5173')}/${restaurantSlug || 'default'}`;
-  // Use a fallback or the production URL if origin is not suitable
   const FINAL_BASE_URL = window.location.origin.includes('localhost') 
     ? BASE_URL 
     : `https://qr-menu-app-gamma.vercel.app/${restaurantSlug || 'default'}`;
@@ -13,24 +15,26 @@ export default function TablesPage({ restaurantId, restaurantSlug }) {
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    if (restaurantId) {
-      loadTables();
-    }
-  }, [restaurantId]);
+  const mountedRef = useRef(false);
+  const abortControllerRef = useRef(null);
 
-  const loadTables = async () => {
-    setLoading(true);
+  const loadTables = useCallback(async (signal = null) => {
+    if (!signal && mountedRef.current) setLoading(true);
+    setError(null);
+
     try {
-      const { data, error: err } = await supabase
+      const tablesPromise = supabase
         .from('restaurant_tables')
         .select('*')
         .eq('restaurant_id', restaurantId)
         .order('table_number', { ascending: true });
 
+      const { data, error: err } = await fetchWithTimeout(tablesPromise, API_TIMEOUT);
+
+      if (signal?.aborted) return;
+
       if (err) throw err;
       
-      // Auto-populate missing tokens for legacy tables
       const missingTokens = (data || []).filter(t => !t.table_token);
       if (missingTokens.length > 0) {
         console.warn(`Found ${missingTokens.length} tables without tokens. Auto-populating...`);
@@ -38,24 +42,46 @@ export default function TablesPage({ restaurantId, restaurantSlug }) {
           const token = crypto.randomUUID();
           await supabase.from('restaurant_tables').update({ table_token: token }).eq('id', table.id);
         }
-        loadTables();
+        loadTables(signal);
         return;
       }
 
-      // Sort numerically
       const sorted = (data || []).sort((a, b) => {
         const numA = Number(a.table_number) || 0;
         const numB = Number(b.table_number) || 0;
         return numA - numB;
       });
-      setTables(sorted);
+
+      if (!signal?.aborted) {
+        setTables(sorted);
+      }
     } catch (err) {
       console.error('Failed to load tables:', err);
-      setError('Failed to load tables.');
+      if (!signal?.aborted) {
+        setError(err.name === 'AbortError' ? 'Request cancelled' : 'Failed to load tables');
+      }
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) {
+        setLoading(false);
+      }
     }
-  };
+  }, [restaurantId]);
+
+  useEffect(() => {
+    if (!restaurantId) return;
+
+    mountedRef.current = true;
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    loadTables(controller.signal);
+
+    return () => {
+      mountedRef.current = false;
+      controller.abort();
+      abortControllerRef.current = null;
+    };
+  }, [restaurantId, loadTables]);
 
   const handleAddTable = async (e) => {
     e.preventDefault();
@@ -170,9 +196,25 @@ export default function TablesPage({ restaurantId, restaurantSlug }) {
           <span className="stat-label">Total Tables</span>
           <span className="stat-value">{tables.length}</span>
         </div>
+        <button onClick={() => loadTables()} className="refresh-btn-glass">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M23 4v6h-6M1 20v-6h6"/>
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+          </svg>
+          Refresh
+        </button>
       </div>
 
-      {error && <div style={{ color: '#ef4444', marginBottom: '15px', padding: '10px', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '8px' }}>{error}</div>}
+      {error ? (
+        <div className="empty-state">
+          <div className="empty-icon">⚠️</div>
+          <h3>Failed to load tables</h3>
+          <p>{error}</p>
+          <button onClick={() => loadTables()} className="add-btn">
+            Retry
+          </button>
+        </div>
+      ) : null}
 
       <div className="menu-controls" style={{ display: 'flex', gap: '15px', marginBottom: '30px', alignItems: 'center', flexWrap: 'wrap' }}>
         <form onSubmit={handleAddTable} style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>

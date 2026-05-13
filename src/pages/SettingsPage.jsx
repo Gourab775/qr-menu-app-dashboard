@@ -1,6 +1,9 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase, RESTAURANT_ID } from '../lib/supabase'
+import { fetchWithTimeout } from '../lib/apiUtils'
 import { useAuth } from '../contexts/AuthContext'
+
+const API_TIMEOUT = 15000
 
 const SOUND_OPTIONS = [
   { id: 'beep', name: 'Default Beep', freq: [800, 1000], duration: 0.3 },
@@ -283,6 +286,9 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
     confirm: false
   })
 
+  const mountedRef = useRef(false)
+  const abortControllerRef = useRef(null)
+
   const currentRestId = restaurantId || RESTAURANT_ID
 
   const showToast = (message, type = 'success') => {
@@ -291,18 +297,19 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
     }
   }
 
-  useEffect(() => {
-    loadRestaurant()
-  }, [])
+  const loadRestaurant = useCallback(async (signal = null) => {
+    if (!signal && mountedRef.current) setLoading(true);
 
-  const loadRestaurant = async () => {
-    setLoading(true)
     try {
-      const { data, error } = await supabase
+      const restaurantPromise = supabase
         .from('restaurants')
         .select('*')
         .eq('id', currentRestId)
         .single()
+
+      const { data, error } = await fetchWithTimeout(restaurantPromise, API_TIMEOUT)
+
+      if (signal?.aborted) return;
 
       if (error && error.code !== 'PGRST116') {
         console.warn('Restaurant not found, using defaults')
@@ -324,30 +331,53 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
       }
     } catch (err) {
       console.error('Failed to load restaurant:', err)
-      setRestaurant({
-        id: RESTAURANT_ID,
-        name: 'Your Restaurant',
-        slug: '',
-        address: '',
-        phone: '',
-        contact_number: '',
-        email: '',
-        logo: ''
-      })
+      if (!signal?.aborted) {
+        setRestaurant({
+          id: RESTAURANT_ID,
+          name: 'Your Restaurant',
+          slug: '',
+          address: '',
+          phone: '',
+          contact_number: '',
+          email: '',
+          logo: ''
+        })
+      }
     } finally {
-      setLoading(false)
+      if (!signal?.aborted) {
+        setLoading(false);
+      }
     }
-  }
+  }, [currentRestId])
+
+  useEffect(() => {
+    mountedRef.current = true;
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    loadRestaurant(controller.signal);
+
+    return () => {
+      mountedRef.current = false;
+      controller.abort();
+      abortControllerRef.current = null;
+    };
+  }, [loadRestaurant]);
 
   const refreshRestaurant = async () => {
-    const { data } = await supabase
-      .from('restaurants')
-      .select('*')
-      .eq('id', RESTAURANT_ID)
-      .single()
-    
-    if (data) {
-      setRestaurant(data)
+    try {
+      const restaurantPromise = supabase
+        .from('restaurants')
+        .select('*')
+        .eq('id', RESTAURANT_ID)
+        .single()
+      
+      const { data } = await fetchWithTimeout(restaurantPromise, API_TIMEOUT)
+      if (data) {
+        setRestaurant(data)
+      }
+    } catch (err) {
+      console.error('Failed to refresh restaurant:', err);
     }
   }
 

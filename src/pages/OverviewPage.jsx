@@ -61,6 +61,8 @@ export default function OverviewPage({ restaurantId }) {
 
   const mountedRef = useRef(false)
   const abortControllerRef = useRef(null)
+  const filterRef = useRef(filter)
+  const isFetchingRef = useRef(false)
 
   const getDateRange = useCallback((range) => {
     const now = new Date()
@@ -78,13 +80,20 @@ export default function OverviewPage({ restaurantId }) {
   }, [])
 
   const fetchAnalytics = useCallback(async (signal = null) => {
+    const currentFilter = filterRef.current
     if (!mountedRef.current && !signal) return
 
-    setLoading(true)
-    setError(null)
+    if (isFetchingRef.current && !signal) return
+
+    isFetchingRef.current = true
+
+    if (!signal) {
+      setLoading(true)
+      setError(null)
+    }
 
     try {
-      const { start, end, startDate, endDate } = getDateRange(filter)
+      const { start, end, startDate, endDate } = getDateRange(currentFilter)
 
       const ordersPromise = supabase
         .from('live_orders')
@@ -100,17 +109,17 @@ export default function OverviewPage({ restaurantId }) {
       if (queryError) throw new Error(queryError.message)
 
       const list = Array.isArray(orders) ? orders : []
-      
+
       const allDays = getDaysInRange(startDate, endDate)
       const dailyRev = {}
       const dailyOrd = {}
-      
+
       allDays.forEach(day => {
         const dateKey = day.toISOString().split('T')[0]
         dailyRev[dateKey] = 0
         dailyOrd[dateKey] = 0
       })
-      
+
       list.forEach(o => {
         if (!o?.created_at) return
         if (o.status === 'rejected') return
@@ -124,10 +133,10 @@ export default function OverviewPage({ restaurantId }) {
 
       const completed = list.filter(o => o.status === 'accepted')
       const pending = list.filter(o => o.status !== 'accepted' && o.status !== 'rejected')
-      
+
       const items = {}
       const payments = { counter: 0, online: 0 }
-      
+
       list.forEach(o => {
         if (o.status === 'rejected') return
         const pm = (o.payment_mode || 'counter').toLowerCase()
@@ -182,10 +191,11 @@ export default function OverviewPage({ restaurantId }) {
       setMetrics(emptyState())
     } finally {
       if (mountedRef.current && !signal?.aborted) {
+        isFetchingRef.current = false
         setLoading(false)
       }
     }
-  }, [filter, getDateRange])
+  }, [getDateRange])
 
   const emptyState = () => ({
     ordersTotal: 0, revenueTotal: 0, revenuePending: 0, avgOrder: 0, itemsSold: 0,
@@ -194,6 +204,7 @@ export default function OverviewPage({ restaurantId }) {
 
   useEffect(() => {
     mountedRef.current = true
+    filterRef.current = filter
 
     const controller = new AbortController()
     abortControllerRef.current = controller
@@ -204,8 +215,9 @@ export default function OverviewPage({ restaurantId }) {
       mountedRef.current = false
       controller.abort()
       abortControllerRef.current = null
+      isFetchingRef.current = false
     }
-  }, [filter])
+  }, [filter, fetchAnalytics])
 
   const fmtPct = (a, b) => b ? Math.round(a / b * 100) : 0
 

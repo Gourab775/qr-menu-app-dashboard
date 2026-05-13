@@ -63,10 +63,12 @@ function App() {
 
   const profileRef = useRef(null)
   const initializedRef = useRef(false)
-  const initTimeoutRef = useRef(null)
-  const logoutRef = useRef(false)
-  const abortControllerRef = useRef(null)
   const initAttemptRef = useRef(0)
+  const abortControllerRef = useRef(null)
+  const ordersLoadingRef = useRef(false)
+  const ordersPollingRef = useRef(null)
+  const orderFilterRef = useRef(orderFilter)
+  const isMountedRef = useRef(true)
 
   const userRole = profile?.role || 'staff'
   const userFullName = profile?.full_name || profile?.email || session?.user?.email || 'User'
@@ -99,17 +101,6 @@ function App() {
       window.removeEventListener('offline', handleOffline)
     }
   }, [])
-
-  useEffect(() => {
-    if (initTimeoutRef.current) clearTimeout(initTimeoutRef.current)
-    initTimeoutRef.current = setTimeout(() => {
-      if (initStatus === 'loading') {
-        console.warn('Init timeout reached, forcing completion')
-        setInitStatus('done')
-      }
-    }, 10000)
-    return () => { if (initTimeoutRef.current) clearTimeout(initTimeoutRef.current) }
-  }, [initStatus])
 
   const handleLogout = useCallback(async () => {
     if (logoutRef.current) return
@@ -160,9 +151,12 @@ function App() {
 
     const controller = new AbortController()
     abortControllerRef.current = controller
+    isMountedRef.current = true
 
     const initApp = async () => {
       try {
+        if (!isMountedRef.current || controller.signal.aborted) return
+
         const sessionValidation = validateSession(session)
         if (!sessionValidation.valid) {
           setInitError(`Session invalid: ${sessionValidation.reason}. Please login again.`)
@@ -177,14 +171,16 @@ function App() {
             .select('id, slug')
             .eq('user_id', user.id)
             .maybeSingle()
-          
+
           const { data } = await fetchWithTimeout(fetchPromise, API_TIMEOUT)
+          if (!isMountedRef.current || controller.signal.aborted) return
           rid = data?.id
           if (data?.slug) setRestaurantSlug(data.slug)
         }
         if (!rid) {
           const fallbackPromise = supabase.from('restaurants').select('id, slug').limit(1).maybeSingle()
           const { data: fb } = await fetchWithTimeout(fallbackPromise, API_TIMEOUT)
+          if (!isMountedRef.current || controller.signal.aborted) return
           rid = fb?.id
           if (fb?.slug && !restaurantSlug) setRestaurantSlug(fb.slug)
         }
@@ -193,9 +189,12 @@ function App() {
           setInitStatus('error')
           return
         }
+        if (!isMountedRef.current || controller.signal.aborted) return
+
         setRestaurantId(rid)
         const restaurantPromise = supabase.from('restaurants').select('name, slug').eq('id', rid).maybeSingle()
         const { data: rData } = await fetchWithTimeout(restaurantPromise, API_TIMEOUT)
+        if (!isMountedRef.current || controller.signal.aborted) return
         if (rData) {
           setRestaurantName(rData.name || '')
           if (rData.slug && !restaurantSlug) setRestaurantSlug(rData.slug)
@@ -203,6 +202,7 @@ function App() {
         setInitStatus('done')
       } catch (err) {
         console.error('[Init] Error:', err)
+        if (!isMountedRef.current || controller.signal.aborted) return
         if (err.name === 'AbortError') {
           setInitError('Request cancelled. Please refresh.')
         } else {
@@ -215,39 +215,46 @@ function App() {
     initApp()
 
     return () => {
+      isMountedRef.current = false
       controller.abort()
       abortControllerRef.current = null
     }
-  }, [isLoggedIn, initialized, session?.user?.id, profileRestaurantId])
+  }, [isLoggedIn, initialized, session?.user?.id, profileRestaurantId, restaurantSlug])
 
   useEffect(() => {
     if (!isLoggedIn || !restaurantId || initStatus !== 'done') return
+    isMountedRef.current = true
 
     const controller = new AbortController()
     abortControllerRef.current = controller
 
     const doLoad = async () => {
       try {
+        if (!isMountedRef.current || controller.signal.aborted) return
+
         await loadOrders(controller.signal)
+
+        if (!isMountedRef.current || controller.signal.aborted) return
 
         const catPromise = supabase.from('categories').select('id, name, image, sort_order').eq('restaurant_id', restaurantId).order('sort_order', { ascending: true })
         const { data: catData } = await fetchWithTimeout(catPromise, API_TIMEOUT)
-        if (!controller.signal.aborted && catData) setCategories(catData || [])
+        if (!isMountedRef.current || controller.signal.aborted) return
+        if (catData) setCategories(catData || [])
 
         setMenuLoading(true)
         try {
           const menuPromise = supabase.from('menu_items').select('id, name, price, description, is_veg, is_available, category_id, image_url').eq('restaurant_id', restaurantId).order('name', { ascending: true })
           const { data: itemData, error: itemErr } = await fetchWithTimeout(menuPromise, API_TIMEOUT)
-          if (!controller.signal.aborted) {
-            if (itemErr) {
-              console.error('[Menu] Load error:', itemErr)
-              if (setToast) setToast({ message: 'Failed to load menu items', type: 'error' })
-            } else {
-              setMenuItems(itemData || [])
-            }
+          if (!isMountedRef.current || controller.signal.aborted) return
+          if (itemErr) {
+            console.error('[Menu] Load error:', itemErr)
+            setToast({ message: 'Failed to load menu items', type: 'error' })
+          } else {
+            setMenuItems(itemData || [])
           }
         } finally {
-          if (!controller.signal.aborted) setMenuLoading(false)
+          if (!isMountedRef.current || controller.signal.aborted) return
+          setMenuLoading(false)
         }
       } catch (err) {
         console.error('[DataLoad] Error:', err)
@@ -257,10 +264,65 @@ function App() {
     doLoad()
 
     return () => {
+      isMountedRef.current = false
       controller.abort()
       abortControllerRef.current = null
     }
-  }, [isLoggedIn, restaurantId, initStatus])
+  }, [isLoggedIn, restaurantId, initStatus, setToast])
+
+  useEffect(() => {
+    if (!isLoggedIn || initStatus !== 'done') {
+      if (ordersPollingRef.current) {
+        clearInterval(ordersPollingRef.current)
+        ordersPollingRef.current = null
+      }
+      return
+    }
+
+    if (orderFilter !== 'live') {
+      if (ordersPollingRef.current) {
+        clearInterval(ordersPollingRef.current)
+        ordersPollingRef.current = null
+      }
+      return
+    }
+
+    const pollInterval = setInterval(() => {
+      if (!ordersLoadingRef.current && restaurantId && isMountedRef.current) {
+        const controller = new AbortController()
+        loadOrders(controller.signal).catch(() => {})
+      }
+    }, 15000)
+
+    ordersPollingRef.current = pollInterval
+
+    return () => {
+      if (ordersPollingRef.current) {
+        clearInterval(ordersPollingRef.current)
+        ordersPollingRef.current = null
+      }
+    }
+  }, [isLoggedIn, initStatus, orderFilter, restaurantId])
+
+  useEffect(() => {
+    if (!isLoggedIn || !restaurantId || initStatus !== 'done') return
+
+    if (ordersLoadingRef.current) return
+
+    const controller = new AbortController()
+    abortControllerRef.current = controller
+    ordersLoadingRef.current = true
+
+    loadOrders(controller.signal).finally(() => {
+      if (isMountedRef.current) {
+        ordersLoadingRef.current = false
+      }
+    })
+
+    return () => {
+      controller.abort()
+    }
+  }, [isLoggedIn, restaurantId, initStatus, orderFilter])
 
   useEffect(() => {
     if (!isLoggedIn || initStatus !== 'done') return
@@ -432,10 +494,16 @@ function App() {
     return () => { mounted = false; clearInterval(intervalId) }
   }, [isLoggedIn, initStatus, preferences.autoDeclineTimeout])
 
-  const loadOrders = useCallback(async (signal = null) => {
-    if (!restaurantId) return
+  const loadOrders = useCallback(async (signal = null, filterOverride = null) => {
+    if (!restaurantId || !isMountedRef.current) return
 
-    setLoading(true)
+    const activeFilter = filterOverride !== null ? filterOverride : orderFilter
+    orderFilterRef.current = activeFilter
+
+    if (!signal) {
+      ordersLoadingRef.current = true
+      setLoading(true)
+    }
 
     const now = new Date()
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
@@ -447,14 +515,14 @@ function App() {
     const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1)
     const yesterdayStr = formatDate(yesterday)
 
-    let bounds = { start: `${todayStr} 00:00:00`, end: null }
-    if (orderFilter === 'today') bounds = { start: `${yesterdayStr} 00:00:00`, end: `${yesterdayStr} 23:59:59` }
-    else if (orderFilter === '7days') {
+    let bounds = { start: `${todayStr}T00:00:00`, end: null }
+    if (activeFilter === 'today') bounds = { start: `${yesterdayStr}T00:00:00`, end: `${yesterdayStr}T23:59:59` }
+    else if (activeFilter === '7days') {
       const d = new Date(today); d.setDate(d.getDate() - 7)
-      bounds = { start: `${formatDate(d)} 00:00:00`, end: `${yesterdayStr} 23:59:59` }
-    } else if (orderFilter === '30days') {
+      bounds = { start: `${formatDate(d)}T00:00:00`, end: `${yesterdayStr}T23:59:59` }
+    } else if (activeFilter === '30days') {
       const d = new Date(today); d.setDate(d.getDate() - 30)
-      bounds = { start: `${formatDate(d)} 00:00:00`, end: `${yesterdayStr} 23:59:59` }
+      bounds = { start: `${formatDate(d)}T00:00:00`, end: `${yesterdayStr}T23:59:59` }
     }
 
     try {
@@ -471,11 +539,11 @@ function App() {
       const fetchPromise = query
       const { data, error } = await fetchWithTimeout(fetchPromise, API_TIMEOUT)
 
-      if (signal?.aborted) return
+      if (signal?.aborted || !isMountedRef.current) return
 
       if (error && error.code !== 'PGRST116') {
         console.error('[Orders] Load error:', error)
-        setToast ? setToast({ message: 'Failed to load orders', type: 'error' }) : null
+        setToast({ message: 'Failed to load orders', type: 'error' })
         setOrders([])
       } else {
         const ids = (data || []).map(o => o.id)
@@ -483,12 +551,12 @@ function App() {
         if (ids.length > 0) {
           const kitchenPromise = supabase.from('kitchen_board').select('order_id, status').in('order_id', ids)
           const { data: kr } = await fetchWithTimeout(kitchenPromise, API_TIMEOUT)
-          if (!signal?.aborted) {
+          if (!signal?.aborted && isMountedRef.current) {
             (kr || []).forEach(k => { kitchenMap[k.order_id] = k.status })
           }
         }
 
-        if (signal?.aborted) return
+        if (signal?.aborted || !isMountedRef.current) return
 
         const resolved = (data || []).map(o => ({
           ...o,
@@ -500,7 +568,7 @@ function App() {
         if (unresolvedIds.length > 0) {
           const tablesPromise = supabase.from('restaurant_tables').select('id, table_number').in('id', unresolvedIds)
           const { data: tr } = await fetchWithTimeout(tablesPromise, API_TIMEOUT)
-          if (!signal?.aborted) {
+          if (!signal?.aborted && isMountedRef.current) {
             const tMap = {}
             ;(tr || []).forEach(t => { tMap[t.id] = t.table_number })
             resolved.forEach(o => {
@@ -511,22 +579,23 @@ function App() {
           }
         }
 
-        if (!signal?.aborted) {
+        if (!signal?.aborted && isMountedRef.current) {
           setOrders(resolved)
         }
       }
     } catch (err) {
       console.error('[Orders] Exception:', err)
-      if (err.name !== 'AbortError') {
-        setToast ? setToast({ message: 'Failed to load orders', type: 'error' }) : null
+      if (!signal?.aborted && isMountedRef.current && err.name !== 'AbortError') {
+        setToast({ message: 'Failed to load orders', type: 'error' })
         setOrders([])
       }
     } finally {
-      if (!signal?.aborted) {
+      if (!signal?.aborted && isMountedRef.current) {
+        ordersLoadingRef.current = false
         setLoading(false)
       }
     }
-  }, [restaurantId, orderFilter])
+  }, [restaurantId, setToast])
 
   const closeSidebar = useCallback(() => setSidebarOpen(false), [])
 
@@ -767,36 +836,62 @@ function App() {
                 <div className="order-filters">
                   <button
                     className={`filter-btn ${orderFilter === 'live' ? 'active' : ''}`}
-                    onClick={() => setOrderFilter('live')}
+                    onClick={() => {
+                      if (orderFilter !== 'live') {
+                        setOrderFilter('live')
+                      }
+                    }}
                   >
                     <span className="live-dot"></span> Live
                   </button>
                   <button
                     className={`filter-btn ${orderFilter === 'today' ? 'active' : ''}`}
-                    onClick={() => setOrderFilter('today')}
+                    onClick={() => {
+                      if (orderFilter !== 'today') {
+                        setOrderFilter('today')
+                      }
+                    }}
                   >
                     Last Day
                   </button>
                   <button
                     className={`filter-btn ${orderFilter === '7days' ? 'active' : ''}`}
-                    onClick={() => setOrderFilter('7days')}
+                    onClick={() => {
+                      if (orderFilter !== '7days') {
+                        setOrderFilter('7days')
+                      }
+                    }}
                   >
                     7 Days
                   </button>
                   <button
                     className={`filter-btn ${orderFilter === '30days' ? 'active' : ''}`}
-                    onClick={() => setOrderFilter('30days')}
+                    onClick={() => {
+                      if (orderFilter !== '30days') {
+                        setOrderFilter('30days')
+                      }
+                    }}
                   >
                     30 Days
                   </button>
                 </div>
-                <button onClick={() => loadOrders()} className="refresh-btn">
+                <button onClick={() => { ordersLoadingRef.current = false; loadOrders(null, orderFilter); }} className="refresh-btn">
                   🔄 Refresh
                 </button>
               </div>
             </div>
 
-            {orders.length === 0 ? (
+            {loading ? (
+              <div className="loading-grid">
+                {[1, 2, 3, 4].map(i => (
+                  <div key={i} className="skeleton-card">
+                    <div className="skeleton-line" style={{ width: '30%' }}></div>
+                    <div className="skeleton-line"></div>
+                    <div className="skeleton-line short"></div>
+                  </div>
+                ))}
+              </div>
+            ) : orders.length === 0 ? (
               <div className="empty-state">
                 <div className="empty-icon">📦</div>
                 <p>
