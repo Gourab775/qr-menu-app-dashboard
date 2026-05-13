@@ -637,7 +637,32 @@ function App() {
     return () => { mounted = false; clearInterval(intervalId) }
   }, [isLoggedIn, initStatus, preferences.autoDeclineTimeout])
 
+  const handleSaveItem = useCallback(async (id, updates) => {
+    const prevItems = [...menuItems]
+    setMenuItems(prev => prev.map(item => item.id === id ? { ...item, ...updates } : item))
+    try {
+      const { error } = await supabase.from('menu_items').update(updates).eq('id', id)
 
+      if (error) throw error
+    } catch (err) {
+      setMenuItems(prevItems)
+      showToast('Failed to update item', 'error')
+    }
+  }, [menuItems, showToast])
+
+  const handleDeleteItem = useCallback(async (id) => {
+    const prevItems = [...menuItems]
+    setMenuItems(prev => prev.filter(item => item.id !== id))
+    try {
+      const { error } = await supabase.from('menu_items').delete().eq('id', id)
+
+      if (error) throw error
+      showToast('Item deleted successfully')
+    } catch (err) {
+      setMenuItems(prevItems)
+      showToast('Failed to delete item', 'error')
+    }
+  }, [menuItems, showToast])
 
   const filteredItems = menuItems.filter(item => {
     const matchSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -764,33 +789,6 @@ function App() {
       showToast('Failed to decline order', 'error')
     }
   }
-
-  const handleSaveItem = useCallback(async (id, updates) => {
-    const prevItems = [...menuItems]
-    setMenuItems(prev => prev.map(item => item.id === id ? { ...item, ...updates } : item))
-    try {
-      const { error } = await supabase.from('menu_items').update(updates).eq('id', id)
-
-      if (error) throw error
-    } catch (err) {
-      setMenuItems(prevItems)
-      showToast('Failed to update item', 'error')
-    }
-  }, [menuItems, showToast])
-
-  const handleDeleteItem = useCallback(async (id) => {
-    const prevItems = [...menuItems]
-    setMenuItems(prev => prev.filter(item => item.id !== id))
-    try {
-      const { error } = await supabase.from('menu_items').delete().eq('id', id)
-
-      if (error) throw error
-      showToast('Item deleted successfully')
-    } catch (err) {
-      setMenuItems(prevItems)
-      showToast('Failed to delete item', 'error')
-    }
-  }, [menuItems, showToast])
 
   const handleAddItem = async (itemData) => {
     try {
