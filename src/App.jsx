@@ -192,7 +192,7 @@ function App() {
     if (result.aborted) return
 
     if (result.error) {
-      setToast({ message: 'Failed to load orders', type: 'error' })
+      showToast('Failed to load orders', 'error')
       setOrders([])
     } else if (result.data) {
       setOrders(result.data)
@@ -246,11 +246,9 @@ function App() {
       setCategories([])
       initializedRef.current = false
       initCompleteRef.current = false
+      initAttemptRef.current = 0
       setInitStatus('idle')
       setInitError(null)
-      setOrders([])
-      setMenuItems([])
-      setCategories([])
       
       window.location.hash = ''
     } catch (err) {
@@ -354,6 +352,8 @@ function App() {
       isMountedRef.current = false
       controller.abort()
       abortControllerRef.current = null
+      initializedRef.current = false
+      initCompleteRef.current = false
     }
   }, [isLoggedIn, initialized, session?.user?.id, profileRestaurantId])
 
@@ -378,7 +378,7 @@ function App() {
           if (!isMountedRef.current || controller.signal.aborted) return
           if (itemErr) {
             console.error('[Menu] Load error:', itemErr)
-            setToast({ message: 'Failed to load menu items', type: 'error' })
+            showToast('Failed to load menu items', 'error')
           } else {
             setMenuItems(itemData || [])
           }
@@ -625,7 +625,7 @@ function App() {
 
         timedOut.forEach(o => {
           supabase.from('live_orders').delete().eq('id', o.id).then(({ error }) => {
-            if (!error && setToast) setToast({ message: `Order #${o.order_code || o.id.slice(0, 8)} auto-declined`, type: 'info' })
+            if (!error) showToast(`Order #${o.order_code || o.id.slice(0, 8)} auto-declined`, 'info')
           })
         })
 
@@ -835,6 +835,7 @@ function App() {
           {activeTab === 'kitchen' && '🍳 Kitchen'}
           {activeTab === 'menu_items' && '🍽️ Menu Items'}
           {activeTab === 'categories' && '📂 Categories'}
+          {activeTab === 'featured' && '🎯 Featured'}
           {activeTab === 'tables' && '🪑 Tables'}
           {activeTab === 'settings' && '⚙️ Settings'}
         </h2>
@@ -1062,7 +1063,7 @@ function App() {
                 supabase.from('menu_items').select('id, name, price, description, is_veg, is_available, category_id, image_url').eq('restaurant_id', restaurantId).order('name', { ascending: true })
                   .then(({ data, error }) => {
                     if (error) {
-                      setToast ? setToast({ message: 'Failed to load menu items', type: 'error' }) : null
+                      showToast('Failed to load menu items', 'error')
                     } else {
                       setMenuItems(data || [])
                     }
