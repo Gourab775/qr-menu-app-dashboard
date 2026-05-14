@@ -60,6 +60,23 @@ function getDaysInRange(startDate, endDate) {
   return days
 }
 
+function getHoursInRange(startDate, endDate) {
+  const hours = []
+  const start = new Date(startDate)
+  const end = new Date(endDate)
+  const current = new Date(start)
+  current.setMinutes(0, 0, 0)
+  while (current <= end) {
+    hours.push(new Date(current))
+    current.setHours(current.getHours() + 1)
+  }
+  return hours
+}
+
+function isHourlyFilter(filter) {
+  return filter === 'today' || filter === 'lastday'
+}
+
 export default function OverviewPage({ restaurantId }) {
   const { initialized, isAuthenticated } = useAuth()
   const [filter, setFilter] = useState('7days')
@@ -80,9 +97,9 @@ export default function OverviewPage({ restaurantId }) {
 
     switch (range) {
       case 'today': break
+      case 'lastday': start = new Date(now.getTime() - 1 * 24 * 60 * 60 * 1000); start.setHours(0,0,0,0); break
       case '7days': start = new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000); start.setHours(0,0,0,0); break
       case '30days': start = new Date(now.getTime() - 29 * 24 * 60 * 60 * 1000); start.setHours(0,0,0,0); break
-      case 'all': start = new Date(2020, 0, 1); start.setHours(0,0,0,0); break
       default: start = new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000); start.setHours(0,0,0,0)
     }
     return { start: start.toISOString(), end: end.toISOString(), startDate: start, endDate: end }
@@ -145,23 +162,41 @@ export default function OverviewPage({ restaurantId }) {
 
       const list = Array.isArray(orders) ? orders : []
 
-      const allDays = getDaysInRange(startDate, endDate)
-      const dailyRev = {}
-      const dailyOrd = {}
-
-      allDays.forEach(day => {
-        const dateKey = getLocalDateString(day)
-        dailyRev[dateKey] = 0
-        dailyOrd[dateKey] = 0
-      })
+      const hourlyFilter = isHourlyFilter(filterKey)
+      
+      let timePoints, revMap, ordMap, getTimeKey, formatLabel
+      
+      if (hourlyFilter) {
+        timePoints = getHoursInRange(startDate, endDate)
+        revMap = {}
+        ordMap = {}
+        timePoints.forEach(h => {
+          const hourKey = h.getHours().toString()
+          revMap[hourKey] = 0
+          ordMap[hourKey] = 0
+        })
+        getTimeKey = (date) => new Date(date).getHours().toString()
+        formatLabel = (h) => `${h.getHours().toString().padStart(2, '0')}:00`
+      } else {
+        timePoints = getDaysInRange(startDate, endDate)
+        revMap = {}
+        ordMap = {}
+        timePoints.forEach(day => {
+          const dayKey = getLocalDateString(day)
+          revMap[dayKey] = 0
+          ordMap[dayKey] = 0
+        })
+        getTimeKey = (date) => getLocalDateString(date)
+        formatLabel = (d) => d.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })
+      }
 
       list.forEach(o => {
         if (!o?.created_at) return
         if (o.status === 'rejected') return
 
-        const dayKey = getLocalDateString(o.created_at)
-        dailyRev[dayKey] = (dailyRev[dayKey] || 0) + (Number(o.total_price) || 0)
-        dailyOrd[dayKey] = (dailyOrd[dayKey] || 0) + 1
+        const timeKey = getTimeKey(o.created_at)
+        revMap[timeKey] = (revMap[timeKey] || 0) + (Number(o.total_price) || 0)
+        ordMap[timeKey] = (ordMap[timeKey] || 0) + 1
       })
 
       if (!mountedRef.current) return
@@ -193,13 +228,13 @@ export default function OverviewPage({ restaurantId }) {
         .slice(0, 5)
         .map(([name, count]) => ({ name, count }))
 
-      const chartData = allDays.map(day => {
-        const dateKey = getLocalDateString(day)
+      const chartData = timePoints.map(point => {
+        const timeKey = hourlyFilter ? point.getHours().toString() : getLocalDateString(point)
         return {
-          date: dateKey,
-          label: day.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' }),
-          revenue: dailyRev[dateKey] || 0,
-          orders: dailyOrd[dateKey] || 0
+          date: timeKey,
+          label: formatLabel(point),
+          revenue: revMap[timeKey] || 0,
+          orders: ordMap[timeKey] || 0
         }
       })
 
@@ -286,9 +321,9 @@ export default function OverviewPage({ restaurantId }) {
 
   const tabs = [
     { id: 'today', label: 'Today' },
+    { id: 'lastday', label: 'Last Day' },
     { id: '7days', label: 'Last 7 Days' },
-    { id: '30days', label: 'Last 30 Days' },
-    { id: 'all', label: 'All Time' }
+    { id: '30days', label: 'Last 30 Days' }
   ]
 
   const filterLabel = tabs.find(t => t.id === filter)?.label || 'Overview'
