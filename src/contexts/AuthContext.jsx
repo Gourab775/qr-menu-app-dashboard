@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
+import { fetchWithTimeout } from '../lib/apiUtils'
 
 const AuthContext = createContext(null)
 
@@ -27,11 +28,13 @@ export function AuthProvider({ children }) {
 
     isFetchingProfileRef.current = true
     try {
-      const { data, error } = await supabase
+      const query = supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
         .maybeSingle()
+
+      const { data, error } = await fetchWithTimeout(query, 10000)
 
       if (error) {
         console.error('Profile fetch error:', error)

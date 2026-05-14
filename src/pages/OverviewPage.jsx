@@ -411,19 +411,18 @@ export default function OverviewPage({ restaurantId }) {
                 <p>Orders and revenue by payment mode</p>
               </div>
               <div className="chart-body" style={{display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '16px'}}>
+                <div style={{ width: '100%', display: 'flex', justifyContent: 'space-around', padding: '0 10px' }}>
+                  <div style={{ textAlign: 'center', padding: '12px', background: 'rgba(59, 130, 246, 0.1)', borderRadius: '12px', flex: 1, marginRight: '8px', border: `1px solid ${CHART_COLORS.online}30` }}>
+                    <p style={{ color: '#a1a1aa', fontSize: '13px', margin: '0 0 4px 0' }}>Online Revenue</p>
+                    <p style={{ color: CHART_COLORS.online, fontWeight: 'bold', fontSize: '20px', margin: 0 }}>{formatCurrency(metrics.paymentRevenue?.online || 0)}</p>
+                  </div>
+                  <div style={{ textAlign: 'center', padding: '12px', background: 'rgba(245, 158, 11, 0.1)', borderRadius: '12px', flex: 1, marginLeft: '8px', border: `1px solid ${CHART_COLORS.counter}30` }}>
+                    <p style={{ color: '#a1a1aa', fontSize: '13px', margin: '0 0 4px 0' }}>Counter Revenue</p>
+                    <p style={{ color: CHART_COLORS.counter, fontWeight: 'bold', fontSize: '20px', margin: 0 }}>{formatCurrency(metrics.paymentRevenue?.counter || 0)}</p>
+                  </div>
+                </div>
                 {metrics.payData?.length ? (
-                  <>
-                    <div style={{ width: '100%', display: 'flex', justifyContent: 'space-around', padding: '0 10px' }}>
-                      <div style={{ textAlign: 'center', padding: '12px', background: 'rgba(59, 130, 246, 0.1)', borderRadius: '12px', flex: 1, marginRight: '8px', border: `1px solid ${CHART_COLORS.online}30` }}>
-                        <p style={{ color: '#a1a1aa', fontSize: '13px', margin: '0 0 4px 0' }}>Online Revenue</p>
-                        <p style={{ color: CHART_COLORS.online, fontWeight: 'bold', fontSize: '20px', margin: 0 }}>{formatCurrency(metrics.paymentRevenue.online)}</p>
-                      </div>
-                      <div style={{ textAlign: 'center', padding: '12px', background: 'rgba(245, 158, 11, 0.1)', borderRadius: '12px', flex: 1, marginLeft: '8px', border: `1px solid ${CHART_COLORS.counter}30` }}>
-                        <p style={{ color: '#a1a1aa', fontSize: '13px', margin: '0 0 4px 0' }}>Counter Revenue</p>
-                        <p style={{ color: CHART_COLORS.counter, fontWeight: 'bold', fontSize: '20px', margin: 0 }}>{formatCurrency(metrics.paymentRevenue.counter)}</p>
-                      </div>
-                    </div>
-                    <ResponsiveContainer width="100%" height={220}>
+                  <ResponsiveContainer width="100%" height={220}>
                     <PieChart>
                       <Pie
                         data={metrics.payData}
@@ -444,7 +443,6 @@ export default function OverviewPage({ restaurantId }) {
                       <Legend verticalAlign="bottom" height={36} iconType="circle" formatter={v => <span style={{ color: '#e4e4e7', fontWeight: 500 }}>{v}</span>} />
                     </PieChart>
                   </ResponsiveContainer>
-                  </>
                 ) : (
                   <div className="analytics-empty" style={{width: '100%', padding: '20px', border: 'none'}}>No payment data</div>
                 )}
