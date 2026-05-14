@@ -93,6 +93,24 @@ export default function OverviewPage({ restaurantId }) {
     
     if (isFetchingRef.current && !signal) return
     
+    if (!initialized || !isAuthenticated || !restaurantId) {
+      setLoading(false)
+      setMetrics(emptyState())
+      return
+    }
+    
+    const dateRange = getDateRange(filterKey)
+    if (!dateRange || !dateRange.start || !dateRange.end) {
+      console.warn('Invalid date range, using defaults')
+      const now = new Date()
+      dateRange.start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6).toISOString()
+      dateRange.end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).toISOString()
+      dateRange.startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6)
+      dateRange.endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999)
+    }
+    
+    const { start, end, startDate, endDate } = dateRange
+    
     isFetchingRef.current = true
     
     if (!signal) {
@@ -104,8 +122,6 @@ export default function OverviewPage({ restaurantId }) {
 
     try {
       const fetchFn = async () => {
-        const { start, end, startDate, endDate } = getDateRange(filterKey)
-
         const ordersPromise = supabase
           .from('live_orders')
           .select('*')
