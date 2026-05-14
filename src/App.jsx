@@ -165,7 +165,7 @@ function App() {
           const { data: tr } = await fetchWithTimeout(tablesPromise, API_TIMEOUT)
           if (!signal?.aborted) {
             const tMap = {}
-            ;(tr || []).forEach(t => { tMap[t.id] = t.table_number })
+              ; (tr || []).forEach(t => { tMap[t.id] = t.table_number })
             resolved.forEach(o => {
               if (o.table_id && tMap[o.table_id] !== undefined) {
                 o.restaurant_tables = { table_number: tMap[o.table_id] }
@@ -183,7 +183,7 @@ function App() {
       }
     }
 
-    const result = isManualFetch 
+    const result = isManualFetch
       ? await deduplicateRequest(fetchKey, executeLoad)
       : await executeLoad()
 
@@ -192,7 +192,7 @@ function App() {
     if (result.aborted) return
 
     if (result.error) {
-      showToast('Failed to load orders', 'error')
+      setToast({ message: 'Failed to load orders', type: 'error' })
       setOrders([])
     } else if (result.data) {
       setOrders(result.data)
@@ -249,7 +249,7 @@ function App() {
       initAttemptRef.current = 0
       setInitStatus('idle')
       setInitError(null)
-      
+
       window.location.hash = ''
     } catch (err) {
       console.error('Logout error:', err)
@@ -378,7 +378,7 @@ function App() {
           if (!isMountedRef.current || controller.signal.aborted) return
           if (itemErr) {
             console.error('[Menu] Load error:', itemErr)
-            showToast('Failed to load menu items', 'error')
+            setToast({ message: 'Failed to load menu items', type: 'error' })
           } else {
             setMenuItems(itemData || [])
           }
@@ -401,9 +401,9 @@ function App() {
 
   useEffect(() => {
     if (!isLoggedIn || !restaurantId || initStatus !== 'done') return
-    
+
     orderFilterRef.current = orderFilter
-    
+
     const fetchKey = `${restaurantId}-${orderFilter}`
     if (lastFetchKeyRef.current === fetchKey) return
     lastFetchKeyRef.current = fetchKey
@@ -445,16 +445,16 @@ function App() {
     }
 
     const pollKey = `poll-${restaurantId}`
-    
+
     const pollInterval = setInterval(() => {
       if (ordersLoadingRef.current || !restaurantId || !isMountedRef.current) return
-      
+
       const executePoll = async () => {
         const controller = new AbortController()
         await loadOrders(controller.signal)
       }
 
-      deduplicateRequest(pollKey, executePoll).catch(() => {})
+      deduplicateRequest(pollKey, executePoll).catch(() => { })
     }, 15000)
 
     ordersPollingRef.current = pollInterval
@@ -527,7 +527,7 @@ function App() {
 
     const playSound = () => {
       if (!preferences.soundEnabled || !playFn) return
-      try { playFn() } catch {}
+      try { playFn() } catch { }
     }
 
     const channel = supabase
@@ -583,7 +583,7 @@ function App() {
     return () => {
       document.removeEventListener('click', handleGesture)
       document.removeEventListener('keydown', handleGesture)
-      if (audioCtxRef.current) { try { audioCtxRef.current.close() } catch {} }
+      if (audioCtxRef.current) { try { audioCtxRef.current.close() } catch { } }
       supabase.removeChannel(channel)
     }
   }, [isLoggedIn, initStatus, preferences.soundEnabled, preferences.orderNotifications, preferences.notificationSound])
@@ -625,7 +625,7 @@ function App() {
 
         timedOut.forEach(o => {
           supabase.from('live_orders').delete().eq('id', o.id).then(({ error }) => {
-            if (!error) showToast(`Order #${o.order_code || o.id.slice(0, 8)} auto-declined`, 'info')
+            if (!error && setToast) setToast({ message: `Order #${o.order_code || o.id.slice(0, 8)} auto-declined`, type: 'info' })
           })
         })
 
@@ -707,8 +707,8 @@ function App() {
             <h1 className="login-title">Initialization Error</h1>
             <p className="login-subtitle">{initError || 'Something went wrong'}</p>
             <button className="login-btn" onClick={() => {
-                signOut().then(() => window.location.reload()).catch(() => window.location.reload())
-              }}>Logout</button>
+              signOut().then(() => window.location.reload()).catch(() => window.location.reload())
+            }}>Logout</button>
           </div>
         </div>
       </div>
@@ -739,8 +739,8 @@ function App() {
             <h1 className="login-title">No Restaurant Found</h1>
             <p className="login-subtitle">No restaurant available for your account</p>
             <button className="login-btn" onClick={() => {
-                signOut().then(() => window.location.reload()).catch(() => window.location.reload())
-              }}>Logout</button>
+              signOut().then(() => window.location.reload()).catch(() => window.location.reload())
+            }}>Logout</button>
           </div>
         </div>
       </div>
@@ -835,7 +835,6 @@ function App() {
           {activeTab === 'kitchen' && '🍳 Kitchen'}
           {activeTab === 'menu_items' && '🍽️ Menu Items'}
           {activeTab === 'categories' && '📂 Categories'}
-          {activeTab === 'featured' && '🎯 Featured'}
           {activeTab === 'tables' && '🪑 Tables'}
           {activeTab === 'settings' && '⚙️ Settings'}
         </h2>
@@ -915,7 +914,7 @@ function App() {
                   </button>
                 </div>
                 <button onClick={() => loadOrders()} className="refresh-btn">
-                  🔄 Refresh
+                  Refresh
                 </button>
               </div>
             </div>
@@ -1063,7 +1062,7 @@ function App() {
                 supabase.from('menu_items').select('id, name, price, description, is_veg, is_available, category_id, image_url').eq('restaurant_id', restaurantId).order('name', { ascending: true })
                   .then(({ data, error }) => {
                     if (error) {
-                      showToast('Failed to load menu items', 'error')
+                      setToast ? setToast({ message: 'Failed to load menu items', type: 'error' }) : null
                     } else {
                       setMenuItems(data || [])
                     }
@@ -1071,8 +1070,8 @@ function App() {
                   })
               }} className="refresh-btn-glass">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M23 4v6h-6M1 20v-6h6"/>
-                  <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                  <path d="M23 4v6h-6M1 20v-6h6" />
+                  <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
                 </svg>
                 Refresh
               </button>
@@ -1111,8 +1110,8 @@ function App() {
 
               <button className="add-btn" onClick={() => setShowAddModal(true)}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <line x1="12" y1="5" x2="12" y2="19"/>
-                  <line x1="5" y1="12" x2="19" y2="12"/>
+                  <line x1="12" y1="5" x2="12" y2="19" />
+                  <line x1="5" y1="12" x2="19" y2="12" />
                 </svg>
                 Add Item
               </button>
@@ -1144,8 +1143,8 @@ function App() {
                   }
                 }}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <line x1="12" y1="5" x2="12" y2="19"/>
-                    <line x1="5" y1="12" x2="19" y2="12"/>
+                    <line x1="12" y1="5" x2="12" y2="19" />
+                    <line x1="5" y1="12" x2="19" y2="12" />
                   </svg>
                   {searchQuery || filterType !== 'all' ? 'Clear filters' : 'Add your first item'}
                 </button>
@@ -1200,7 +1199,7 @@ function App() {
 
       {selectedOrder && (
         <BillModal
-          order={{...selectedOrder, restaurants: { name: restaurantName }}}
+          order={{ ...selectedOrder, restaurants: { name: restaurantName } }}
           isOpen={!!selectedOrder}
           onClose={() => setSelectedOrder(null)}
         />
