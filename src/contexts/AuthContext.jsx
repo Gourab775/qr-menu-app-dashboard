@@ -1,6 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
-import { fetchWithTimeout } from '../lib/apiUtils'
 
 const AuthContext = createContext(null)
 
@@ -15,39 +14,54 @@ export function AuthProvider({ children }) {
   // Stable refs — never cause re-renders or effect re-runs
   const profileCacheRef = useRef(new Map())
   const isFetchingProfileRef = useRef(false)
-  const userDataLoadedForRef = useRef(null) // tracks which userId we loaded for
+  const pendingProfileFetchRef = useRef(null) // deduplicates concurrent fetches
+  const userDataLoadedForRef = useRef(null)   // tracks which userId data was loaded for
   const mountedRef = useRef(true)
 
-  // ─── Internal helpers (not callbacks — no deps) ───────────────────────────
-
+  // ─── Internal: fetch profile with deduplication (no artificial timeout) ───
   const _fetchProfile = async (userId) => {
+    if (!userId) return null
+
+    // Return from cache immediately
     if (profileCacheRef.current.has(userId)) {
       return profileCacheRef.current.get(userId)
     }
-    if (isFetchingProfileRef.current) {
-      // Wait briefly and return cached if available
-      await new Promise(r => setTimeout(r, 200))
-      return profileCacheRef.current.get(userId) || null
+
+    // Deduplicate concurrent fetches for the same userId
+    if (isFetchingProfileRef.current && pendingProfileFetchRef.current) {
+      return pendingProfileFetchRef.current
     }
 
     isFetchingProfileRef.current = true
-    try {
-      const { data, error } = await fetchWithTimeout(
-        supabase.from('profiles').select('*').eq('id', userId).maybeSingle(),
-        10000
-      )
-      if (error) { console.error('[Auth] Profile fetch error:', error); return null }
-      if (data) profileCacheRef.current.set(userId, data)
-      return data
-    } catch (err) {
-      console.error('[Auth] Profile fetch exception:', err)
-      return null
-    } finally {
-      isFetchingProfileRef.current = false
-    }
+    pendingProfileFetchRef.current = (async () => {
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', userId)
+          .maybeSingle()
+
+        if (error) {
+          console.error('[Auth] Profile fetch error:', error)
+          return null
+        }
+        if (data) profileCacheRef.current.set(userId, data)
+        return data
+      } catch (err) {
+        console.error('[Auth] Profile fetch exception:', err)
+        return null
+      } finally {
+        isFetchingProfileRef.current = false
+        pendingProfileFetchRef.current = null
+      }
+    })()
+
+    return pendingProfileFetchRef.current
   }
 
+  // ─── Internal: load full user data (profile + role + restaurantId) ────────
   const _loadUserData = async (userId) => {
+    if (!userId) return
     // Skip if we already loaded for this exact userId
     if (userDataLoadedForRef.current === userId) return
     userDataLoadedForRef.current = userId
@@ -59,40 +73,50 @@ export function AuthProvider({ children }) {
     setRole(userProfile?.role || 'staff')
 
     let rid = userProfile?.restaurant_id || null
+
     if (!rid) {
       try {
-        const { data: fb } = await fetchWithTimeout(
-          supabase.from('restaurants').select('id').eq('user_id', userId).limit(1).maybeSingle(),
-          10000
-        )
+        // Try user-specific restaurant first
+        const { data: fb } = await supabase
+          .from('restaurants')
+          .select('id')
+          .eq('user_id', userId)
+          .limit(1)
+          .maybeSingle()
+
         if (fb?.id) {
           rid = fb.id
         } else {
-          const { data: anyFb } = await fetchWithTimeout(
-            supabase.from('restaurants').select('id').limit(1).maybeSingle(),
-            10000
-          )
+          // Fallback: first available restaurant
+          const { data: anyFb } = await supabase
+            .from('restaurants')
+            .select('id')
+            .limit(1)
+            .maybeSingle()
           if (anyFb?.id) rid = anyFb.id
         }
       } catch (err) {
         console.error('[Auth] Restaurant lookup error:', err)
       }
     }
+
     if (!mountedRef.current) return
     setRestaurantId(rid)
   }
 
+  // ─── Internal: reset all user state ──────────────────────────────────────
   const _clearUserData = () => {
     userDataLoadedForRef.current = null
-    profileCacheRef.current.clear()
+    pendingProfileFetchRef.current = null
     isFetchingProfileRef.current = false
+    profileCacheRef.current.clear()
     setSession(null)
     setProfile(null)
     setRole('staff')
     setRestaurantId(null)
   }
 
-  // ─── One-time initialization — EMPTY dep array so it runs exactly once ────
+  // ─── One-time initialization — EMPTY dep array so listener registers once ─
   useEffect(() => {
     mountedRef.current = true
 
@@ -112,7 +136,7 @@ export function AuthProvider({ children }) {
         }
       } catch (err) {
         console.error('[Auth] Init error:', err)
-        setSession(null)
+        if (mountedRef.current) setSession(null)
       } finally {
         if (mountedRef.current) {
           setInitialized(true)
@@ -123,7 +147,7 @@ export function AuthProvider({ children }) {
 
     initializeAuth()
 
-    // Register auth listener once — using a plain function so it's never recreated
+    // Auth state listener — registered once, never re-registered
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, newSession) => {
       if (!mountedRef.current) return
 
@@ -132,23 +156,22 @@ export function AuthProvider({ children }) {
         return
       }
 
-      // For TOKEN_REFRESHED: just update session, don't re-fetch profile
+      // TOKEN_REFRESHED: just update session token, no profile re-fetch needed
       if (event === 'TOKEN_REFRESHED') {
         setSession(newSession)
         return
       }
 
-      // For SIGNED_IN: only load user data if it's a NEW user (not already loaded)
+      // SIGNED_IN: only load data if it's a new/different user
       if (event === 'SIGNED_IN' && newSession?.user) {
         setSession(newSession)
-        // Only re-load if this is a genuinely new login (different user or first load)
         if (userDataLoadedForRef.current !== newSession.user.id) {
           await _loadUserData(newSession.user.id)
         }
         return
       }
 
-      // For USER_UPDATED: force re-fetch
+      // USER_UPDATED: force fresh re-fetch
       if (event === 'USER_UPDATED' && newSession?.user) {
         setSession(newSession)
         profileCacheRef.current.delete(newSession.user.id)
@@ -162,7 +185,7 @@ export function AuthProvider({ children }) {
       mountedRef.current = false
       subscription.unsubscribe()
     }
-  }, []) // ← EMPTY: runs once, listener is never re-registered
+  }, []) // ← empty: runs exactly once
 
   // ─── Public API ───────────────────────────────────────────────────────────
 
@@ -178,7 +201,7 @@ export function AuthProvider({ children }) {
     userDataLoadedForRef.current = null // force fresh load on explicit sign-in
     await _loadUserData(data.user.id)
     return data
-  }, []) // no deps — uses internal functions via closure
+  }, [])
 
   const signOut = useCallback(async () => {
     try {
@@ -205,7 +228,7 @@ export function AuthProvider({ children }) {
     userDataLoadedForRef.current = null
     await _loadUserData(userId)
     return profileCacheRef.current.get(userId) || null
-  }, [session?.user?.id]) // only dep: user id, not callbacks
+  }, [session?.user?.id])
 
   const value = {
     session,
