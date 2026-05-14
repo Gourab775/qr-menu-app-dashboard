@@ -3,6 +3,9 @@ import { supabase } from '../lib/supabase'
 
 const AuthContext = createContext(null)
 
+// Module-level: prevents concurrent getSession() calls from any component
+let sessionPromise = null
+
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(null)
   const [profile, setProfile] = useState(null)
@@ -11,23 +14,29 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true)
   const [initialized, setInitialized] = useState(false)
 
-  // Stable refs — never cause re-renders or effect re-runs
   const profileCacheRef = useRef(new Map())
   const isFetchingProfileRef = useRef(false)
-  const pendingProfileFetchRef = useRef(null) // deduplicates concurrent fetches
-  const userDataLoadedForRef = useRef(null)   // tracks which userId data was loaded for
+  const pendingProfileFetchRef = useRef(null)
+  const userDataLoadedForRef = useRef(null)
   const mountedRef = useRef(true)
+  const subscriberReadyRef = useRef(false)
 
-  // ─── Internal: fetch profile with deduplication (no artificial timeout) ───
+  // ─── Module-level deduplicated getSession() ───
+  const _getSessionOnce = async () => {
+    if (!sessionPromise) {
+      sessionPromise = supabase.auth.getSession().finally(() => {
+        // Keep the resolved promise so subsequent calls return same result
+      })
+    }
+    return sessionPromise
+  }
+
+  // ─── Internal: fetch profile with deduplication ───
   const _fetchProfile = async (userId) => {
     if (!userId) return null
-
-    // Return from cache immediately
     if (profileCacheRef.current.has(userId)) {
       return profileCacheRef.current.get(userId)
     }
-
-    // Deduplicate concurrent fetches for the same userId
     if (isFetchingProfileRef.current && pendingProfileFetchRef.current) {
       return pendingProfileFetchRef.current
     }
@@ -59,10 +68,9 @@ export function AuthProvider({ children }) {
     return pendingProfileFetchRef.current
   }
 
-  // ─── Internal: load full user data (profile + role + restaurantId) ────────
+  // ─── Internal: load full user data ───
   const _loadUserData = async (userId) => {
     if (!userId) return
-    // Skip if we already loaded for this exact userId
     if (userDataLoadedForRef.current === userId) return
     userDataLoadedForRef.current = userId
 
@@ -76,7 +84,6 @@ export function AuthProvider({ children }) {
 
     if (!rid) {
       try {
-        // Try user-specific restaurant first
         const { data: fb } = await supabase
           .from('restaurants')
           .select('id')
@@ -87,7 +94,6 @@ export function AuthProvider({ children }) {
         if (fb?.id) {
           rid = fb.id
         } else {
-          // Fallback: first available restaurant
           const { data: anyFb } = await supabase
             .from('restaurants')
             .select('id')
@@ -104,7 +110,6 @@ export function AuthProvider({ children }) {
     setRestaurantId(rid)
   }
 
-  // ─── Internal: reset all user state ──────────────────────────────────────
   const _clearUserData = () => {
     userDataLoadedForRef.current = null
     pendingProfileFetchRef.current = null
@@ -116,13 +121,15 @@ export function AuthProvider({ children }) {
     setRestaurantId(null)
   }
 
-  // ─── One-time initialization — EMPTY dep array so listener registers once ─
+  // ─── One-time initialization ───
   useEffect(() => {
     mountedRef.current = true
+    const subscriptionRef = { current: null }
 
     const initializeAuth = async () => {
       try {
-        const { data: { session: currentSession }, error } = await supabase.auth.getSession()
+        // 1. Get session ONCE (module-level dedup prevents re-entrant lock acquisition)
+        const { data: { session: currentSession }, error } = await _getSessionOnce()
         if (!mountedRef.current) return
 
         if (error) {
@@ -130,9 +137,51 @@ export function AuthProvider({ children }) {
           setSession(null)
         } else {
           setSession(currentSession)
-          if (currentSession?.user) {
-            await _loadUserData(currentSession.user.id)
+        }
+
+        // 2. Subscribe to auth state changes AFTER getSession() resolves.
+        //    This prevents the SIGNED_IN event fired by _recoverAndRefresh
+        //    (during getSession) from triggering our handler and causing
+        //    a re-entrant lock acquisition loop in GoTrue.
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, newSession) => {
+          if (!mountedRef.current) return
+          if (!subscriberReadyRef.current) return
+
+          if (event === 'SIGNED_OUT') {
+            _clearUserData()
+            return
           }
+
+          if (event === 'TOKEN_REFRESHED') {
+            setSession(newSession)
+            return
+          }
+
+          if (event === 'SIGNED_IN' && newSession?.user) {
+            setSession(newSession)
+            if (userDataLoadedForRef.current !== newSession.user.id) {
+              await _loadUserData(newSession.user.id)
+            }
+            return
+          }
+
+          if (event === 'USER_UPDATED' && newSession?.user) {
+            setSession(newSession)
+            profileCacheRef.current.delete(newSession.user.id)
+            userDataLoadedForRef.current = null
+            await _loadUserData(newSession.user.id)
+            return
+          }
+        })
+
+        subscriptionRef.current = subscription
+        subscriberReadyRef.current = true
+
+        // 3. Load user data for the initial session.
+        //    The initial getSession() fired SIGNED_IN before we subscribed,
+        //    so no duplicate events — we must load data here explicitly.
+        if (currentSession?.user) {
+          await _loadUserData(currentSession.user.id)
         }
       } catch (err) {
         console.error('[Auth] Init error:', err)
@@ -147,47 +196,15 @@ export function AuthProvider({ children }) {
 
     initializeAuth()
 
-    // Auth state listener — registered once, never re-registered
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, newSession) => {
-      if (!mountedRef.current) return
-
-      if (event === 'SIGNED_OUT') {
-        _clearUserData()
-        return
-      }
-
-      // TOKEN_REFRESHED: just update session token, no profile re-fetch needed
-      if (event === 'TOKEN_REFRESHED') {
-        setSession(newSession)
-        return
-      }
-
-      // SIGNED_IN: only load data if it's a new/different user
-      if (event === 'SIGNED_IN' && newSession?.user) {
-        setSession(newSession)
-        if (userDataLoadedForRef.current !== newSession.user.id) {
-          await _loadUserData(newSession.user.id)
-        }
-        return
-      }
-
-      // USER_UPDATED: force fresh re-fetch
-      if (event === 'USER_UPDATED' && newSession?.user) {
-        setSession(newSession)
-        profileCacheRef.current.delete(newSession.user.id)
-        userDataLoadedForRef.current = null
-        await _loadUserData(newSession.user.id)
-        return
-      }
-    })
-
     return () => {
       mountedRef.current = false
-      subscription.unsubscribe()
+      if (subscriptionRef.current) {
+        subscriptionRef.current.unsubscribe()
+      }
     }
-  }, []) // ← empty: runs exactly once
+  }, []) // empty: runs exactly once
 
-  // ─── Public API ───────────────────────────────────────────────────────────
+  // ─── Public API ───
 
   const signIn = useCallback(async (email, password) => {
     const { data, error } = await supabase.auth.signInWithPassword({
@@ -198,7 +215,7 @@ export function AuthProvider({ children }) {
     if (!data?.session) throw new Error('No session created')
 
     setSession(data.session)
-    userDataLoadedForRef.current = null // force fresh load on explicit sign-in
+    userDataLoadedForRef.current = null
     await _loadUserData(data.user.id)
     return data
   }, [])
