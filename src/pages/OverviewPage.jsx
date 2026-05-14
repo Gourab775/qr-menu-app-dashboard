@@ -444,6 +444,7 @@ export default function OverviewPage({ restaurantId }) {
                       <Legend verticalAlign="bottom" height={36} iconType="circle" formatter={v => <span style={{ color: '#e4e4e7', fontWeight: 500 }}>{v}</span>} />
                     </PieChart>
                   </ResponsiveContainer>
+                  </>
                 ) : (
                   <div className="analytics-empty" style={{width: '100%', padding: '20px', border: 'none'}}>No payment data</div>
                 )}
