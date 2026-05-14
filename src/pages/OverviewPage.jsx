@@ -155,11 +155,14 @@ export default function OverviewPage({ restaurantId }) {
 
       const items = {}
       const payments = { counter: 0, online: 0 }
+      const paymentRevenue = { counter: 0, online: 0 }
 
       list.forEach(o => {
         if (o.status === 'rejected') return
         const pm = (o.payment_mode || 'counter').toLowerCase()
-        payments[pm === 'online' ? 'online' : 'counter']++
+        const pmKey = pm === 'online' ? 'online' : 'counter'
+        payments[pmKey]++
+        paymentRevenue[pmKey] += (Number(o.total_price) || 0)
 
         const orderItems = Array.isArray(o.items) ? o.items : []
         orderItems.forEach(it => {
@@ -185,8 +188,8 @@ export default function OverviewPage({ restaurantId }) {
       })
 
       const payData = [
-        { name: 'Counter', value: payments.counter, fill: CHART_COLORS.counter },
-        { name: 'Online', value: payments.online, fill: CHART_COLORS.online }
+        { name: 'Counter', value: payments.counter, revenue: paymentRevenue.counter, fill: CHART_COLORS.counter },
+        { name: 'Online', value: payments.online, revenue: paymentRevenue.online, fill: CHART_COLORS.online }
       ].filter(d => d.value > 0)
 
       if (!mountedRef.current) return
@@ -202,6 +205,7 @@ export default function OverviewPage({ restaurantId }) {
         topItems,
         chartData,
         payData,
+        paymentRevenue,
       })
     } catch (err) {
       console.error('Analytics fetch failed:', err)
@@ -219,7 +223,7 @@ export default function OverviewPage({ restaurantId }) {
 
   const emptyState = () => ({
     ordersTotal: 0, revenueTotal: 0, revenuePending: 0, avgOrder: 0, itemsSold: 0,
-    completedOrders: 0, pendingOrders: 0, topItems: [], chartData: [], payData: []
+    completedOrders: 0, pendingOrders: 0, topItems: [], chartData: [], payData: [], paymentRevenue: { counter: 0, online: 0 }
   })
 
   useEffect(() => {
@@ -267,7 +271,8 @@ export default function OverviewPage({ restaurantId }) {
   const tabs = [
     { id: 'today', label: 'Today' },
     { id: '7days', label: 'Last 7 Days' },
-    { id: '30days', label: 'Last 30 Days' }
+    { id: '30days', label: 'Last 30 Days' },
+    { id: 'all', label: 'All Time' }
   ]
 
   const filterLabel = tabs.find(t => t.id === filter)?.label || 'Overview'
@@ -403,11 +408,22 @@ export default function OverviewPage({ restaurantId }) {
             <div className="chart-card">
               <div className="chart-header">
                 <h3>Payment Breakdown</h3>
-                <p>Online vs Counter payments</p>
+                <p>Orders and revenue by payment mode</p>
               </div>
-              <div className="chart-body" style={{display: 'flex', alignItems: 'center'}}>
+              <div className="chart-body" style={{display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '16px'}}>
                 {metrics.payData?.length ? (
-                  <ResponsiveContainer width="100%" height={260}>
+                  <>
+                    <div style={{ width: '100%', display: 'flex', justifyContent: 'space-around', padding: '0 10px' }}>
+                      <div style={{ textAlign: 'center', padding: '12px', background: 'rgba(59, 130, 246, 0.1)', borderRadius: '12px', flex: 1, marginRight: '8px', border: `1px solid ${CHART_COLORS.online}30` }}>
+                        <p style={{ color: '#a1a1aa', fontSize: '13px', margin: '0 0 4px 0' }}>Online Revenue</p>
+                        <p style={{ color: CHART_COLORS.online, fontWeight: 'bold', fontSize: '20px', margin: 0 }}>{formatCurrency(metrics.paymentRevenue.online)}</p>
+                      </div>
+                      <div style={{ textAlign: 'center', padding: '12px', background: 'rgba(245, 158, 11, 0.1)', borderRadius: '12px', flex: 1, marginLeft: '8px', border: `1px solid ${CHART_COLORS.counter}30` }}>
+                        <p style={{ color: '#a1a1aa', fontSize: '13px', margin: '0 0 4px 0' }}>Counter Revenue</p>
+                        <p style={{ color: CHART_COLORS.counter, fontWeight: 'bold', fontSize: '20px', margin: 0 }}>{formatCurrency(metrics.paymentRevenue.counter)}</p>
+                      </div>
+                    </div>
+                    <ResponsiveContainer width="100%" height={220}>
                     <PieChart>
                       <Pie
                         data={metrics.payData}
