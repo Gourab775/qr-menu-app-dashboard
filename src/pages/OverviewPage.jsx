@@ -43,6 +43,12 @@ function getTimeAgo(date) {
   return new Date(date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })
 }
 
+function getLocalDateString(date) {
+  const d = new Date(date)
+  const pad = n => n.toString().padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
 function getDaysInRange(startDate, endDate) {
   const days = []
   const current = new Date(startDate)
@@ -103,6 +109,7 @@ export default function OverviewPage({ restaurantId }) {
         const ordersPromise = supabase
           .from('live_orders')
           .select('*')
+          .eq('restaurant_id', restaurantId)
           .gte('created_at', start)
           .lte('created_at', end)
           .order('created_at', { ascending: false })
@@ -127,7 +134,7 @@ export default function OverviewPage({ restaurantId }) {
       const dailyOrd = {}
 
       allDays.forEach(day => {
-        const dateKey = day.toISOString().split('T')[0]
+        const dateKey = getLocalDateString(day)
         dailyRev[dateKey] = 0
         dailyOrd[dateKey] = 0
       })
@@ -136,9 +143,9 @@ export default function OverviewPage({ restaurantId }) {
         if (!o?.created_at) return
         if (o.status === 'rejected') return
 
-        const day = new Date(o.created_at).toISOString().split('T')[0]
-        dailyRev[day] = (dailyRev[day] || 0) + (Number(o.total_price) || 0)
-        dailyOrd[day] = (dailyOrd[day] || 0) + 1
+        const dayKey = getLocalDateString(o.created_at)
+        dailyRev[dayKey] = (dailyRev[dayKey] || 0) + (Number(o.total_price) || 0)
+        dailyOrd[dayKey] = (dailyOrd[dayKey] || 0) + 1
       })
 
       if (!mountedRef.current) return
@@ -168,7 +175,7 @@ export default function OverviewPage({ restaurantId }) {
         .map(([name, count]) => ({ name, count }))
 
       const chartData = allDays.map(day => {
-        const dateKey = day.toISOString().split('T')[0]
+        const dateKey = getLocalDateString(day)
         return {
           date: dateKey,
           label: day.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' }),
