@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from './lib/supabase'
 import { useAuth } from './contexts/AuthContext'
-import { validateSession, fetchWithTimeout, deduplicateRequest } from './lib/apiUtils'
+import { fetchWithTimeout, deduplicateRequest } from './lib/apiUtils'
 import MenuItemCard from './components/MenuItemCard'
 import AddItemModal from './components/AddItemModal'
 import Toast from './components/Toast'
@@ -20,12 +20,10 @@ import './App.css'
 import './theme.css'
 
 const API_TIMEOUT = 15000
-const MAX_RETRIES = 2
 
 function App() {
-  const { session, profile, loading: authLoading, initialized, signOut } = useAuth()
+  const { session, profile, loading: authLoading, initialized, signOut, role, restaurantId } = useAuth()
   const [resetMode, setResetMode] = useState(() => window.location.hash === '#reset-password')
-  const [restaurantId, setRestaurantId] = useState(null)
   const [restaurantSlug, setRestaurantSlug] = useState('')
   const [restaurantName, setRestaurantName] = useState('')
   const [orders, setOrders] = useState([])
@@ -33,8 +31,6 @@ function App() {
   const [categories, setCategories] = useState([])
   const [loading, setLoading] = useState(false)
   const [menuLoading, setMenuLoading] = useState(false)
-  const [initStatus, setInitStatus] = useState('idle')
-  const [initError, setInitError] = useState(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [activeTab, setActiveTab] = useState('orders')
   const [orderFilter, setOrderFilter] = useState('live')
@@ -62,21 +58,17 @@ function App() {
   })
 
   const profileRef = useRef(null)
-  const initializedRef = useRef(false)
-  const initAttemptRef = useRef(0)
   const abortControllerRef = useRef(null)
   const ordersLoadingRef = useRef(false)
   const ordersPollingRef = useRef(null)
   const orderFilterRef = useRef(orderFilter)
   const isMountedRef = useRef(true)
   const logoutRef = useRef(false)
-  const initCompleteRef = useRef(false)
   const lastFetchKeyRef = useRef(null)
   const firstOrdersFetchDone = useRef(false)
 
-  const userRole = profile?.role || 'staff'
+  const userRole = role || 'staff'
   const userFullName = profile?.full_name || profile?.email || session?.user?.email || 'User'
-  const profileRestaurantId = profile?.restaurant_id || null
   const isLoggedIn = !!session
 
   const showToast = useCallback((message, type = 'success') => {
@@ -238,17 +230,11 @@ function App() {
       setShowProfile(false)
       await signOut()
 
-      setRestaurantId(null)
       setRestaurantSlug('')
       setRestaurantName('')
       setOrders([])
       setMenuItems([])
       setCategories([])
-      initializedRef.current = false
-      initCompleteRef.current = false
-      initAttemptRef.current = 0
-      setInitStatus('idle')
-      setInitError(null)
 
       window.location.hash = ''
     } catch (err) {
@@ -260,105 +246,39 @@ function App() {
     }
   }, [signOut])
 
+  // Fetch restaurant name and slug when restaurantId is available
   useEffect(() => {
-    if (initCompleteRef.current) return
-    if (!isLoggedIn || !initialized) return
-
-    const user = session?.user
-    if (!user) return
-
-    if (initAttemptRef.current >= MAX_RETRIES) {
-      setInitError('Maximum initialization attempts reached. Please refresh.')
-      setInitStatus('error')
-      return
-    }
-
-    if (initializedRef.current) return
-    initializedRef.current = true
-    initCompleteRef.current = true
-
-    setInitStatus('loading')
-    initAttemptRef.current++
-
-    const controller = new AbortController()
-    abortControllerRef.current = controller
+    if (!isLoggedIn || !restaurantId) return
     isMountedRef.current = true
 
-    const initApp = async () => {
+    const controller = new AbortController()
+
+    const fetchRestaurantInfo = async () => {
       try {
+        const { data } = await fetchWithTimeout(
+          supabase.from('restaurants').select('name, slug').eq('id', restaurantId).maybeSingle(),
+          API_TIMEOUT
+        )
         if (!isMountedRef.current || controller.signal.aborted) return
-
-        const sessionValidation = validateSession(session)
-        if (!sessionValidation.valid) {
-          setInitError(`Session invalid: ${sessionValidation.reason}. Please login again.`)
-          setInitStatus('error')
-          return
+        if (data) {
+          setRestaurantName(data.name || '')
+          setRestaurantSlug(data.slug || '')
         }
-
-        let rid = profileRestaurantId
-        let slug = ''
-        if (!rid) {
-          const fetchPromise = supabase
-            .from('restaurants')
-            .select('id, slug')
-            .eq('user_id', user.id)
-            .maybeSingle()
-
-          const { data } = await fetchWithTimeout(fetchPromise, API_TIMEOUT)
-          if (!isMountedRef.current || controller.signal.aborted) return
-          rid = data?.id
-          slug = data?.slug || ''
-          if (slug) setRestaurantSlug(slug)
-        }
-        if (!rid) {
-          const fallbackPromise = supabase.from('restaurants').select('id, slug').limit(1).maybeSingle()
-          const { data: fb } = await fetchWithTimeout(fallbackPromise, API_TIMEOUT)
-          if (!isMountedRef.current || controller.signal.aborted) return
-          rid = fb?.id
-          slug = fb?.slug || ''
-          if (slug) setRestaurantSlug(slug)
-        }
-        if (!rid) {
-          setInitError('No restaurant found. Please contact support.')
-          setInitStatus('error')
-          return
-        }
-        if (!isMountedRef.current || controller.signal.aborted) return
-
-        setRestaurantId(rid)
-        const restaurantPromise = supabase.from('restaurants').select('name, slug').eq('id', rid).maybeSingle()
-        const { data: rData } = await fetchWithTimeout(restaurantPromise, API_TIMEOUT)
-        if (!isMountedRef.current || controller.signal.aborted) return
-        if (rData) {
-          setRestaurantName(rData.name || '')
-          if (rData.slug && !slug) setRestaurantSlug(rData.slug)
-        }
-        setInitStatus('done')
       } catch (err) {
-        console.error('[Init] Error:', err)
-        if (!isMountedRef.current || controller.signal.aborted) return
-        if (err.name === 'AbortError') {
-          setInitError('Request cancelled. Please refresh.')
-        } else {
-          setInitError('Failed to initialize. Please try again.')
-        }
-        setInitStatus('error')
+        console.error('[RestaurantInfo] Error:', err)
       }
     }
 
-    initApp()
+    fetchRestaurantInfo()
 
     return () => {
       isMountedRef.current = false
       controller.abort()
-      abortControllerRef.current = null
-      initializedRef.current = false
-      initCompleteRef.current = false
     }
-  }, [isLoggedIn, initialized, session?.user?.id, profileRestaurantId])
+  }, [isLoggedIn, restaurantId])
 
   useEffect(() => {
-    if (!isLoggedIn || !restaurantId || initStatus !== 'done') return
+    if (!isLoggedIn || !restaurantId) return
     isMountedRef.current = true
 
     const controller = new AbortController()
@@ -397,10 +317,10 @@ function App() {
       controller.abort()
       abortControllerRef.current = null
     }
-  }, [isLoggedIn, restaurantId, initStatus, setToast])
+  }, [isLoggedIn, restaurantId, setToast])
 
   useEffect(() => {
-    if (!isLoggedIn || !restaurantId || initStatus !== 'done') return
+    if (!isLoggedIn || !restaurantId) return
 
     orderFilterRef.current = orderFilter
 
@@ -425,10 +345,10 @@ function App() {
       controller.abort()
       ordersLoadingRef.current = false
     }
-  }, [isLoggedIn, restaurantId, initStatus, orderFilter, loadOrders])
+  }, [isLoggedIn, restaurantId, orderFilter, loadOrders])
 
   useEffect(() => {
-    if (!isLoggedIn || initStatus !== 'done') {
+    if (!isLoggedIn || !restaurantId) {
       if (ordersPollingRef.current) {
         clearInterval(ordersPollingRef.current)
         ordersPollingRef.current = null
@@ -465,10 +385,10 @@ function App() {
         ordersPollingRef.current = null
       }
     }
-  }, [isLoggedIn, initStatus, orderFilter, restaurantId, loadOrders])
+  }, [isLoggedIn, orderFilter, restaurantId, loadOrders])
 
   useEffect(() => {
-    if (!isLoggedIn || initStatus !== 'done') return
+    if (!isLoggedIn || !restaurantId) return
 
     const lastPlayedOrderRef = { current: null }
     const soundReadyRef = { current: false }
@@ -586,10 +506,10 @@ function App() {
       if (audioCtxRef.current) { try { audioCtxRef.current.close() } catch { } }
       supabase.removeChannel(channel)
     }
-  }, [isLoggedIn, initStatus, preferences.soundEnabled, preferences.orderNotifications, preferences.notificationSound])
+  }, [isLoggedIn, restaurantId, preferences.soundEnabled, preferences.orderNotifications, preferences.notificationSound])
 
   useEffect(() => {
-    if (!isLoggedIn || initStatus !== 'done') return
+    if (!isLoggedIn || !restaurantId) return
 
     const kitchenChannel = supabase
       .channel('kitchen-sync-for-orders')
@@ -606,10 +526,10 @@ function App() {
       .subscribe()
 
     return () => supabase.removeChannel(kitchenChannel)
-  }, [isLoggedIn, initStatus])
+  }, [isLoggedIn, restaurantId])
 
   useEffect(() => {
-    if (!isLoggedIn || initStatus !== 'done') return
+    if (!isLoggedIn || !restaurantId) return
 
     let mounted = true
     const intervalId = setInterval(() => {
@@ -635,7 +555,7 @@ function App() {
     }, 30000)
 
     return () => { mounted = false; clearInterval(intervalId) }
-  }, [isLoggedIn, initStatus, preferences.autoDeclineTimeout])
+  }, [isLoggedIn, restaurantId, preferences.autoDeclineTimeout])
 
   const handleSaveItem = useCallback(async (id, updates) => {
     const prevItems = [...menuItems]
@@ -684,38 +604,6 @@ function App() {
   if (!isLoggedIn) return <Login />
 
   if (authLoading || !initialized) {
-    return (
-      <div className="app">
-        <div className="login-page">
-          <div className="login-card skeleton-container">
-            <div className="skeleton skeleton-title" style={{ width: '60%', margin: '0 auto 24px' }}></div>
-            <div className="skeleton skeleton-text" style={{ width: '100%' }}></div>
-            <div className="skeleton skeleton-text" style={{ width: '80%' }}></div>
-            <div className="skeleton skeleton-button" style={{ width: '100%', marginTop: '16px' }}></div>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  if (initStatus === 'error' || initError) {
-    return (
-      <div className="app">
-        <div className="login-page">
-          <div className="login-card">
-            <div className="login-icon">⚠️</div>
-            <h1 className="login-title">Initialization Error</h1>
-            <p className="login-subtitle">{initError || 'Something went wrong'}</p>
-            <button className="login-btn" onClick={() => {
-              signOut().then(() => window.location.reload()).catch(() => window.location.reload())
-            }}>Logout</button>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  if (initStatus === 'loading') {
     return (
       <div className="app">
         <div className="login-page">

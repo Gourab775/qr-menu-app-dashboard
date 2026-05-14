@@ -4,18 +4,17 @@ import { fetchWithTimeout } from '../lib/apiUtils'
 
 const AuthContext = createContext(null)
 
-let authListenerInitialized = false
-
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(null)
   const [profile, setProfile] = useState(null)
+  const [role, setRole] = useState('staff')
+  const [restaurantId, setRestaurantId] = useState(null)
   const [loading, setLoading] = useState(true)
   const [initialized, setInitialized] = useState(false)
 
   const initCompleteRef = useRef(false)
   const profileCacheRef = useRef(new Map())
   const isFetchingProfileRef = useRef(false)
-  const subscriptionRef = useRef(null)
 
   const fetchProfile = useCallback(async (userId) => {
     if (!userId) return null
@@ -54,29 +53,54 @@ export function AuthProvider({ children }) {
     }
   }, [])
 
+  const loadUserData = useCallback(async (userId) => {
+    const userProfile = await fetchProfile(userId)
+    setProfile(userProfile)
+    
+    const userRole = userProfile?.role || 'staff'
+    setRole(userRole)
+    
+    let rid = userProfile?.restaurant_id || null
+    
+    if (!rid) {
+      const fbQuery = supabase.from('restaurants').select('id').eq('user_id', userId).limit(1).maybeSingle()
+      const { data: fb } = await fetchWithTimeout(fbQuery, 10000)
+      if (fb?.id) {
+        rid = fb.id
+      } else {
+        const anyFbQuery = supabase.from('restaurants').select('id').limit(1).maybeSingle()
+        const { data: anyFb } = await fetchWithTimeout(anyFbQuery, 10000)
+        if (anyFb?.id) rid = anyFb.id
+      }
+    }
+    setRestaurantId(rid)
+  }, [fetchProfile])
+
   const handleAuthChange = useCallback(async (event, newSession) => {
     if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
       setSession(newSession)
       if (newSession?.user) {
-        const userProfile = await fetchProfile(newSession.user.id)
-        setProfile(userProfile)
+        await loadUserData(newSession.user.id)
       }
     } else if (event === 'SIGNED_OUT') {
       setSession(null)
       setProfile(null)
+      setRole('staff')
+      setRestaurantId(null)
       profileCacheRef.current.clear()
     } else if (event === 'USER_UPDATED') {
       setSession(newSession)
       if (newSession?.user) {
         profileCacheRef.current.delete(newSession.user.id)
-        const userProfile = await fetchProfile(newSession.user.id)
-        setProfile(userProfile)
+        await loadUserData(newSession.user.id)
       }
     }
-  }, [fetchProfile])
+  }, [loadUserData])
 
   useEffect(() => {
     if (initCompleteRef.current) return
+
+    let mounted = true
 
     const initializeAuth = async () => {
       setLoading(true)
@@ -87,37 +111,45 @@ export function AuthProvider({ children }) {
 
         if (sessionError) {
           console.error('Session fetch error:', sessionError)
-          setSession(null)
-          setProfile(null)
+          if (mounted) {
+            setSession(null)
+            setProfile(null)
+            setRole('staff')
+            setRestaurantId(null)
+          }
         } else {
-          setSession(currentSession)
-          if (currentSession?.user) {
-            const userProfile = await fetchProfile(currentSession.user.id)
-            setProfile(userProfile)
+          if (mounted) setSession(currentSession)
+          if (currentSession?.user && mounted) {
+            await loadUserData(currentSession.user.id)
           }
         }
       } catch (err) {
         console.error('Session check error:', err)
-        setSession(null)
-        setProfile(null)
+        if (mounted) {
+          setSession(null)
+          setProfile(null)
+          setRole('staff')
+          setRestaurantId(null)
+        }
       } finally {
-        setInitialized(true)
-        setLoading(false)
-        initCompleteRef.current = true
+        if (mounted) {
+          setInitialized(true)
+          setLoading(false)
+          initCompleteRef.current = true
+        }
       }
     }
 
     initializeAuth()
 
-    if (!authListenerInitialized) {
-      const { data: { subscription } } = supabase.auth.onAuthStateChange(handleAuthChange)
-      subscriptionRef.current = subscription
-      authListenerInitialized = true
-    }
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(handleAuthChange)
 
     return () => {
+      mounted = false
+      subscription.unsubscribe()
+      initCompleteRef.current = false
     }
-  }, [fetchProfile, handleAuthChange])
+  }, [handleAuthChange, loadUserData])
 
   const signIn = useCallback(async (email, password) => {
     const { data, error } = await supabase.auth.signInWithPassword({
@@ -129,15 +161,10 @@ export function AuthProvider({ children }) {
     if (!data?.session) throw new Error('No session created')
 
     setSession(data.session)
-
-    const userProfile = await fetchProfile(data.user.id)
-    if (userProfile) {
-      profileCacheRef.current.set(data.user.id, userProfile)
-    }
-    setProfile(userProfile)
+    await loadUserData(data.user.id)
 
     return data
-  }, [fetchProfile])
+  }, [loadUserData])
 
   const signOut = useCallback(async () => {
     try {
@@ -145,12 +172,16 @@ export function AuthProvider({ children }) {
       isFetchingProfileRef.current = false
       setSession(null)
       setProfile(null)
+      setRole('staff')
+      setRestaurantId(null)
       const { error } = await supabase.auth.signOut()
       if (error) console.warn('Supabase signOut warning:', error.message)
     } catch (err) {
       console.error('signOut error:', err)
       setSession(null)
       setProfile(null)
+      setRole('staff')
+      setRestaurantId(null)
     }
   }, [])
 
@@ -164,14 +195,15 @@ export function AuthProvider({ children }) {
   const refreshProfile = useCallback(async () => {
     if (!session?.user) return null
     profileCacheRef.current.delete(session.user.id)
-    const userProfile = await fetchProfile(session.user.id)
-    setProfile(userProfile)
-    return userProfile
-  }, [session, fetchProfile])
+    await loadUserData(session.user.id)
+    return profileCacheRef.current.get(session.user.id)
+  }, [session, loadUserData])
 
   const value = {
     session,
     profile,
+    role,
+    restaurantId,
     loading,
     initialized,
     isAuthenticated: !!session,
