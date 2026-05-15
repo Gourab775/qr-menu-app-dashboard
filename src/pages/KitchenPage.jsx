@@ -18,9 +18,9 @@ export default function KitchenPage({ restaurantId }) {
     try {
       let kitchenPromise = supabase
         .from('kitchen_board')
-        .select('*, restaurant_tables(table_number), live_orders(order_code, accepted_at)')
+        .select('*, restaurant_tables(table_number), live_orders(order_code)')
         .neq('status', 'completed')
-        .order('created_at', { ascending: true })
+        .order('confirmed_at', { ascending: true })
 
       let { data, error } = await fetchWithTimeout(kitchenPromise, API_TIMEOUT)
 
@@ -30,7 +30,7 @@ export default function KitchenPage({ restaurantId }) {
         console.warn('Initial fetch error, trying without join:', error.message)
         const fallbackPromise = supabase
           .from('kitchen_board')
-          .select('*, live_orders(order_code, accepted_at)')
+          .select('*, live_orders(order_code)')
           .neq('status', 'completed')
           .order('created_at', { ascending: true })
         
@@ -222,7 +222,7 @@ function KitchenOrderCard({ order, onUpdateStatus }) {
           <span className="info-label">SINCE ACCEPTED</span>
           <div className="kitchen-timer-badge">
             <span className="clock-icon">🕒</span>
-            <KitchenTimer confirmedAt={order.live_orders?.accepted_at || order.created_at} />
+            <KitchenTimer startTime={order.confirmed_at || order.created_at} />
           </div>
         </div>
       </div>
@@ -272,13 +272,13 @@ function KitchenOrderCard({ order, onUpdateStatus }) {
   )
 }
 
-function KitchenTimer({ confirmedAt }) {
+function KitchenTimer({ startTime }) {
   const [elapsed, setElapsed] = useState('')
 
   useEffect(() => {
     const update = () => {
       const now = new Date()
-      const start = new Date(confirmedAt)
+      const start = new Date(startTime)
       const diff = Math.floor((now - start) / 1000)
 
       if (diff < 0) { setElapsed('00:00'); return }
@@ -299,7 +299,7 @@ function KitchenTimer({ confirmedAt }) {
     update()
     const interval = setInterval(update, 1000)
     return () => clearInterval(interval)
-  }, [confirmedAt])
+  }, [startTime])
 
   return <span className="timer-text">{elapsed}</span>
 }

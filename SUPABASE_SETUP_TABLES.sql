@@ -77,7 +77,10 @@ BEGIN
 END $$;
 
 -- =====================================
--- Add accepted_at column for "SINCE ACCEPTED" timer
+-- Add confirmed_at column for "SINCE ACCEPTED" timer on kitchen board
 -- =====================================
-ALTER TABLE live_orders 
-ADD COLUMN IF NOT EXISTS accepted_at TIMESTAMPTZ;
+ALTER TABLE kitchen_board
+ADD COLUMN IF NOT EXISTS confirmed_at TIMESTAMPTZ DEFAULT NOW();
+
+-- Backfill confirmed_at for existing rows using their created_at (which = accept time)
+UPDATE kitchen_board SET confirmed_at = created_at WHERE confirmed_at IS NULL;

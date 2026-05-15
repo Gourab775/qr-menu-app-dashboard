@@ -115,7 +115,7 @@ function App() {
       try {
         let query = supabase
           .from('live_orders')
-          .select('id, restaurant_id, total_price, payment_mode, status, items, created_at, accepted_at, order_code, table_id, note, restaurant_tables(table_number)')
+          .select('id, restaurant_id, total_price, payment_mode, status, items, created_at, order_code, table_id, note, restaurant_tables(table_number)')
           .eq('restaurant_id', restaurantId)
           .order('created_at', { ascending: false })
           .limit(200)
@@ -488,9 +488,12 @@ function App() {
         async (payload) => {
           if (payload.new.status === 'accepted' && payload.old.status !== 'accepted') {
             const { data: ex } = await supabase.from('kitchen_board').select('id').eq('order_id', payload.new.id).maybeSingle()
-            if (!ex) await supabase.from('kitchen_board').insert({
-              order_id: payload.new.id, items: payload.new.items, table_id: payload.new.table_id, status: 'pending', created_at: new Date().toISOString()
-            })
+            if (!ex) {
+              const nowISO = new Date().toISOString()
+              await supabase.from('kitchen_board').insert({
+                order_id: payload.new.id, items: payload.new.items, table_id: payload.new.table_id, status: 'pending', created_at: nowISO, confirmed_at: nowISO
+              })
+            }
           }
           setOrders(prev => prev.map(o => o.id === payload.new.id ? { ...o, ...payload.new } : o))
         }
@@ -643,13 +646,13 @@ function App() {
 
     try {
       const nowISO = new Date().toISOString()
-      await supabase.from('live_orders').update({ status: 'accepted', accepted_at: nowISO }).eq('id', orderId)
+      await supabase.from('live_orders').update({ status: 'accepted' }).eq('id', orderId)
 
       const { data: existing } = await supabase.from('kitchen_board').select('id').eq('order_id', orderId).maybeSingle()
 
       if (!existing) {
         const { error: insertError } = await supabase.from('kitchen_board').insert({
-          order_id: orderId, items: order.items, table_id: order.table_id, status: 'pending', created_at: new Date().toISOString()
+          order_id: orderId, items: order.items, table_id: order.table_id, status: 'pending', created_at: nowISO, confirmed_at: nowISO
         })
 
         if (insertError && insertError.code !== '23505') {
