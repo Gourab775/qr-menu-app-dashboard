@@ -75,3 +75,9 @@ BEGIN
     FOREIGN KEY (table_id) REFERENCES restaurant_tables(id) ON DELETE SET NULL;
   END IF;
 END $$;
+
+-- =====================================
+-- Add accepted_at column for "SINCE ACCEPTED" timer
+-- =====================================
+ALTER TABLE live_orders 
+ADD COLUMN IF NOT EXISTS accepted_at TIMESTAMPTZ;

@@ -18,7 +18,7 @@ export default function KitchenPage({ restaurantId }) {
     try {
       let kitchenPromise = supabase
         .from('kitchen_board')
-        .select('*, restaurant_tables(table_number), live_orders(order_code)')
+        .select('*, restaurant_tables(table_number), live_orders(order_code, accepted_at)')
         .neq('status', 'completed')
         .order('created_at', { ascending: true })
 
@@ -30,7 +30,7 @@ export default function KitchenPage({ restaurantId }) {
         console.warn('Initial fetch error, trying without join:', error.message)
         const fallbackPromise = supabase
           .from('kitchen_board')
-          .select('*, live_orders(order_code)')
+          .select('*, live_orders(order_code, accepted_at)')
           .neq('status', 'completed')
           .order('created_at', { ascending: true })
         
@@ -222,7 +222,7 @@ function KitchenOrderCard({ order, onUpdateStatus }) {
           <span className="info-label">SINCE ACCEPTED</span>
           <div className="kitchen-timer-badge">
             <span className="clock-icon">🕒</span>
-            <KitchenTimer startTime={order.created_at} />
+            <KitchenTimer confirmedAt={order.live_orders?.accepted_at || order.created_at} />
           </div>
         </div>
       </div>
@@ -272,23 +272,34 @@ function KitchenOrderCard({ order, onUpdateStatus }) {
   )
 }
 
-function KitchenTimer({ startTime }) {
+function KitchenTimer({ confirmedAt }) {
   const [elapsed, setElapsed] = useState('')
 
   useEffect(() => {
     const update = () => {
       const now = new Date()
-      const start = new Date(startTime)
+      const start = new Date(confirmedAt)
       const diff = Math.floor((now - start) / 1000)
-      
-      const mins = Math.floor(diff / 60)
-      setElapsed(`${mins}m`)
+
+      if (diff < 0) { setElapsed('00:00'); return }
+
+      const hours = Math.floor(diff / 3600)
+      const mins = Math.floor((diff % 3600) / 60)
+      const secs = diff % 60
+
+      if (hours > 0) {
+        setElapsed(
+          `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
+        )
+      } else {
+        setElapsed(`${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`)
+      }
     }
 
     update()
     const interval = setInterval(update, 1000)
     return () => clearInterval(interval)
-  }, [startTime])
+  }, [confirmedAt])
 
   return <span className="timer-text">{elapsed}</span>
 }

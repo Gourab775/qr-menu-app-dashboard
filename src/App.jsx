@@ -115,7 +115,7 @@ function App() {
       try {
         let query = supabase
           .from('live_orders')
-          .select('id, restaurant_id, total_price, payment_mode, status, items, created_at, order_code, table_id, note, restaurant_tables(table_number)')
+          .select('id, restaurant_id, total_price, payment_mode, status, items, created_at, accepted_at, order_code, table_id, note, restaurant_tables(table_number)')
           .eq('restaurant_id', restaurantId)
           .order('created_at', { ascending: false })
           .limit(200)
@@ -642,7 +642,8 @@ function App() {
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'accepted' } : o))
 
     try {
-      await supabase.from('live_orders').update({ status: 'accepted' }).eq('id', orderId)
+      const nowISO = new Date().toISOString()
+      await supabase.from('live_orders').update({ status: 'accepted', accepted_at: nowISO }).eq('id', orderId)
 
       const { data: existing } = await supabase.from('kitchen_board').select('id').eq('order_id', orderId).maybeSingle()
 
