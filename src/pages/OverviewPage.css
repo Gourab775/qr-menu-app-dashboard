@@ -116,7 +116,6 @@
   transform: scale(1.05) rotate(-5deg);
 }
 
-.kpi-icon-wrap.revenue { background: rgba(34, 197, 94, 0.15); color: var(--green); border: 1px solid rgba(34, 197, 94, 0.3); }
 .kpi-icon-wrap.orders { background: rgba(59, 130, 246, 0.15); color: var(--blue); border: 1px solid rgba(59, 130, 246, 0.3); }
 .kpi-icon-wrap.avg { background: rgba(139, 92, 246, 0.15); color: var(--purple); border: 1px solid rgba(139, 92, 246, 0.3); }
 .kpi-icon-wrap.items { background: rgba(245, 158, 11, 0.15); color: var(--orange); border: 1px solid rgba(245, 158, 11, 0.3); }

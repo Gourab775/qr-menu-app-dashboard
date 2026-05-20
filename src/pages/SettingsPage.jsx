@@ -24,11 +24,6 @@ const HELP_TOPICS = [
     'New orders appear automatically when received - ensure you are logged in',
     'If orders still don\'t show, try clearing browser cache and logging in again'
   ]},
-  { id: 'payment', icon: '💳', label: 'Payment Problems', keywords: ['payment', 'pay', 'upi', 'qr'], answers: [
-    'Verify payment settings in Settings > Payment Settings',
-    'For counter orders, ensure customer pays at the counter',
-    'Contact customer for UPI payment confirmation'
-  ]},
   { id: 'dashboard', icon: '📊', label: 'Dashboard Help', keywords: ['dashboard', 'how', 'use', 'app', 'help'], answers: [
     'Live Orders: Accept or decline incoming orders',
     'Analytics: View sales performance and reports',
@@ -49,11 +44,6 @@ const HELP_TOPICS = [
     'Default password is: 1234',
     'Clear browser cache and try logging in again',
     'Contact support if you cannot access your account'
-  ]},
-  { id: 'qrcode', icon: '⬛', label: 'QR Code Issues', keywords: ['qr', 'code', 'scan', 'payment'], answers: [
-    'Ensure QR code image is hosted on a public URL',
-    'Use Settings > Payment Settings to update QR code',
-    'Test the QR code by scanning with a phone'
   ]},
   { id: 'menu', icon: '🍽️', label: 'Menu Items', keywords: ['menu', 'item', 'add', 'delete', 'edit'], answers: [
     'Go to Menu Items in sidebar to add new items',
@@ -91,17 +81,6 @@ const HELP_RESPONSES = {
       { q: 'How do I receive orders?', a: 'New orders appear automatically when received. Make sure notifications are enabled in Settings.' },
       { q: 'Orders disappear after accepting?', a: 'Refresh the page or check if the order was cancelled by the customer.' },
       { q: 'Can I see order history?', a: 'Current session orders are shown. For history, check Analytics page.'
-      }
-    ]
-  },
-  payment: {
-    title: 'Payment Problems',
-    description: 'Issues with payments and QR codes',
-    answers: [
-      { q: 'How to configure payment QR?', a: 'Go to Settings > Payment Settings and add your QR code image URL (must be publicly accessible).' },
-      { q: 'Customer paid but order shows unpaid?', a: 'For counter orders, manually confirm payment. For UPI, wait for bank notification.' },
-      { q: 'Payment not working?', a: 'Verify your payment settings and ensure the QR code is accessible via public URL.' },
-      { q: 'What payment modes are supported?', a: 'Online (UPI) and Counter (Pay at Counter) modes are supported.'
       }
     ]
   },
@@ -143,16 +122,6 @@ const HELP_RESPONSES = {
       { q: 'Forgot password, what to do?', a: 'Contact support for password reset assistance.' },
       { q: 'Session expired repeatedly?', a: 'Clear browser cache and ensure cookies are enabled.' },
       { q: 'Can I change my password?', a: 'Yes, go to Settings > Change Password to update your password.' }
-    ]
-  },
-  qrcode: {
-    title: 'QR Code Issues',
-    description: 'Payment QR code troubleshooting',
-    answers: [
-      { q: 'How to add payment QR?', a: 'Go to Settings > Payment Settings and enter the URL of your QR code image.' },
-      { q: 'QR code not showing?', a: 'Ensure the image URL is publicly accessible (not behind login).' },
-      { q: 'Customer cannot scan QR?', a: 'Test the QR code yourself with a phone scanner. Ensure image is clear.' },
-      { q: 'Remove payment QR?', a: 'Clear the QR URL field and save to remove payment option.' }
     ]
   },
   menu: {
@@ -210,7 +179,7 @@ const HELP_RESPONSES = {
 const PRIVACY_POLICY = `Data Collection
 We collect the following information:
  Restaurant details (name, address, contact)
- Order information (items, prices, payment mode)
+ Order information (items, prices)
  User preferences and settings
 
 How We Use Your Data
@@ -252,11 +221,6 @@ Limitations of Service
  We strive for 99.9% uptime but cannot guarantee availability
  Service may be interrupted for maintenance
  We are not responsible for lost profits or business interruption
-
-Payment Terms
- All payments are processed through third-party providers
- We do not store payment credentials
- Payment disputes should be handled with the payment provider
 
 Account Responsibilities
  Keep your password secure
@@ -446,10 +410,6 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
     } else if (modalName === 'logo' && restaurant) {
       setFormData({
         logo: restaurant.logo || ''
-      })
-    } else if (modalName === 'payments' && restaurant) {
-      setFormData({
-        payment_id: restaurant.payment_id || ''
       })
     } else if (modalName === 'changepassword') {
       setFormData({
@@ -649,34 +609,6 @@ const handlePasswordChange = async (e) => {
     }
   }
 
-  const handleSavePayments = async (e) => {
-    e.preventDefault()
-    const { payment_id } = formData
-    const paymentId = payment_id?.trim() || ''
-
-    setSaving(true)
-    try {
-      const { error } = await supabase
-        .from('restaurants')
-        .upsert({ 
-          id: currentRestId, 
-          upi_id: null,
-          payment_id: paymentId 
-        }, { onConflict: 'id' })
-
-      if (error) throw error
-      
-      await refreshRestaurant()
-      showToast('Payment settings saved')
-      closeModal()
-    } catch (err) {
-      console.error('Payment save error:', err)
-      showToast('Failed to save: ' + (err.message || 'Unknown error'), 'error')
-    } finally {
-      setSaving(false)
-    }
-  }
-
   const handleSaveLogo = async (e) => {
     e.preventDefault()
     const logoUrl = formData.logo?.trim() || ''
@@ -734,29 +666,6 @@ const handlePasswordChange = async (e) => {
               <div className="form-group">
                 <label>Email</label>
                 <input type="email" value={formData.email || ''} onChange={e => setFormData({ ...formData, email: e.target.value })} placeholder="Enter email" />
-              </div>
-              <div className="modal-actions">
-                <button type="button" className="cancel-btn" onClick={closeModal}>Cancel</button>
-                <button type="submit" className="save-btn" disabled={saving}>{saving ? 'Saving...' : 'Save'}</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )
-    }
-    if (showModal === 'payments') {
-      return (
-        <div className="modal-overlay" onClick={closeModal}>
-          <div className="settings-modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>Payment Settings</h3>
-              <button className="modal-close" onClick={closeModal}>×</button>
-            </div>
-            <form onSubmit={handleSavePayments}>
-              <div className="form-group">
-                <label>QR Code Image URL</label>
-                <input type="text" value={formData.payment_id || ''} onChange={e => setFormData({ ...formData, payment_id: e.target.value })} placeholder="https://..." />
-                <span className="input-hint">Link to payment QR code image</span>
               </div>
               <div className="modal-actions">
                 <button type="button" className="cancel-btn" onClick={closeModal}>Cancel</button>
@@ -1097,12 +1006,6 @@ const handlePasswordChange = async (e) => {
       items: [
         { icon: '🏪', label: 'Business Details', description: restaurant?.name || 'Configure', onClick: () => openModal('business') },
         { icon: '🖼️', label: 'Logo', description: restaurant?.logo ? 'Set' : 'Not set', onClick: () => openModal('logo'), badge: restaurant?.logo ? 'Set' : '' }
-      ]
-    },
-    {
-      title: 'Payments',
-      items: [
-        { icon: '💳', label: 'Payment Settings', description: 'QR code configuration', onClick: () => openModal('payments') }
       ]
     },
     {

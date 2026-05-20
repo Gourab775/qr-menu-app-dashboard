@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import {
-  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  BarChart, Bar, PieChart, Pie, Cell, Legend, AreaChart, Area
+  XAxis, YAxis, Tooltip, ResponsiveContainer,
+  AreaChart, Area, Line
 } from 'recharts'
 import { supabase } from '../lib/supabase'
 import { fetchWithTimeout, deduplicateRequest } from '../lib/apiUtils'
@@ -24,9 +24,7 @@ const ACCENT = {
 
 const CHART_COLORS = {
   revenue: ACCENT.green,
-  orders: ACCENT.blue,
-  counter: ACCENT.orange,
-  online: ACCENT.purple
+  orders: ACCENT.blue
 }
 
 function formatCurrency(v) {
@@ -205,15 +203,9 @@ export default function OverviewPage({ restaurantId }) {
       const pending = list.filter(o => o.status !== 'accepted' && o.status !== 'rejected')
 
       const items = {}
-      const payments = { counter: 0, online: 0 }
-      const paymentRevenue = { counter: 0, online: 0 }
 
       list.forEach(o => {
         if (o.status === 'rejected') return
-        const pm = (o.payment_mode || 'counter').toLowerCase()
-        const pmKey = pm === 'online' ? 'online' : 'counter'
-        payments[pmKey]++
-        paymentRevenue[pmKey] += (Number(o.total_price) || 0)
 
         const orderItems = Array.isArray(o.items) ? o.items : []
         orderItems.forEach(it => {
@@ -238,11 +230,6 @@ export default function OverviewPage({ restaurantId }) {
         }
       })
 
-      const payData = [
-        { name: 'Counter', value: payments.counter, revenue: paymentRevenue.counter, fill: CHART_COLORS.counter },
-        { name: 'Online', value: payments.online, revenue: paymentRevenue.online, fill: CHART_COLORS.online }
-      ].filter(d => d.value > 0)
-
       if (!mountedRef.current) return
 
       setMetrics({
@@ -254,9 +241,7 @@ export default function OverviewPage({ restaurantId }) {
         completedOrders: completed.length,
         pendingOrders: pending.length,
         topItems,
-        chartData,
-        payData,
-        paymentRevenue,
+        chartData
       })
     } catch (err) {
       console.error('Analytics fetch failed:', err)
@@ -274,7 +259,7 @@ export default function OverviewPage({ restaurantId }) {
 
   const emptyState = () => ({
     ordersTotal: 0, revenueTotal: 0, revenuePending: 0, avgOrder: 0, itemsSold: 0,
-    completedOrders: 0, pendingOrders: 0, topItems: [], chartData: [], payData: [], paymentRevenue: { counter: 0, online: 0 }
+    completedOrders: 0, pendingOrders: 0, topItems: [], chartData: []
   })
 
   useEffect(() => {
@@ -390,11 +375,7 @@ export default function OverviewPage({ restaurantId }) {
               <div className="kpi-info">
                 <span className="kpi-label">Total Revenue</span>
                 <span className="kpi-value">{formatCurrency(metrics.revenueTotal)}</span>
-                {metrics.revenuePending > 0 ? (
-                  <span className="kpi-sub neutral">{formatCurrency(metrics.revenuePending)} pending</span>
-                ) : (
-                  <span className="kpi-sub positive">From {metrics.completedOrders} completed</span>
-                )}
+                <span className="kpi-sub positive">From {metrics.completedOrders} completed</span>
               </div>
             </div>
 
@@ -456,49 +437,7 @@ export default function OverviewPage({ restaurantId }) {
               </div>
             </div>
 
-            <div className="chart-card">
-              <div className="chart-header">
-                <h3>Payment Breakdown</h3>
-                <p>Orders and revenue by payment mode</p>
-              </div>
-              <div className="chart-body" style={{display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '16px'}}>
-                <div style={{ width: '100%', display: 'flex', justifyContent: 'space-around', padding: '0 10px' }}>
-                  <div style={{ textAlign: 'center', padding: '12px', background: 'rgba(59, 130, 246, 0.1)', borderRadius: '12px', flex: 1, marginRight: '8px', border: `1px solid ${CHART_COLORS.online}30` }}>
-                    <p style={{ color: '#a1a1aa', fontSize: '13px', margin: '0 0 4px 0' }}>Online Revenue</p>
-                    <p style={{ color: CHART_COLORS.online, fontWeight: 'bold', fontSize: '20px', margin: 0 }}>{formatCurrency(metrics.paymentRevenue?.online || 0)}</p>
-                  </div>
-                  <div style={{ textAlign: 'center', padding: '12px', background: 'rgba(245, 158, 11, 0.1)', borderRadius: '12px', flex: 1, marginLeft: '8px', border: `1px solid ${CHART_COLORS.counter}30` }}>
-                    <p style={{ color: '#a1a1aa', fontSize: '13px', margin: '0 0 4px 0' }}>Counter Revenue</p>
-                    <p style={{ color: CHART_COLORS.counter, fontWeight: 'bold', fontSize: '20px', margin: 0 }}>{formatCurrency(metrics.paymentRevenue?.counter || 0)}</p>
-                  </div>
-                </div>
-                {metrics.payData?.length ? (
-                  <ResponsiveContainer width="100%" height={220}>
-                    <PieChart>
-                      <Pie
-                        data={metrics.payData}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={65}
-                        outerRadius={90}
-                        paddingAngle={5}
-                        dataKey="value"
-                        stroke="none"
-                      >
-                        {metrics.payData.map(entry => <Cell key={entry.name} fill={entry.fill} />)}
-                      </Pie>
-                      <Tooltip 
-                        contentStyle={{ background: 'rgba(24, 24, 27, 0.9)', border: '1px solid #27272a', borderRadius: '8px' }}
-                        itemStyle={{ color: '#fff', fontWeight: 600 }}
-                      />
-                      <Legend verticalAlign="bottom" height={36} iconType="circle" formatter={v => <span style={{ color: '#e4e4e7', fontWeight: 500 }}>{v}</span>} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="analytics-empty" style={{width: '100%', padding: '20px', border: 'none'}}>No payment data</div>
-                )}
-              </div>
-            </div>
+
           </div>
 
           <div className="insights-grid">

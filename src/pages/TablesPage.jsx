@@ -256,7 +256,7 @@ export default function TablesPage({ restaurantId, restaurantSlug }) {
 
                 <div style={{ display: 'flex', gap: '10px', width: '100%' }}>
                   <button 
-                    className="bill-btn" 
+                    className="action-btn" 
                     style={{ flex: 1, padding: '8px', fontSize: '0.9rem' }}
                     onClick={() => handlePrintQR(table.id, table.table_number, table.table_token)}
                   >

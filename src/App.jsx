@@ -7,7 +7,6 @@ import AddItemModal from './components/AddItemModal'
 import Toast from './components/Toast'
 import Login from './components/Login'
 import ResetPassword from './components/ResetPassword'
-import BillModal from './components/BillModal'
 import OfflineBanner from './components/OfflineBanner'
 import FeaturedItemsPanel from './components/FeaturedItemsPanel'
 import CategoriesPage from './pages/CategoriesPage'
@@ -41,7 +40,6 @@ function App() {
   const [filterType, setFilterType] = useState('all')
   const [toast, setToast] = useState(null)
   const [newOrderToast, setNewOrderToast] = useState(null)
-  const [selectedOrder, setSelectedOrder] = useState(null)
   const [isOnline, setIsOnline] = useState(navigator.onLine)
   const [preferences, setPreferences] = useState(() => {
     try {
@@ -115,7 +113,7 @@ function App() {
       try {
         let query = supabase
           .from('live_orders')
-          .select('id, restaurant_id, total_price, payment_mode, status, items, created_at, order_code, table_id, note, restaurant_tables(table_number)')
+          .select('id, restaurant_id, total_price, status, items, created_at, order_code, table_id, note, restaurant_tables(table_number)')
           .eq('restaurant_id', restaurantId)
           .order('created_at', { ascending: false })
           .limit(200)
@@ -841,11 +839,6 @@ function App() {
                 )}
                 <div className="orders-grid">
                   {filteredOrders.map(order => {
-                    const paymentMode = order.payment_mode?.toLowerCase()
-                    const isCash = paymentMode === 'cash' || paymentMode === 'counter'
-                    const isCard = paymentMode === 'card'
-                    const isOnline = paymentMode === 'online'
-
                     const orderTime = new Date(order.created_at)
                     const now = new Date()
                     const minutesOld = Math.floor((now - orderTime) / 60000)
@@ -870,11 +863,7 @@ function App() {
                                 <span className="dot">●</span> {order.kitchen_status?.toUpperCase() || 'ACCEPTED'}
                               </span>
                             )}
-                            <div style={{ display: 'flex', gap: '4px' }}>
-                              {isCash && <span className="p-badge counter">Cash</span>}
-                              {isCard && <span className="p-badge card">Card</span>}
-                              {isOnline && <span className="p-badge online">Online</span>}
-                            </div>
+
                           </div>
                         </div>
 
@@ -919,7 +908,6 @@ function App() {
                         </div>
 
                         <div className="card-actions-new">
-                          <button className="action-btn icon" onClick={() => setSelectedOrder(order)} title="View Bill">🧾</button>
                           <div style={{ flex: 1, display: 'flex', gap: '8px' }}>
                             {order.status === 'accepted' ? (
                               <div className="acceptance-confirmed">
@@ -1089,13 +1077,6 @@ function App() {
         />
       )}
 
-      {selectedOrder && (
-        <BillModal
-          order={{ ...selectedOrder, restaurants: { name: restaurantName } }}
-          isOpen={!!selectedOrder}
-          onClose={() => setSelectedOrder(null)}
-        />
-      )}
     </div>
   )
 }

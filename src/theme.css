@@ -208,7 +208,7 @@ button, input, select, textarea {
   border-color: var(--primary) !important;
 }
 
-.refresh-btn, .bill-btn, .accept-btn {
+.refresh-btn, .accept-btn {
   border-radius: var(--radius-md) !important;
   font-weight: 500 !important;
 }
@@ -252,14 +252,14 @@ input:focus, textarea:focus, select:focus {
   -webkit-backdrop-filter: blur(8px);
 }
 
-.modal-content, .bill-content {
+.modal-content {
   background: var(--card) !important;
   border: 1px solid var(--border) !important;
   border-radius: var(--radius-xl) !important;
   box-shadow: var(--shadow-lg) !important;
 }
 
-.modal-header, .bill-header {
+.modal-header {
   border-bottom: 1px solid var(--border) !important;
   padding: var(--space-3) !important;
 }
@@ -269,7 +269,7 @@ input:focus, textarea:focus, select:focus {
   font-weight: 600 !important;
 }
 
-.modal-body, .bill-body {
+.modal-body {
   padding: var(--space-3) !important;
 }
 
@@ -356,7 +356,7 @@ tr:last-child td {
 }
 
 /* Badges */
-.payment-badge, .time-badge, .item-qty {
+.time-badge, .item-qty {
   border-radius: var(--radius-sm) !important;
   font-weight: 600 !important;
 }
