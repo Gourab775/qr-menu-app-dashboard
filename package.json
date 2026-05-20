@@ -39,7 +39,9 @@
     "win": {
       "target": "nsis",
       "icon": "assets/icon.png",
-      "artifactName": "${productName}-Setup-${version}.${ext}"
+      "artifactName": "${productName}-Setup-${version}.${ext}",
+      "sign": false,
+      "signAndEditExecutable": false
     },
     "nsis": {
       "oneClick": false,
