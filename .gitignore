@@ -1,7 +1,12 @@
 node_modules
 dist
+dist-electron
+release
 .env
 .env.local
 .env.*.local
 *.log
 .DS_Store
+*.exe
+*.dll
+*.msi
