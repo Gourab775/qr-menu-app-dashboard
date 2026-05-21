@@ -268,28 +268,15 @@ body {
   width: 100%;
   max-width: 100%;
   padding: 0 16px;
-}
-
-.orders-header-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  padding: 2px 0;
-}
-
-.orders-header-title {
-  font-size: 15px;
-  font-weight: 500;
-  color: var(--text-muted);
-  letter-spacing: 0.3px;
+  background: #000;
+  min-height: calc(100vh - 60px);
 }
 
 .orders-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 16px;
-  padding: 12px 0;
+  padding: 8px 0 16px;
   width: 100%;
 }
 
@@ -3153,16 +3140,6 @@ body {
   .input-group {
     width: 100%;
   }
-}
-
-/* Sticky Header for Orders */
-.sticky-header {
-  position: sticky;
-  top: 0;
-  background: var(--bg);
-  padding: 4px 0;
-  z-index: 10;
-  margin-bottom: 2px;
 }
 
 /* Analytics Page */

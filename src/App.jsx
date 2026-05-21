@@ -638,15 +638,6 @@ function App() {
 
         {activeTab === 'orders' && (
           <div className="orders-section">
-            <div className="sticky-header">
-              <div className="orders-header-row">
-                <span className="orders-header-title">Live Orders</span>
-                <button onClick={() => loadOrders()} className="refresh-btn">
-                  Refresh
-                </button>
-              </div>
-            </div>
-
             {loading || (!firstOrdersFetchDone.current && orders.length === 0) ? (
               <div className="loading-grid">
                 {[1, 2, 3, 4].map(i => (
