@@ -23,7 +23,6 @@ const API_TIMEOUT = 15000
 function App() {
   const { session, profile, loading: authLoading, initialized, signOut, role, restaurantId } = useAuth()
   const [resetMode, setResetMode] = useState(() => window.location.hash === '#reset-password')
-  const isPopupMode = new URLSearchParams(window.location.search).get('mode') === 'popup-orders'
   const [restaurantSlug, setRestaurantSlug] = useState('')
   const [restaurantName, setRestaurantName] = useState('')
   const [orders, setOrders] = useState([])
@@ -34,16 +33,11 @@ function App() {
   const [menuLoading, setMenuLoading] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [activeTab, setActiveTab] = useState('analytics')
-  const [ordersPopupOpen, setOrdersPopupOpen] = useState(false)
-  const [popupTab, setPopupTab] = useState('live')
-  const [popupMenuOpen, setPopupMenuOpen] = useState(false)
-  const popupMenuRef = useRef(null)
   const [showProfile, setShowProfile] = useState(false)
   const [showAddModal, setShowAddModal] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [filterType, setFilterType] = useState('all')
   const [toast, setToast] = useState(null)
-  const [newOrderToast, setNewOrderToast] = useState(null)
   const [isOnline, setIsOnline] = useState(navigator.onLine)
   const [preferences, setPreferences] = useState(() => {
     try {
@@ -66,7 +60,6 @@ function App() {
   const isMountedRef = useRef(true)
   const logoutRef = useRef(false)
   const firstOrdersFetchDone = useRef(false)
-  const ordersPopupOpenedRef = useRef(false)
   const ordersFetchFailedRef = useRef(false)
 
   const userRole = role || 'staff'
@@ -192,16 +185,6 @@ function App() {
   useEffect(() => {
     const handleClick = (e) => {
       if (profileRef.current && !profileRef.current.contains(e.target)) setShowProfile(false)
-    }
-    document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
-  }, [])
-
-  useEffect(() => {
-    const handleClick = (e) => {
-      if (popupMenuRef.current && !popupMenuRef.current.contains(e.target)) {
-        setPopupMenuOpen(false)
-      }
     }
     document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
@@ -448,17 +431,7 @@ function App() {
             if (newStatus === 'pending') {
               setOrders(prev => {
                 if (prev.some(o => o.id === newOrderId)) return prev.map(o => o.id === newOrderId ? { ...o, ...resolved } : o)
-                if (!isPopupMode && !ordersPopupOpenedRef.current) {
-                  console.log('[Popup] New order arrived, auto-opening popup')
-                  ordersPopupOpenedRef.current = true
-                  setOrdersPopupOpen(true)
-                }
                 if (preferences.soundEnabled) playSound()
-                if (preferences.orderNotifications) {
-                  const code = resolved.order_code || newOrderId.slice(0, 8).toUpperCase()
-                  setNewOrderToast(`New Order #${code}`)
-                  setTimeout(() => setNewOrderToast(null), 4000)
-                }
                 return [resolved, ...prev].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
               })
             } else if (newStatus === 'accepted') {
@@ -545,59 +518,6 @@ function App() {
 
 
   // [Polling disabled - auto-decline background check removed]
-
-  useEffect(() => {
-    if (!isPopupMode && orders.length === 0 && !ordersFetchFailedRef.current) {
-      console.log('[Popup] Order queue empty, closing popup')
-      setOrdersPopupOpen(false)
-      ordersPopupOpenedRef.current = false
-    }
-    if (orders.length === 0 && ordersFetchFailedRef.current) {
-      console.log('[Popup] Orders empty due to fetch failure — keeping popup open')
-    }
-  }, [isPopupMode, orders])
-
-  // Persist popup window bounds via localStorage (works in both Electron and browser)
-  useEffect(() => {
-    if (!isPopupMode) return;
-
-    const loadBounds = async () => {
-      try {
-        let bounds = null;
-        if (window.electronAPI?.getPopupBounds) {
-          bounds = await window.electronAPI.getPopupBounds();
-        } else {
-          const saved = localStorage.getItem('popup_window_bounds');
-          if (saved) bounds = JSON.parse(saved);
-        }
-        if (bounds) {
-          console.log('[Popup] Restored bounds:', bounds);
-        }
-      } catch (_) {}
-    };
-    loadBounds();
-
-    let saveTimer = null;
-    const handleResize = () => {
-      if (saveTimer) clearTimeout(saveTimer);
-      saveTimer = setTimeout(() => {
-        const b = { width: window.outerWidth, height: window.outerHeight, x: window.screenX, y: window.screenY };
-        try {
-          localStorage.setItem('popup_window_bounds', JSON.stringify(b));
-          if (window.electronAPI?.savePopupBounds) {
-            window.electronAPI.savePopupBounds(b);
-          }
-        } catch (_) {}
-      }, 300);
-    };
-
-    window.addEventListener('resize', handleResize);
-
-    return () => {
-      window.removeEventListener('resize', handleResize);
-      if (saveTimer) clearTimeout(saveTimer);
-    };
-  }, [isPopupMode])
 
   const handleSaveItem = useCallback(async (id, updates) => {
     const prevItems = [...menuItems]
@@ -771,198 +691,11 @@ function App() {
     }
   }
 
-  // Popup mode: standalone orders window with hamburger menu
-  if (isPopupMode) {
-    return (
-      <div className="app popup-mode">
-        {toast && <Toast message={toast.message} type={toast.type} />}
-        {newOrderToast && (
-          <div className="new-order-toast">{newOrderToast}</div>
-        )}
-        <OfflineBanner />
-        <div className="popup-orders-window">
-          <div className="popup-orders-header popup-drag-header" onDoubleClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
-            <div className="popup-header-left popup-no-drag" ref={popupMenuRef}>
-              <button className="popup-hamburger-btn popup-no-drag" onClick={() => setPopupMenuOpen(!popupMenuOpen)}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                  <line x1="3" y1="6" x2="21" y2="6" />
-                  <line x1="3" y1="12" x2="21" y2="12" />
-                  <line x1="3" y1="18" x2="21" y2="18" />
-                </svg>
-              </button>
-              {popupMenuOpen && (
-                <div className="popup-menu-dropdown">
-                  <button
-                    className={`popup-menu-item ${popupTab === 'live' ? 'active' : ''}`}
-                    onClick={() => { setPopupTab('live'); setPopupMenuOpen(false) }}
-                  >
-                    Live Orders
-                    <span className="popup-menu-count">{orders.length}</span>
-                  </button>
-                  <button
-                    className={`popup-menu-item ${popupTab === 'past' ? 'active' : ''}`}
-                    onClick={() => { setPopupTab('past'); setPopupMenuOpen(false) }}
-                  >
-                    Past Orders
-                    <span className="popup-menu-count">{pastOrders.length}</span>
-                  </button>
-                </div>
-              )}
-            </div>
-            <h2 className="popup-header-title">{popupTab === 'live' ? 'Live Orders' : 'Past Orders'}</h2>
-            <div className="popup-header-right"></div>
-          </div>
-          <div className="popup-orders-body">
-            {popupTab === 'live' ? (
-              loading || (!firstOrdersFetchDone.current && orders.length === 0) ? (
-                <div className="loading-grid">
-                  {[1, 2, 3, 4].map(i => (
-                    <div key={i} className="skeleton-card">
-                      <div className="skeleton-line" style={{ width: '30%' }}></div>
-                      <div className="skeleton-line"></div>
-                      <div className="skeleton-line short"></div>
-                    </div>
-                  ))}
-                </div>
-              ) : orders.length === 0 ? (
-                <div className="popup-empty-state">
-                    <div className="popup-empty-icon"></div>
-                    <p>No orders</p>
-                  </div>
-              ) : (
-                <div className="popup-orders-list">
-                  {orders.map(order => {
-                    const safeOrder = order || {}
-                    const tableNum = safeOrder.restaurant_tables?.table_number;
-                    const items = Array.isArray(safeOrder.items) ? safeOrder.items : []
-                    const totalPrice = safeOrder.total_price != null ? safeOrder.total_price : 0
-                    const orderId = safeOrder.id || 'unknown'
-                    const orderCode = safeOrder.order_code || (safeOrder.id ? safeOrder.id.slice(0, 8).toUpperCase() : 'N/A')
-                    const status = safeOrder.status || 'pending'
 
-                    return (
-                      <div key={orderId} className="pos-order-card">
-                        <div className="pos-card-header">
-                          <div className="pos-card-header-left">
-                            <span className="pos-order-id">#{orderCode}</span>
-                            <span className="pos-table-badge">Table {tableNum || '—'}</span>
-                          </div>
-                          <div className="pos-card-header-right">
-                            <span className="pos-order-date">{safeOrder.created_at ? formatOrderDateTime(safeOrder.created_at) : ''}</span>
-                          </div>
-                        </div>
-                        <div className="pos-items">
-                          {items.length > 0 ? items.map((item, i) => (
-                            <div key={i} className="pos-item">
-                              <span className="pos-item-name">{item?.name || 'Item'}</span>
-                              <span className="pos-item-qty">x{item?.quantity != null ? item.quantity : 1}</span>
-                              <span className="pos-item-price">₹{((item?.price ?? 0) * (item?.quantity ?? 1)).toFixed(0)}</span>
-                            </div>
-                          )) : (
-                            <div className="pos-item">
-                              <span className="pos-item-name" style={{ color: '#555', fontStyle: 'italic' }}>No items</span>
-                            </div>
-                          )}
-                        </div>
-                        {safeOrder.note && (
-                          <div className="pos-order-note">
-                            <span className="pos-note-label">Note</span>
-                            <span>{safeOrder.note}</span>
-                          </div>
-                        )}
-                        <div className="pos-total-row">
-                          <span className="pos-total-label">Total</span>
-                          <span className="pos-total-amount">₹{totalPrice}</span>
-                        </div>
-                        <div className="pos-card-footer">
-                          {status === 'accepted' ? (
-                            <span className="pos-accepted-label">Accepted</span>
-                          ) : (
-                            <>
-                              <button className="pos-decline-btn" onClick={() => handleDecline(orderId, orderCode)}>Decline</button>
-                              <button className="pos-accept-btn" onClick={() => handleAccept(orderId)}>Accept</button>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              )
-            ) : (
-              pastOrders.length === 0 ? (
-                <div className="popup-empty-state">
-                  <div className="popup-empty-icon"></div>
-                  <p>No past orders</p>
-                </div>
-              ) : (
-                <div className="popup-orders-list">
-                  {pastOrders.map(order => {
-                    const safeOrder = order || {}
-                    const tableNum = safeOrder.restaurant_tables?.table_number;
-                    const items = Array.isArray(safeOrder.items) ? safeOrder.items : []
-                    const totalPrice = safeOrder.total_price != null ? safeOrder.total_price : 0
-                    const orderId = safeOrder.id || 'unknown'
-                    const orderCode = safeOrder.order_code || (safeOrder.id ? safeOrder.id.slice(0, 8).toUpperCase() : 'N/A')
-
-                    return (
-                      <div key={orderId} className="pos-order-card">
-                        <div className="pos-card-header">
-                          <div className="pos-card-header-left">
-                            <span className="pos-order-id">#{orderCode}</span>
-                            <span className="pos-table-badge">Table {tableNum || '—'}</span>
-                          </div>
-                          <div className="pos-card-header-right">
-                            <span className="pos-order-date">{safeOrder.created_at ? formatOrderDateTime(safeOrder.created_at) : ''}</span>
-                          </div>
-                        </div>
-                        <div className="pos-items">
-                          {items.length > 0 ? items.map((item, i) => (
-                            <div key={i} className="pos-item">
-                              <span className="pos-item-name">{item?.name || 'Item'}</span>
-                              <span className="pos-item-qty">x{item?.quantity != null ? item.quantity : 1}</span>
-                              <span className="pos-item-price">₹{((item?.price ?? 0) * (item?.quantity ?? 1)).toFixed(0)}</span>
-                            </div>
-                          )) : (
-                            <div className="pos-item">
-                              <span className="pos-item-name" style={{ color: '#555', fontStyle: 'italic' }}>No items</span>
-                            </div>
-                          )}
-                        </div>
-                        {safeOrder.note && (
-                          <div className="pos-order-note">
-                            <span className="pos-note-label">Note</span>
-                            <span>{safeOrder.note}</span>
-                          </div>
-                        )}
-                        <div className="pos-total-row">
-                          <span className="pos-total-label">Total</span>
-                          <span className="pos-total-amount">₹{totalPrice}</span>
-                        </div>
-                        <div className="pos-card-footer">
-                          <span className="pos-past-status-badge accepted">Accepted</span>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              )
-            )}
-          </div>
-          <div className="popup-resize-handle popup-no-drag"></div>
-        </div>
-      </div>
-    )
-  }
 
   return (
     <div className="app">
       {toast && <Toast message={toast.message} type={toast.type} />}
-      {newOrderToast && (
-        <div className="new-order-toast">
-          {newOrderToast}
-        </div>
-      )}
       <OfflineBanner />
 
       <header className="header">
@@ -1226,100 +959,7 @@ function App() {
         />
       )}
 
-      {ordersPopupOpen && (
-        <PopupErrorBoundary onReset={() => { setOrdersPopupOpen(false); ordersPopupOpenedRef.current = false; }}>
-          <div className="popup-orders-overlay">
-            <div className="popup-orders-header">
-              <h2>Orders</h2>
-              <div className="popup-orders-header-right">
-                <span className="popup-orders-badge">{orders.length} orders</span>
-                <button className="popup-orders-close" onClick={() => { console.log('[Popup] Manual close'); setOrdersPopupOpen(false); ordersPopupOpenedRef.current = false; }}>✕</button>
-              </div>
-            </div>
-            <div className="popup-orders-body">
-              {loading || (!firstOrdersFetchDone.current && orders.length === 0) ? (
-                <div className="loading-grid">
-                  {[1, 2, 3, 4].map(i => (
-                    <div key={i} className="skeleton-card">
-                      <div className="skeleton-line" style={{ width: '30%' }}></div>
-                      <div className="skeleton-line"></div>
-                      <div className="skeleton-line short"></div>
-                    </div>
-                  ))}
-                </div>
-              ) : orders.length === 0 ? (
-                <div className="popup-empty-state">
-                  <div className="popup-empty-icon"></div>
-                  <p>No orders</p>
-                </div>
-              ) : (
-                <div className="popup-orders-list">
-                  {orders.map(order => {
-                    const safeOrder = order || {}
-                    const tableNum = safeOrder.restaurant_tables?.table_number;
-                    const items = Array.isArray(safeOrder.items) ? safeOrder.items : []
-                    const totalPrice = safeOrder.total_price != null ? safeOrder.total_price : 0
-                    const orderId = safeOrder.id || 'unknown'
-                    const orderCode = safeOrder.order_code || (safeOrder.id ? safeOrder.id.slice(0, 8).toUpperCase() : 'N/A')
-                    const status = safeOrder.status || 'pending'
 
-                    return (
-                      <div key={orderId} className="pos-order-card">
-                        <div className="pos-card-header">
-                          <div className="pos-card-header-left">
-                            <span className="pos-order-id">#{orderCode}</span>
-                            <span className="pos-table-badge">Table {tableNum || '—'}</span>
-                          </div>
-                          <div className="pos-card-header-right">
-                            <span className="pos-order-date">{safeOrder.created_at ? formatOrderDateTime(safeOrder.created_at) : ''}</span>
-                          </div>
-                        </div>
-
-                        <div className="pos-items">
-                          {items.length > 0 ? items.map((item, i) => (
-                            <div key={i} className="pos-item">
-                              <span className="pos-item-name">{item?.name || 'Item'}</span>
-                              <span className="pos-item-qty">x{item?.quantity != null ? item.quantity : 1}</span>
-                              <span className="pos-item-price">₹{((item?.price ?? 0) * (item?.quantity ?? 1)).toFixed(0)}</span>
-                            </div>
-                          )) : (
-                            <div className="pos-item">
-                              <span className="pos-item-name" style={{ color: '#555', fontStyle: 'italic' }}>No items</span>
-                            </div>
-                          )}
-                        </div>
-
-                        {safeOrder.note && (
-                          <div className="pos-order-note">
-                            <span className="pos-note-label">Note</span>
-                            <span>{safeOrder.note}</span>
-                          </div>
-                        )}
-
-                        <div className="pos-total-row">
-                          <span className="pos-total-label">Total</span>
-                          <span className="pos-total-amount">₹{totalPrice}</span>
-                        </div>
-
-                        <div className="pos-card-footer">
-                          {status === 'accepted' ? (
-                            <span className="pos-accepted-label">Accepted</span>
-                          ) : (
-                            <>
-                              <button className="pos-decline-btn" onClick={() => handleDecline(orderId, orderCode)}>Decline</button>
-                              <button className="pos-accept-btn" onClick={() => handleAccept(orderId)}>Accept</button>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-        </PopupErrorBoundary>
-      )}
 
     </div>
   )
@@ -1389,40 +1029,6 @@ function Sidebar({ isOpen, onClose, activeTab, setActiveTab }) {
   )
 }
 
-class PopupErrorBoundary extends React.Component {
-  constructor(props) {
-    super(props)
-    this.state = { hasError: false, error: null }
-  }
 
-  static getDerivedStateFromError(error) {
-    return { hasError: true, error }
-  }
-
-  componentDidCatch(error, info) {
-    console.error('[PopupErrorBoundary] Caught:', error, info)
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div className="popup-orders-overlay" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ textAlign: 'center', color: '#888' }}>
-            <div style={{ fontSize: '32px', marginBottom: '12px', opacity: 0.3 }}>⚠️</div>
-            <p style={{ fontSize: '14px', fontWeight: 500, marginBottom: '8px' }}>Orders encountered an error</p>
-            <p style={{ fontSize: '12px', color: '#555', marginBottom: '16px' }}>{this.state.error?.message || 'Unknown error'}</p>
-            <button
-              onClick={() => { this.setState({ hasError: false, error: null }); this.props.onReset?.() }}
-              style={{ background: '#22c55e', color: '#000', border: 'none', borderRadius: '4px', padding: '7px 18px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}
-            >
-              Reset
-            </button>
-          </div>
-        </div>
-      )
-    }
-    return this.props.children
-  }
-}
 
 export default App

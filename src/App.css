@@ -399,138 +399,9 @@ body {
   background: var(--red);
 }
 
-/* =========================================
-   POPUP ORDERS TAB — Clean POS-Style Stacked Layout
-   ========================================= */
-.popup-orders-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 400;
-  background: #000;
-  display: flex;
-  flex-direction: column;
-}
 
-.popup-orders-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 6px 16px;
-  background: #000;
-  flex-shrink: 0;
-  min-height: 36px;
-  position: relative;
-}
 
-.popup-header-left {
-  position: relative;
-  display: flex;
-  align-items: center;
-  min-width: 36px;
-}
 
-.popup-header-right {
-  min-width: 36px;
-}
-
-.popup-header-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: #e4e4e7;
-  letter-spacing: 0.2px;
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  white-space: nowrap;
-}
-
-.popup-hamburger-btn {
-  background: none;
-  border: none;
-  color: #666;
-  cursor: pointer;
-  padding: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 6px;
-  transition: all 0.15s;
-}
-
-.popup-hamburger-btn:hover {
-  color: #e4e4e7;
-  background: rgba(255,255,255,0.06);
-}
-
-.popup-menu-dropdown {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  margin-top: 6px;
-  background: #1a1a1d;
-  border: 1px solid #2a2a2d;
-  border-radius: 10px;
-  padding: 4px;
-  min-width: 180px;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
-  z-index: 100;
-}
-
-.popup-menu-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  background: none;
-  border: none;
-  color: #a1a1aa;
-  font-size: 13px;
-  font-weight: 500;
-  padding: 10px 14px;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.1s;
-  text-align: left;
-}
-
-.popup-menu-item:hover {
-  background: rgba(255,255,255,0.04);
-  color: #e4e4e7;
-}
-
-.popup-menu-item.active {
-  background: rgba(59, 130, 246, 0.1);
-  color: #60a5fa;
-  font-weight: 600;
-}
-
-.popup-menu-count {
-  font-size: 11px;
-  font-weight: 600;
-  background: rgba(255,255,255,0.06);
-  padding: 2px 9px;
-  border-radius: 12px;
-  color: #555;
-}
-
-.popup-menu-item.active .popup-menu-count {
-  background: rgba(59, 130, 246, 0.15);
-  color: #60a5fa;
-}
-
-.popup-tab-badge {
-  font-size: 10px;
-  font-weight: 700;
-  background: rgba(255,255,255,0.08);
-  padding: 1px 7px;
-  border-radius: 10px;
-  color: #888;
-}
-
-.popup-tab.active .popup-tab-badge {
-  background: rgba(255,255,255,0.12);
-  color: #bbb;
-}
 
 .pos-confirm-btn {
   background: #f59e0b;
@@ -586,54 +457,7 @@ body {
   letter-spacing: 0.2px;
 }
 
-.popup-orders-header-right {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
 
-.popup-orders-badge {
-  font-size: 11px;
-  color: #555;
-  font-weight: 500;
-}
-
-.popup-orders-close {
-  background: none;
-  border: none;
-  color: #444;
-  font-size: 18px;
-  cursor: pointer;
-  padding: 2px 4px;
-  line-height: 1;
-  transition: color 0.15s;
-}
-
-.popup-orders-close:hover {
-  color: #fff;
-}
-
-.popup-orders-body {
-  flex: 1;
-  overflow-y: auto;
-  padding: 0 12px 16px;
-}
-
-/* Stacked list — zero gap from header */
-.popup-orders-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 8px 0 0;
-}
-
-/* Loading skeletons also stacked */
-.popup-orders-body .loading-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 0;
-}
 
 /* =========================================
    POS Order Card — Premium Restaurant POS Style
@@ -836,29 +660,7 @@ body {
   gap: 6px;
 }
 
-/* Empty state */
-.popup-empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 60px 20px;
-  color: #555;
-}
 
-.popup-empty-icon {
-  width: 40px;
-  height: 40px;
-  margin-bottom: 12px;
-  border-radius: 50%;
-  background: #1a1a1d;
-  border: 1px solid #27272a;
-}
-
-.popup-empty-state p {
-  font-size: 13px;
-  font-weight: 500;
-}
 
 /* Card Header Section */
 .card-top-bar {
@@ -2030,25 +1832,7 @@ body {
   z-index: 500;
 }
 
-.new-order-toast {
-  position: fixed;
-  top: 60px;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 20px;
-  background: #1e293b;
-  border: 1px solid #334155;
-  border-radius: 10px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
-  animation: slideDown 0.3s ease;
-  z-index: 500;
-  font-size: 13px;
-  font-weight: 600;
-  color: #f1f5f9;
-}
+
 
 @keyframes slideDown {
   from {
@@ -7503,56 +7287,7 @@ body {
   display: contents;
 }
 
-/* =========================================
-   POPUP MODE — Standalone Live Orders Window
-   ========================================= */
-.popup-mode {
-  height: 100vh;
-  overflow: hidden;
-  background: #000;
-}
 
-.popup-orders-window {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-}
-
-.popup-drag-header {
-  -webkit-app-region: drag;
-}
-
-.popup-no-drag {
-  -webkit-app-region: no-drag;
-}
-
-.popup-resize-handle {
-  position: fixed;
-  bottom: 0;
-  right: 0;
-  width: 20px;
-  height: 20px;
-  cursor: nwse-resize;
-  z-index: 10;
-  pointer-events: auto;
-}
-
-.popup-resize-handle::after {
-  content: '';
-  position: absolute;
-  bottom: 4px;
-  right: 4px;
-  width: 10px;
-  height: 10px;
-  border-right: 2px solid rgba(255,255,255,0.15);
-  border-bottom: 2px solid rgba(255,255,255,0.15);
-  border-radius: 0 0 3px 0;
-}
-
-.popup-resize-handle:hover::after {
-  border-right-color: rgba(255,255,255,0.4);
-  border-bottom-color: rgba(255,255,255,0.4);
-}
 
 /* End of PC Analytics Dashboard */
 
