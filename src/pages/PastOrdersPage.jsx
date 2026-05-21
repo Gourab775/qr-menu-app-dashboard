@@ -9,7 +9,7 @@ const STATUS_CONFIG = {
   completed: { label: 'Completed', color: '#22c55e', bg: 'rgba(34, 197, 94, 0.12)' }
 }
 
-function PastOrdersPage({ pastOrders, onToast }) {
+function PastOrdersPage({ pastOrders, loading, onToast }) {
   const [timeFilter, setTimeFilter] = useState('today')
   const [actionLoading, setActionLoading] = useState(null)
 
@@ -116,7 +116,17 @@ function PastOrdersPage({ pastOrders, onToast }) {
         </button>
       </div>
 
-      {pastOrders.length === 0 ? (
+      {loading && pastOrders.length === 0 ? (
+        <div className="past-loading-grid">
+          {[1, 2, 3].map(i => (
+            <div key={i} className="skeleton-card">
+              <div className="skeleton-line" style={{ width: '40%' }}></div>
+              <div className="skeleton-line"></div>
+              <div className="skeleton-line short"></div>
+            </div>
+          ))}
+        </div>
+      ) : pastOrders.length === 0 ? (
         <div className="past-empty-state">
           <div className="past-empty-icon">
             <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" opacity="0.3">

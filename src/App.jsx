@@ -103,9 +103,11 @@ function App() {
 
         if (signal?.aborted) return { aborted: true }
 
-        if ((liveResult.error && liveResult.error.code !== 'PGRST116') || (pastResult.error && pastResult.error.code !== 'PGRST116')) {
-          console.error('[Orders] Load error:', liveResult.error || pastResult.error)
-          return { error: liveResult.error || pastResult.error }
+        const liveError = liveResult.error && liveResult.error.code !== 'PGRST116' ? liveResult.error : null
+        const pastError = pastResult.error && pastResult.error.code !== 'PGRST116' ? pastResult.error : null
+
+        if (liveError || pastError) {
+          console.error('[Orders] Load error:', liveError || pastError)
         }
 
         const liveData = liveResult.data || []
@@ -143,10 +145,14 @@ function App() {
     if (signal?.aborted) return
     if (result.aborted) return
 
-    if (result.error) {
+    if (result.error && !result.data && !result.pastData) {
       setToast({ message: 'Failed to load orders', type: 'error' })
       setOrders([])
       setPastOrders([])
+    } else if (result.error) {
+      console.warn('[Orders] Partial error, using available data:', result.error)
+      if (result.data !== undefined) setOrders(result.data)
+      if (result.pastData !== undefined) setPastOrders(result.pastData)
     } else if (result.data !== undefined) {
       setOrders(result.data)
       setPastOrders(result.pastData || [])
@@ -403,6 +409,7 @@ function App() {
       .channel('live-orders')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'live_orders' },
         (payload) => {
+          if (payload.new.restaurant_id !== restaurantId) return
           const newOrderId = payload.new.id
           const newStatus = payload.new.status || 'pending'
           if (lastPlayedOrderRef.current === newOrderId) return
@@ -449,25 +456,36 @@ function App() {
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'live_orders' },
         (payload) => {
           const { id, status } = payload.new
+          const isPastStatus = ['accepted', 'confirmed', 'completed'].includes(status)
+
+          if (!isPastStatus && status !== 'pending') return
+
           setOrders(prev => {
-            const order = prev.find(o => o.id === id)
-            if (!order) return prev
+            if (!prev.some(o => o.id === id)) return prev
             if (status === 'pending') {
               return prev.map(o => o.id === id ? { ...o, ...payload.new } : o)
             }
-            setPastOrders(past => {
-              if (past.some(o => o.id === id)) return past.map(o => o.id === id ? { ...o, ...order, ...payload.new } : o)
-              return [{ ...order, ...payload.new }, ...past]
-            })
             return prev.filter(o => o.id !== id)
           })
+
           setPastOrders(prev => {
-            if (prev.some(o => o.id === id)) {
-              if (status === 'pending') return prev.filter(o => o.id !== id)
-              return prev.map(o => o.id === id ? { ...o, ...payload.new } : o)
+            const exists = prev.some(o => o.id === id)
+            if (status === 'pending') {
+              return exists ? prev.filter(o => o.id !== id) : prev
             }
-            return prev
+            if (exists) {
+              return prev.map(o => o.id === id ? { ...o, ...payload.new, restaurant_tables: o.restaurant_tables || payload.new.restaurant_tables } : o)
+            }
+            return [{ ...payload.new, restaurant_tables: null }, ...prev].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
           })
+
+          if (isPastStatus) {
+            supabase.from('live_orders').select('*, restaurant_tables(table_number)').eq('id', id).single().then(({ data }) => {
+              if (data) {
+                setPastOrders(prev => prev.map(o => o.id === id ? { ...o, ...data } : o))
+              }
+            })
+          }
         }
       )
       .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'live_orders' },
@@ -608,33 +626,44 @@ function App() {
     }
 
     try {
-      await supabase.from('live_orders').update({ status: 'accepted' }).eq('id', orderId)
+      const { error } = await supabase.from('live_orders').update({ status: 'accepted' }).eq('id', orderId)
+      if (error) throw error
       showToast('Order accepted')
     } catch (err) {
       console.error('Error in handleAccept:', err)
-      showToast('Failed to process order', 'error')
+      if (movedOrder) {
+        setOrders(prev => [movedOrder, ...prev])
+        setPastOrders(prev => prev.filter(o => o.id !== orderId))
+      }
+      showToast('Failed to accept order', 'error')
     }
   }
 
   const handleConfirm = async (orderId) => {
+    const prevOrders = pastOrders
     setPastOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'confirmed' } : o))
     try {
-      await supabase.from('live_orders').update({ status: 'confirmed' }).eq('id', orderId)
+      const { error } = await supabase.from('live_orders').update({ status: 'confirmed' }).eq('id', orderId)
+      if (error) throw error
       showToast('Order confirmed')
     } catch (err) {
       console.error('Error confirming order:', err)
+      setPastOrders(prevOrders)
       showToast('Failed to confirm order', 'error')
     }
   }
 
   const handleComplete = async (orderId) => {
     const now = new Date().toISOString()
+    const prevOrders = pastOrders
     setPastOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'completed', completed_at: now } : o))
     try {
-      await supabase.from('live_orders').update({ status: 'completed', completed_at: now }).eq('id', orderId)
+      const { error } = await supabase.from('live_orders').update({ status: 'completed', completed_at: now }).eq('id', orderId)
+      if (error) throw error
       showToast('Order completed')
     } catch (err) {
       console.error('Error completing order:', err)
+      setPastOrders(prevOrders)
       showToast('Failed to complete order', 'error')
     }
   }
@@ -956,7 +985,7 @@ function App() {
 
         {activeTab === 'featured' && <FeaturedItemsPanel restaurantId={restaurantId} />}
 
-        {activeTab === 'past-orders' && <PastOrdersPage pastOrders={pastOrders} onToast={showToast} />}
+        {activeTab === 'past-orders' && <PastOrdersPage pastOrders={pastOrders} loading={loading} onToast={showToast} />}
       </main>
 
       <Sidebar isOpen={sidebarOpen} onClose={closeSidebar} activeTab={activeTab} setActiveTab={setActiveTab} />
