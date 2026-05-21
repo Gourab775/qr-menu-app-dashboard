@@ -62,7 +62,7 @@ function App() {
   const profileRef = useRef(null)
   const abortControllerRef = useRef(null)
   const ordersLoadingRef = useRef(false)
-  const ordersPollingRef = useRef(null)
+
   const isMountedRef = useRef(true)
   const logoutRef = useRef(false)
   const firstOrdersFetchDone = useRef(false)
@@ -340,37 +340,7 @@ function App() {
     }
   }, [isLoggedIn, restaurantId, loadOrders])
 
-  useEffect(() => {
-    if (!isLoggedIn || !restaurantId) {
-      if (ordersPollingRef.current) {
-        clearInterval(ordersPollingRef.current)
-        ordersPollingRef.current = null
-      }
-      return
-    }
-
-    const pollKey = `poll-${restaurantId}`
-
-    const pollInterval = setInterval(() => {
-      if (ordersLoadingRef.current || !restaurantId || !isMountedRef.current) return
-
-      const executePoll = async () => {
-        const controller = new AbortController()
-        await loadOrders(controller.signal)
-      }
-
-      deduplicateRequest(pollKey, executePoll).catch(() => { })
-    }, 15000)
-
-    ordersPollingRef.current = pollInterval
-
-    return () => {
-      if (ordersPollingRef.current) {
-        clearInterval(ordersPollingRef.current)
-        ordersPollingRef.current = null
-      }
-    }
-  }, [isLoggedIn, restaurantId, loadOrders])
+  // [Polling disabled - auto orders refresh removed]
 
   useEffect(() => {
     if (!isLoggedIn || !restaurantId) return
@@ -574,34 +544,7 @@ function App() {
 
 
 
-  useEffect(() => {
-    if (!isLoggedIn || !restaurantId) return
-
-    let mounted = true
-    const intervalId = setInterval(() => {
-      if (!mounted) return
-      setOrders(prev => {
-        const timeoutMs = (preferences.autoDeclineTimeout || 10) * 60 * 1000
-        const threshold = new Date(Date.now() - timeoutMs)
-        const timedOut = prev.filter(o => {
-          if (o.status === 'accepted' || o.status === 'rejected') return false
-          return new Date(o.created_at) < threshold
-        })
-        if (timedOut.length === 0) return prev
-
-        timedOut.forEach(o => {
-          supabase.from('live_orders').delete().eq('id', o.id).then(({ error }) => {
-            if (!error && setToast) setToast({ message: `Order #${o.order_code || o.id.slice(0, 8)} auto-declined`, type: 'info' })
-          })
-        })
-
-        const ids = new Set(timedOut.map(o => o.id))
-        return prev.filter(o => !ids.has(o.id))
-      })
-    }, 30000)
-
-    return () => { mounted = false; clearInterval(intervalId) }
-  }, [isLoggedIn, restaurantId, preferences.autoDeclineTimeout])
+  // [Polling disabled - auto-decline background check removed]
 
   useEffect(() => {
     if (!isPopupMode && orders.length === 0 && !ordersFetchFailedRef.current) {
@@ -649,22 +592,10 @@ function App() {
     };
 
     window.addEventListener('resize', handleResize);
-    // Poll for position changes (move events not available in web)
-    let moveCheckTimer = null;
-    let lastX = window.screenX, lastY = window.screenY;
-    const checkMove = () => {
-      if (window.screenX !== lastX || window.screenY !== lastY) {
-        lastX = window.screenX; lastY = window.screenY;
-        handleResize();
-      }
-      moveCheckTimer = setTimeout(checkMove, 500);
-    };
-    moveCheckTimer = setTimeout(checkMove, 500);
 
     return () => {
       window.removeEventListener('resize', handleResize);
       if (saveTimer) clearTimeout(saveTimer);
-      if (moveCheckTimer) clearTimeout(moveCheckTimer);
     };
   }, [isPopupMode])
 

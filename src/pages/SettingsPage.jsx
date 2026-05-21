@@ -1013,7 +1013,7 @@ const handlePasswordChange = async (e) => {
       items: [
         { icon: '🔔', label: 'Notifications', description: 'Sound & alerts', onClick: () => openModal('notifications'), badge: preferences.soundEnabled ? 'On' : 'Off' },
         { icon: '🎨', label: 'Theme', description: preferences.theme === 'default' ? 'Default Dark' : preferences.theme, onClick: () => openModal('theme') },
-        { icon: '⏱️', label: 'Auto-Decline', description: `${preferences.autoDeclineTimeout} min`, onClick: () => openModal('autodecline') }
+        { icon: '⏱️', label: 'Auto-Decline', description: 'Disabled', badge: 'Off' }
       ]
     },
     {
