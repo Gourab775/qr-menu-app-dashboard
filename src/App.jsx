@@ -609,7 +609,7 @@ function App() {
         <button className="menu-btn" onClick={() => setSidebarOpen(true)}>☰</button>
         <h2 className="header-title">
           {activeTab === 'analytics' && '📊 Analytics'}
-          {activeTab === 'orders' && '📦 Orders'}
+          {activeTab === 'orders' && 'Live Orders'}
           {activeTab === 'menu_items' && '🍽️ Menu Items'}
           {activeTab === 'categories' && '📂 Categories'}
           {activeTab === 'tables' && '🪑 Tables'}
@@ -640,6 +640,7 @@ function App() {
           <div className="orders-section">
             <div className="sticky-header">
               <div className="orders-header-row">
+                <span className="orders-header-title">Live Orders</span>
                 <button onClick={() => loadOrders()} className="refresh-btn">
                   Refresh
                 </button>
