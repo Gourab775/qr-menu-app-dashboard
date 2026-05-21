@@ -35,6 +35,7 @@ function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [activeTab, setActiveTab] = useState('analytics')
   const [ordersPopupOpen, setOrdersPopupOpen] = useState(false)
+  const [popupTab, setPopupTab] = useState('live')
   const [showProfile, setShowProfile] = useState(false)
   const [showAddModal, setShowAddModal] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -710,8 +711,16 @@ function App() {
     }
   }
 
-  // Popup mode: standalone Live Orders window — bypasses Analytics and all other pages
+  // Popup mode: standalone orders window with Live/Past tabs
   if (isPopupMode) {
+    const popupPastFiltered = popupTab === 'past' ? (() => {
+      const now = new Date()
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0)
+      return pastOrders.filter(o => new Date(o.created_at) >= todayStart)
+    })() : []
+
+    const popupPastCount = popupPastFiltered.length
+
     return (
       <div className="app popup-mode">
         {toast && <Toast message={toast.message} type={toast.type} />}
@@ -721,88 +730,176 @@ function App() {
         <OfflineBanner />
         <div className="popup-orders-window">
           <div className="popup-orders-header popup-drag-header">
-            <h2>Live Orders</h2>
-            <span className="popup-orders-badge">{orders.length} active</span>
+            <div className="popup-tab-bar">
+              <button
+                className={`popup-tab ${popupTab === 'live' ? 'active' : ''}`}
+                onClick={() => setPopupTab('live')}
+              >
+                Live Orders
+                <span className="popup-tab-badge">{orders.length}</span>
+              </button>
+              <button
+                className={`popup-tab ${popupTab === 'past' ? 'active' : ''}`}
+                onClick={() => setPopupTab('past')}
+              >
+                Past Orders
+                <span className="popup-tab-badge">{pastOrders.length}</span>
+              </button>
+            </div>
           </div>
           <div className="popup-orders-body">
-            {loading || (!firstOrdersFetchDone.current && orders.length === 0) ? (
-              <div className="loading-grid">
-                {[1, 2, 3, 4].map(i => (
-                  <div key={i} className="skeleton-card">
-                    <div className="skeleton-line" style={{ width: '30%' }}></div>
-                    <div className="skeleton-line"></div>
-                    <div className="skeleton-line short"></div>
-                  </div>
-                ))}
-              </div>
-            ) : orders.length === 0 ? (
-              <div className="popup-empty-state">
-                  <div className="popup-empty-icon"></div>
-                  <p>No orders</p>
-                </div>
-            ) : (
-              <div className="popup-orders-list">
-                {orders.map(order => {
-                  const safeOrder = order || {}
-                  const tableNum = safeOrder.restaurant_tables?.table_number;
-                  const items = Array.isArray(safeOrder.items) ? safeOrder.items : []
-                  const totalPrice = safeOrder.total_price != null ? safeOrder.total_price : 0
-                  const orderId = safeOrder.id || 'unknown'
-                  const orderCode = safeOrder.order_code || (safeOrder.id ? safeOrder.id.slice(0, 8).toUpperCase() : 'N/A')
-                  const status = safeOrder.status || 'pending'
-
-                  return (
-                    <div key={orderId} className="pos-order-card">
-                      <div className="pos-card-header">
-                        <div className="pos-card-header-left">
-                          <span className="pos-order-id">#{orderCode}</span>
-                          <span className="pos-table-badge">Table {tableNum || '—'}</span>
-                        </div>
-                        <div className="pos-card-header-right">
-                          <span className="pos-order-date">{safeOrder.created_at ? formatOrderDateTime(safeOrder.created_at) : ''}</span>
-                        </div>
-                      </div>
-
-                      <div className="pos-items">
-                        {items.length > 0 ? items.map((item, i) => (
-                          <div key={i} className="pos-item">
-                            <span className="pos-item-name">{item?.name || 'Item'}</span>
-                            <span className="pos-item-qty">x{item?.quantity != null ? item.quantity : 1}</span>
-                            <span className="pos-item-price">₹{((item?.price ?? 0) * (item?.quantity ?? 1)).toFixed(0)}</span>
-                          </div>
-                        )) : (
-                          <div className="pos-item">
-                            <span className="pos-item-name" style={{ color: '#555', fontStyle: 'italic' }}>No items</span>
-                          </div>
-                        )}
-                      </div>
-
-                      {safeOrder.note && (
-                        <div className="pos-order-note">
-                          <span className="pos-note-label">Note</span>
-                          <span>{safeOrder.note}</span>
-                        </div>
-                      )}
-
-                      <div className="pos-total-row">
-                        <span className="pos-total-label">Total</span>
-                        <span className="pos-total-amount">₹{totalPrice}</span>
-                      </div>
-
-                      <div className="pos-card-footer">
-                        {status === 'accepted' ? (
-                          <span className="pos-accepted-label">Accepted</span>
-                        ) : (
-                          <>
-                            <button className="pos-decline-btn" onClick={() => handleDecline(orderId, orderCode)}>Decline</button>
-                            <button className="pos-accept-btn" onClick={() => handleAccept(orderId)}>Accept</button>
-                          </>
-                        )}
-                      </div>
+            {popupTab === 'live' ? (
+              loading || (!firstOrdersFetchDone.current && orders.length === 0) ? (
+                <div className="loading-grid">
+                  {[1, 2, 3, 4].map(i => (
+                    <div key={i} className="skeleton-card">
+                      <div className="skeleton-line" style={{ width: '30%' }}></div>
+                      <div className="skeleton-line"></div>
+                      <div className="skeleton-line short"></div>
                     </div>
-                  )
-                })}
-              </div>
+                  ))}
+                </div>
+              ) : orders.length === 0 ? (
+                <div className="popup-empty-state">
+                    <div className="popup-empty-icon"></div>
+                    <p>No orders</p>
+                  </div>
+              ) : (
+                <div className="popup-orders-list">
+                  {orders.map(order => {
+                    const safeOrder = order || {}
+                    const tableNum = safeOrder.restaurant_tables?.table_number;
+                    const items = Array.isArray(safeOrder.items) ? safeOrder.items : []
+                    const totalPrice = safeOrder.total_price != null ? safeOrder.total_price : 0
+                    const orderId = safeOrder.id || 'unknown'
+                    const orderCode = safeOrder.order_code || (safeOrder.id ? safeOrder.id.slice(0, 8).toUpperCase() : 'N/A')
+                    const status = safeOrder.status || 'pending'
+
+                    return (
+                      <div key={orderId} className="pos-order-card">
+                        <div className="pos-card-header">
+                          <div className="pos-card-header-left">
+                            <span className="pos-order-id">#{orderCode}</span>
+                            <span className="pos-table-badge">Table {tableNum || '—'}</span>
+                          </div>
+                          <div className="pos-card-header-right">
+                            <span className="pos-order-date">{safeOrder.created_at ? formatOrderDateTime(safeOrder.created_at) : ''}</span>
+                          </div>
+                        </div>
+                        <div className="pos-items">
+                          {items.length > 0 ? items.map((item, i) => (
+                            <div key={i} className="pos-item">
+                              <span className="pos-item-name">{item?.name || 'Item'}</span>
+                              <span className="pos-item-qty">x{item?.quantity != null ? item.quantity : 1}</span>
+                              <span className="pos-item-price">₹{((item?.price ?? 0) * (item?.quantity ?? 1)).toFixed(0)}</span>
+                            </div>
+                          )) : (
+                            <div className="pos-item">
+                              <span className="pos-item-name" style={{ color: '#555', fontStyle: 'italic' }}>No items</span>
+                            </div>
+                          )}
+                        </div>
+                        {safeOrder.note && (
+                          <div className="pos-order-note">
+                            <span className="pos-note-label">Note</span>
+                            <span>{safeOrder.note}</span>
+                          </div>
+                        )}
+                        <div className="pos-total-row">
+                          <span className="pos-total-label">Total</span>
+                          <span className="pos-total-amount">₹{totalPrice}</span>
+                        </div>
+                        <div className="pos-card-footer">
+                          {status === 'accepted' ? (
+                            <span className="pos-accepted-label">Accepted</span>
+                          ) : (
+                            <>
+                              <button className="pos-decline-btn" onClick={() => handleDecline(orderId, orderCode)}>Decline</button>
+                              <button className="pos-accept-btn" onClick={() => handleAccept(orderId)}>Accept</button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+            ) : (
+              pastOrders.length === 0 ? (
+                <div className="popup-empty-state">
+                  <div className="popup-empty-icon"></div>
+                  <p>No past orders</p>
+                </div>
+              ) : (
+                <div className="popup-orders-list">
+                  {pastOrders.map(order => {
+                    const safeOrder = order || {}
+                    const tableNum = safeOrder.restaurant_tables?.table_number;
+                    const items = Array.isArray(safeOrder.items) ? safeOrder.items : []
+                    const totalPrice = safeOrder.total_price != null ? safeOrder.total_price : 0
+                    const orderId = safeOrder.id || 'unknown'
+                    const orderCode = safeOrder.order_code || (safeOrder.id ? safeOrder.id.slice(0, 8).toUpperCase() : 'N/A')
+                    const status = safeOrder.status || 'accepted'
+                    const STATUS_COLORS = { accepted: '#3b82f6', confirmed: '#f59e0b', completed: '#22c55e' }
+
+                    return (
+                      <div key={orderId} className="pos-order-card">
+                        <div className="pos-card-header">
+                          <div className="pos-card-header-left">
+                            <span className="pos-order-id">#{orderCode}</span>
+                            <span className="pos-table-badge">Table {tableNum || '—'}</span>
+                          </div>
+                          <div className="pos-card-header-right">
+                            <span className="pos-order-date">{safeOrder.created_at ? formatOrderDateTime(safeOrder.created_at) : ''}</span>
+                          </div>
+                        </div>
+                        <div className="pos-items">
+                          {items.length > 0 ? items.map((item, i) => (
+                            <div key={i} className="pos-item">
+                              <span className="pos-item-name">{item?.name || 'Item'}</span>
+                              <span className="pos-item-qty">x{item?.quantity != null ? item.quantity : 1}</span>
+                              <span className="pos-item-price">₹{((item?.price ?? 0) * (item?.quantity ?? 1)).toFixed(0)}</span>
+                            </div>
+                          )) : (
+                            <div className="pos-item">
+                              <span className="pos-item-name" style={{ color: '#555', fontStyle: 'italic' }}>No items</span>
+                            </div>
+                          )}
+                        </div>
+                        {safeOrder.note && (
+                          <div className="pos-order-note">
+                            <span className="pos-note-label">Note</span>
+                            <span>{safeOrder.note}</span>
+                          </div>
+                        )}
+                        <div className="pos-total-row">
+                          <span className="pos-total-label">Total</span>
+                          <span className="pos-total-amount">₹{totalPrice}</span>
+                        </div>
+                        <div className="pos-card-footer">
+                          <span className="pos-past-status-badge" style={{
+                            fontSize: '12px', fontWeight: 600, padding: '5px 14px',
+                            borderRadius: '20px', border: '1px solid',
+                            background: STATUS_COLORS[status] ? `${STATUS_COLORS[status]}18` : 'rgba(255,255,255,0.05)',
+                            color: STATUS_COLORS[status] || '#666', borderColor: STATUS_COLORS[status] || '#666',
+                            letterSpacing: '0.2px'
+                          }}>
+                            {status.charAt(0).toUpperCase() + status.slice(1)}
+                          </span>
+                          <div className="pos-card-footer-right">
+                            {status === 'accepted' && (
+                              <button className="pos-confirm-btn" onClick={() => handleConfirm(orderId)}>Confirm</button>
+                            )}
+                            {status === 'confirmed' && (
+                              <button className="pos-complete-btn" onClick={() => handleComplete(orderId)}>Complete</button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )
             )}
           </div>
         </div>
@@ -828,6 +925,7 @@ function App() {
   {activeTab === 'categories' && 'Categories'}
   {activeTab === 'tables' && 'Tables'}
   {activeTab === 'settings' && 'Settings'}
+  {activeTab === 'live-orders' && 'Live Orders'}
   {activeTab === 'past-orders' && 'Past Orders'}
 </h2>
         <div className="profile-wrapper" ref={profileRef}>
@@ -985,6 +1083,88 @@ function App() {
 
         {activeTab === 'featured' && <FeaturedItemsPanel restaurantId={restaurantId} />}
 
+        {activeTab === 'live-orders' && (
+          <div className="live-orders-page">
+            {loading || (!firstOrdersFetchDone.current && orders.length === 0) ? (
+              <div className="loading-grid">
+                {[1, 2, 3, 4].map(i => (
+                  <div key={i} className="skeleton-card">
+                    <div className="skeleton-line" style={{ width: '30%' }}></div>
+                    <div className="skeleton-line"></div>
+                    <div className="skeleton-line short"></div>
+                  </div>
+                ))}
+              </div>
+            ) : orders.length === 0 ? (
+              <div className="empty-state">
+                <div className="empty-icon">🕐</div>
+                <h3>No live orders</h3>
+                <p>Pending orders from customers will appear here</p>
+              </div>
+            ) : (
+              <div className="orders-list">
+                <div className="orders-count-bar">{orders.length} order{orders.length !== 1 ? 's' : ''} waiting</div>
+                {orders.map(order => {
+                  const safeOrder = order || {}
+                  const tableNum = safeOrder.restaurant_tables?.table_number;
+                  const items = Array.isArray(safeOrder.items) ? safeOrder.items : []
+                  const totalPrice = safeOrder.total_price != null ? safeOrder.total_price : 0
+                  const orderId = safeOrder.id || 'unknown'
+                  const orderCode = safeOrder.order_code || (safeOrder.id ? safeOrder.id.slice(0, 8).toUpperCase() : 'N/A')
+                  const status = safeOrder.status || 'pending'
+
+                  return (
+                    <div key={orderId} className="pos-order-card">
+                      <div className="pos-card-header">
+                        <div className="pos-card-header-left">
+                          <span className="pos-order-id">#{orderCode}</span>
+                          <span className="pos-table-badge">Table {tableNum || '—'}</span>
+                        </div>
+                        <div className="pos-card-header-right">
+                          <span className="pos-order-date">{safeOrder.created_at ? formatOrderDateTime(safeOrder.created_at) : ''}</span>
+                        </div>
+                      </div>
+                      <div className="pos-items">
+                        {items.length > 0 ? items.map((item, i) => (
+                          <div key={i} className="pos-item">
+                            <span className="pos-item-name">{item?.name || 'Item'}</span>
+                            <span className="pos-item-qty">x{item?.quantity != null ? item.quantity : 1}</span>
+                            <span className="pos-item-price">₹{((item?.price ?? 0) * (item?.quantity ?? 1)).toFixed(0)}</span>
+                          </div>
+                        )) : (
+                          <div className="pos-item">
+                            <span className="pos-item-name" style={{ color: '#555', fontStyle: 'italic' }}>No items</span>
+                          </div>
+                        )}
+                      </div>
+                      {safeOrder.note && (
+                        <div className="pos-order-note">
+                          <span className="pos-note-label">Note</span>
+                          <span>{safeOrder.note}</span>
+                        </div>
+                      )}
+                      <div className="pos-total-row">
+                        <span className="pos-total-label">Total</span>
+                        <span className="pos-total-amount">₹{totalPrice}</span>
+                      </div>
+                      <div className="pos-card-footer">
+                        {status === 'accepted' ? (
+                          <span className="pos-accepted-label">Accepted</span>
+                        ) : (
+                          <>
+                            <button className="pos-decline-btn" onClick={() => handleDecline(orderId, orderCode)}>Decline</button>
+                            <button className="pos-accept-btn" onClick={() => handleAccept(orderId)}>Accept</button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
         {activeTab === 'past-orders' && <PastOrdersPage pastOrders={pastOrders} loading={loading} onToast={showToast} />}
       </main>
 
@@ -1130,6 +1310,12 @@ function Sidebar({ isOpen, onClose, activeTab, setActiveTab }) {
             onClick={() => { setActiveTab('featured'); onClose(); }}
           >
             🎯 Featured
+          </button>
+          <button
+            className={`nav-item ${activeTab === 'live-orders' ? 'active' : ''}`}
+            onClick={() => { setActiveTab('live-orders'); onClose(); }}
+          >
+            🔴 Live Orders
           </button>
           <button
             className={`nav-item ${activeTab === 'past-orders' ? 'active' : ''}`}

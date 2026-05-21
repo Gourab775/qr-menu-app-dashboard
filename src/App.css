@@ -428,6 +428,99 @@ body {
   letter-spacing: 0.3px;
 }
 
+.popup-tab-bar {
+  display: flex;
+  gap: 2px;
+  width: 100%;
+  background: rgba(255,255,255,0.03);
+  padding: 2px;
+  border-radius: 8px;
+}
+
+.popup-tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  color: #555;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.popup-tab:hover {
+  color: #a1a1aa;
+  background: rgba(255,255,255,0.04);
+}
+
+.popup-tab.active {
+  background: rgba(255,255,255,0.08);
+  color: #e4e4e7;
+}
+
+.popup-tab-badge {
+  font-size: 10px;
+  font-weight: 700;
+  background: rgba(255,255,255,0.08);
+  padding: 1px 7px;
+  border-radius: 10px;
+  color: #888;
+}
+
+.popup-tab.active .popup-tab-badge {
+  background: rgba(255,255,255,0.12);
+  color: #bbb;
+}
+
+.pos-confirm-btn {
+  background: #f59e0b;
+  color: #000;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 18px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.15s;
+  letter-spacing: 0.2px;
+}
+
+.pos-confirm-btn:hover {
+  background: #d97706;
+  transform: scale(1.02);
+}
+
+.pos-complete-btn {
+  background: #22c55e;
+  color: #000;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 18px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.15s;
+  letter-spacing: 0.2px;
+}
+
+.pos-complete-btn:hover {
+  background: #16a34a;
+  transform: scale(1.02);
+}
+
+.pos-card-footer-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
 .popup-orders-header-right {
   display: flex;
   align-items: center;
@@ -1696,6 +1789,27 @@ body {
 .category-card-actions {
   display: flex;
   gap: 6px;
+}
+
+/* Live Orders Page */
+.live-orders-page {
+  padding-top: 0;
+  width: 100%;
+}
+
+.orders-count-bar {
+  font-size: 13px;
+  font-weight: 600;
+  color: #a1a1aa;
+  padding: 8px 0 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  margin-bottom: 12px;
+}
+
+.orders-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 /* Empty State */
