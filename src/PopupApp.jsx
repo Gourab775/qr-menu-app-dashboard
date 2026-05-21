@@ -20,7 +20,8 @@ function PopupApp() {
   const [orders, setOrders] = useState([])
   const [pastOrders, setPastOrders] = useState([])
   const [loading, setLoading] = useState(false)
-  const [activeView, setActiveView] = useState('past')
+  const [activeView, setActiveView] = useState('live')
+  const [liveTab, setLiveTab] = useState('orders')
   const [menuOpen, setMenuOpen] = useState(false)
   const [toast, setToast] = useState(null)
   const [isOnline, setIsOnline] = useState(navigator.onLine)
@@ -310,7 +311,7 @@ function PopupApp() {
 
   const handleDragStart = useCallback((e) => {
     if (isElectron) return
-    if (e.target.closest('.popup-tabs') || e.target.closest('.popup-toast')) return
+    if (e.target.closest('.popup-live-tabs') || e.target.closest('.popup-toast')) return
 
     const rect = popupRef.current?.getBoundingClientRect()
     if (!rect) return
@@ -430,23 +431,15 @@ function PopupApp() {
           <div className="popup-menu-dropdown">
             <button
               className={`popup-menu-item ${activeView === 'live' ? 'active' : ''}`}
-              onClick={() => {
-                if (activeView === 'live') setActiveView('past')
-                else setActiveView('live')
-                setMenuOpen(false)
-              }}
+              onClick={() => { setActiveView('live'); setMenuOpen(false) }}
             >
               Live Orders
             </button>
             <button
-              className={`popup-menu-item ${activeView === 'notification' ? 'active' : ''}`}
-              onClick={() => {
-                if (activeView === 'notification') setActiveView('past')
-                else setActiveView('notification')
-                setMenuOpen(false)
-              }}
+              className={`popup-menu-item ${activeView === 'past' ? 'active' : ''}`}
+              onClick={() => { setActiveView('past'); setMenuOpen(false) }}
             >
-              Notification
+              Past Orders
             </button>
           </div>
         </>
@@ -459,87 +452,105 @@ function PopupApp() {
           </div>
         )}
 
-        {activeView === 'notification' && (
-          <div className="popup-notification-placeholder">
-            <p>Notifications coming soon</p>
-          </div>
-        )}
-
         {activeView === 'live' && (
-          <div className="popup-live-orders">
-            {!firstOrdersFetchDone.current && loading ? (
-              <div className="popup-loading-grid">
-                {[1, 2, 3].map(i => (
-                  <div key={i} className="popup-skeleton-card">
-                    <div className="popup-skeleton-line" style={{ width: '40%' }} />
-                    <div className="popup-skeleton-line" />
-                    <div className="popup-skeleton-line" style={{ width: '60%' }} />
+          <>
+            <div className="popup-live-tabs">
+              <button
+                className={`popup-live-tab ${liveTab === 'orders' ? 'active' : ''}`}
+                onClick={() => setLiveTab('orders')}
+              >
+                Live Orders
+                {orders.length > 0 && <span className="popup-tab-badge">{orders.length}</span>}
+              </button>
+              <button
+                className={`popup-live-tab ${liveTab === 'notification' ? 'active' : ''}`}
+                onClick={() => setLiveTab('notification')}
+              >
+                Notification
+              </button>
+            </div>
+
+            {liveTab === 'orders' ? (
+              <div className="popup-live-orders">
+                {!firstOrdersFetchDone.current && loading ? (
+                  <div className="popup-loading-grid">
+                    {[1, 2, 3].map(i => (
+                      <div key={i} className="popup-skeleton-card">
+                        <div className="popup-skeleton-line" style={{ width: '40%' }} />
+                        <div className="popup-skeleton-line" />
+                        <div className="popup-skeleton-line" style={{ width: '60%' }} />
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            ) : orders.length === 0 ? (
-              <div className="popup-empty">
-                <div className="popup-empty-icon">🕐</div>
-                <h3>No live orders</h3>
-                <p>Pending orders will appear here</p>
+                ) : orders.length === 0 ? (
+                  <div className="popup-empty">
+                    <div className="popup-empty-icon">🕐</div>
+                    <h3>No live orders</h3>
+                    <p>Pending orders will appear here</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="popup-orders-count">{orders.length} order{orders.length !== 1 ? 's' : ''} waiting</div>
+                    <div className="popup-orders-list">
+                      {orders.map(order => {
+                        const safeOrder = order || {}
+                        const tableNum = safeOrder.restaurant_tables?.table_number
+                        const items = Array.isArray(safeOrder.items) ? safeOrder.items : []
+                        const totalPrice = safeOrder.total_price != null ? safeOrder.total_price : 0
+                        const orderId = safeOrder.id || 'unknown'
+                        const orderCode = safeOrder.order_code || (safeOrder.id ? safeOrder.id.slice(0, 8).toUpperCase() : 'N/A')
+
+                        return (
+                          <div key={orderId} className="popup-order-card">
+                            <div className="popup-card-header">
+                              <div className="popup-card-header-left">
+                                <span className="popup-order-id">#{orderCode}</span>
+                                <span className="popup-table-badge">Table {tableNum || '—'}</span>
+                              </div>
+                              <span className="popup-order-date">
+                                {safeOrder.created_at ? formatOrderDateTime(safeOrder.created_at) : ''}
+                              </span>
+                            </div>
+                            <div className="popup-items">
+                              {items.length > 0 ? items.map((item, i) => (
+                                <div key={i} className="popup-item">
+                                  <span className="popup-item-name">{item?.name || 'Item'}</span>
+                                  <span className="popup-item-qty">x{item?.quantity != null ? item.quantity : 1}</span>
+                                  <span className="popup-item-price">₹{((item?.price ?? 0) * (item?.quantity ?? 1)).toFixed(0)}</span>
+                                </div>
+                              )) : (
+                                <div className="popup-item">
+                                  <span className="popup-item-name" style={{ color: '#555', fontStyle: 'italic' }}>No items</span>
+                                </div>
+                              )}
+                            </div>
+                            {safeOrder.note && (
+                              <div className="popup-order-note">
+                                <span className="popup-note-label">Note</span>
+                                <span>{safeOrder.note}</span>
+                              </div>
+                            )}
+                            <div className="popup-total-row">
+                              <span className="popup-total-label">Total</span>
+                              <span className="popup-total-amount">₹{totalPrice}</span>
+                            </div>
+                            <div className="popup-card-footer">
+                              <button className="popup-decline-btn" onClick={() => handleDecline(orderId, orderCode)}>Decline</button>
+                              <button className="popup-accept-btn" onClick={() => handleAccept(orderId)}>Accept</button>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </>
+                )}
               </div>
             ) : (
-              <>
-                <div className="popup-orders-count">{orders.length} order{orders.length !== 1 ? 's' : ''} waiting</div>
-                <div className="popup-orders-list">
-                  {orders.map(order => {
-                    const safeOrder = order || {}
-                    const tableNum = safeOrder.restaurant_tables?.table_number
-                    const items = Array.isArray(safeOrder.items) ? safeOrder.items : []
-                    const totalPrice = safeOrder.total_price != null ? safeOrder.total_price : 0
-                    const orderId = safeOrder.id || 'unknown'
-                    const orderCode = safeOrder.order_code || (safeOrder.id ? safeOrder.id.slice(0, 8).toUpperCase() : 'N/A')
-
-                    return (
-                      <div key={orderId} className="popup-order-card">
-                        <div className="popup-card-header">
-                          <div className="popup-card-header-left">
-                            <span className="popup-order-id">#{orderCode}</span>
-                            <span className="popup-table-badge">Table {tableNum || '—'}</span>
-                          </div>
-                          <span className="popup-order-date">
-                            {safeOrder.created_at ? formatOrderDateTime(safeOrder.created_at) : ''}
-                          </span>
-                        </div>
-                        <div className="popup-items">
-                          {items.length > 0 ? items.map((item, i) => (
-                            <div key={i} className="popup-item">
-                              <span className="popup-item-name">{item?.name || 'Item'}</span>
-                              <span className="popup-item-qty">x{item?.quantity != null ? item.quantity : 1}</span>
-                              <span className="popup-item-price">₹{((item?.price ?? 0) * (item?.quantity ?? 1)).toFixed(0)}</span>
-                            </div>
-                          )) : (
-                            <div className="popup-item">
-                              <span className="popup-item-name" style={{ color: '#555', fontStyle: 'italic' }}>No items</span>
-                            </div>
-                          )}
-                        </div>
-                        {safeOrder.note && (
-                          <div className="popup-order-note">
-                            <span className="popup-note-label">Note</span>
-                            <span>{safeOrder.note}</span>
-                          </div>
-                        )}
-                        <div className="popup-total-row">
-                          <span className="popup-total-label">Total</span>
-                          <span className="popup-total-amount">₹{totalPrice}</span>
-                        </div>
-                        <div className="popup-card-footer">
-                          <button className="popup-decline-btn" onClick={() => handleDecline(orderId, orderCode)}>Decline</button>
-                          <button className="popup-accept-btn" onClick={() => handleAccept(orderId)}>Accept</button>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </>
+              <div className="popup-notification-placeholder">
+                <p>Notifications coming soon</p>
+              </div>
             )}
-          </div>
+          </>
         )}
 
         {activeView === 'past' && (
