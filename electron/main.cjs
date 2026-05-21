@@ -111,29 +111,14 @@ function createQuickWindow() {
       sandbox: true,
     },
   });
-  quickWindow.loadURL(APP_URL);
+  const popupUrl = new URL(APP_URL);
+  popupUrl.searchParams.set('mode', 'popup-orders');
+  quickWindow.loadURL(popupUrl.toString());
 
   quickWindow.webContents.on('did-finish-load', () => {
     if (!quickWindow || quickWindow.isDestroyed()) return;
-    quickWindow.webContents.insertCSS(`
-      #quick-drag-bar {
-        position: fixed;
-        top: 0; left: 0; right: 0;
-        height: 35px;
-        -webkit-app-region: drag;
-        z-index: 999999;
-        background: transparent;
-      }
-      body { margin-top: 35px !important; }
-    `);
-    quickWindow.webContents.executeJavaScript(`
-      (function(){
-        if (document.getElementById('quick-drag-bar')) return;
-        var bar = document.createElement('div');
-        bar.id = 'quick-drag-bar';
-        document.body.prepend(bar);
-      })();
-    `);
+    // Drag bar is handled by the React app's Live Orders header (-webkit-app-region: drag)
+    // No CSS/JS injection needed for the dedicated orders popup window
   });
 
   quickWindow.webContents.setWindowOpenHandler(({ url }) => {

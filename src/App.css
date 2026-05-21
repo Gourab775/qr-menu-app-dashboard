@@ -7245,5 +7245,24 @@ body {
   display: contents;
 }
 
+/* =========================================
+   POPUP MODE — Standalone Live Orders Window
+   ========================================= */
+.popup-mode {
+  height: 100vh;
+  overflow: hidden;
+  background: #000;
+}
+
+.popup-orders-window {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.popup-drag-header {
+  -webkit-app-region: drag;
+}
+
 /* End of PC Analytics Dashboard */
 

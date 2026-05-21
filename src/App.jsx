@@ -22,6 +22,7 @@ const API_TIMEOUT = 15000
 function App() {
   const { session, profile, loading: authLoading, initialized, signOut, role, restaurantId } = useAuth()
   const [resetMode, setResetMode] = useState(() => window.location.hash === '#reset-password')
+  const isPopupMode = new URLSearchParams(window.location.search).get('mode') === 'popup-orders'
   const [restaurantSlug, setRestaurantSlug] = useState('')
   const [restaurantName, setRestaurantName] = useState('')
   const [orders, setOrders] = useState([])
@@ -407,7 +408,7 @@ function App() {
 
             setOrders(prev => {
               if (prev.some(o => o.id === newOrderId)) return prev.map(o => o.id === newOrderId ? { ...o, ...resolved } : o)
-              if (!ordersPopupOpenedRef.current) {
+              if (!isPopupMode && !ordersPopupOpenedRef.current) {
                 console.log('[Popup] New order arrived, auto-opening popup')
                 ordersPopupOpenedRef.current = true
                 setOrdersPopupOpen(true)
@@ -474,12 +475,12 @@ function App() {
   }, [isLoggedIn, restaurantId, preferences.autoDeclineTimeout])
 
   useEffect(() => {
-    if (orders.length === 0) {
+    if (!isPopupMode && orders.length === 0) {
       console.log('[Popup] Order queue empty, closing popup')
       setOrdersPopupOpen(false)
       ordersPopupOpenedRef.current = false
     }
-  }, [orders])
+  }, [isPopupMode, orders])
 
   const handleSaveItem = useCallback(async (id, updates) => {
     const prevItems = [...menuItems]
@@ -604,6 +605,95 @@ function App() {
     } catch (err) {
       showToast('Failed to add item', 'error')
     }
+  }
+
+  // Popup mode: standalone Live Orders window — bypasses Analytics and all other pages
+  if (isPopupMode) {
+    return (
+      <div className="app popup-mode">
+        {toast && <Toast message={toast.message} type={toast.type} />}
+        {newOrderToast && (
+          <div className="new-order-toast">{newOrderToast}</div>
+        )}
+        <OfflineBanner />
+        <div className="popup-orders-window">
+          <div className="popup-orders-header popup-drag-header">
+            <h2>📋 Live Orders</h2>
+            <span className="popup-orders-badge">{orders.length} active</span>
+          </div>
+          <div className="popup-orders-body">
+            {loading || (!firstOrdersFetchDone.current && orders.length === 0) ? (
+              <div className="loading-grid">
+                {[1, 2, 3, 4].map(i => (
+                  <div key={i} className="skeleton-card">
+                    <div className="skeleton-line" style={{ width: '30%' }}></div>
+                    <div className="skeleton-line"></div>
+                    <div className="skeleton-line short"></div>
+                  </div>
+                ))}
+              </div>
+            ) : orders.length === 0 ? (
+              <div className="popup-empty-state">
+                <div className="popup-empty-icon">📦</div>
+                <p>No orders</p>
+              </div>
+            ) : (
+              <div className="popup-orders-list">
+                {orders.map(order => {
+                  const safeOrder = order || {}
+                  const tableNum = safeOrder.restaurant_tables?.table_number;
+                  const items = Array.isArray(safeOrder.items) ? safeOrder.items : []
+                  const totalPrice = safeOrder.total_price != null ? safeOrder.total_price : 0
+                  const orderId = safeOrder.id || 'unknown'
+                  const orderCode = safeOrder.order_code || (safeOrder.id ? safeOrder.id.slice(0, 8).toUpperCase() : 'N/A')
+                  const status = safeOrder.status || 'pending'
+
+                  return (
+                    <div key={orderId} className="pos-order-card">
+                      <div className="pos-card-header">
+                        <span className="pos-order-id">#{orderCode}</span>
+                        <span className="pos-table-badge">T{tableNum || '—'}</span>
+                        <span className="pos-order-time">{safeOrder.created_at ? <RunningTimer createdAt={safeOrder.created_at} /> : ''}</span>
+                        <span className="pos-total">₹{totalPrice}</span>
+                      </div>
+
+                      {safeOrder.note && (
+                        <div className="pos-order-note">{safeOrder.note}</div>
+                      )}
+
+                      <div className="pos-items">
+                        {items.map((item, i) => (
+                          <div key={i} className="pos-item">
+                            <span className="pos-item-name">{item?.name || 'Item'}</span>
+                            <span className="pos-item-qty">x{item?.quantity != null ? item.quantity : 1}</span>
+                          </div>
+                        ))}
+                        {items.length === 0 && (
+                          <div className="pos-item">
+                            <span className="pos-item-name" style={{ color: '#555', fontStyle: 'italic' }}>No items</span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="pos-card-footer">
+                        {status === 'accepted' ? (
+                          <span className="pos-accepted-label">✓ Accepted</span>
+                        ) : (
+                          <>
+                            <button className="pos-decline-btn" onClick={() => handleDecline(orderId, orderCode)}>Decline</button>
+                            <button className="pos-accept-btn" onClick={() => handleAccept(orderId)}>Accept</button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
