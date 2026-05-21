@@ -4,9 +4,7 @@ import { formatDate, formatTime } from '../utils/formatDateTime'
 import './PastOrdersPage.css'
 
 const STATUS_CONFIG = {
-  accepted: { label: 'Accepted', color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.12)' },
-  confirmed: { label: 'Confirmed', color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.12)' },
-  completed: { label: 'Completed', color: '#22c55e', bg: 'rgba(34, 197, 94, 0.12)' }
+  accepted: { label: 'Accepted', color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.12)' }
 }
 
 function PastOrdersPage({ pastOrders, loading, onToast }) {
@@ -51,29 +49,16 @@ function PastOrdersPage({ pastOrders, loading, onToast }) {
   }
 
   const getNextActions = (order) => {
-    if (order.status === 'accepted') {
-      return (
-        <button
-          className="past-action-btn past-action-confirm"
-          onClick={() => handleAction(order.id, 'confirmed')}
-          disabled={actionLoading === order.id}
-        >
-          Confirm
-        </button>
-      )
-    }
-    if (order.status === 'confirmed') {
-      return (
-        <button
-          className="past-action-btn past-action-complete"
-          onClick={() => handleAction(order.id, 'completed')}
-          disabled={actionLoading === order.id}
-        >
-          Complete
-        </button>
-      )
-    }
-    return null
+    if (order.status !== 'accepted') return null
+    return (
+      <button
+        className="past-action-btn past-action-confirm"
+        onClick={() => handleAction(order.id, 'confirmed')}
+        disabled={actionLoading === order.id}
+      >
+        Confirm
+      </button>
+    )
   }
 
   const orderCounts = {

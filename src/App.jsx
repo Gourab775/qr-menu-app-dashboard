@@ -36,6 +36,8 @@ function App() {
   const [activeTab, setActiveTab] = useState('analytics')
   const [ordersPopupOpen, setOrdersPopupOpen] = useState(false)
   const [popupTab, setPopupTab] = useState('live')
+  const [popupMenuOpen, setPopupMenuOpen] = useState(false)
+  const popupMenuRef = useRef(null)
   const [showProfile, setShowProfile] = useState(false)
   const [showAddModal, setShowAddModal] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -98,7 +100,7 @@ function App() {
             API_TIMEOUT
           ),
           fetchWithTimeout(
-            supabase.from('live_orders').select(baseSelect).eq('restaurant_id', restaurantId).in('status', ['accepted', 'confirmed', 'completed']).order('created_at', { ascending: false }).limit(200),
+            supabase.from('live_orders').select(baseSelect).eq('restaurant_id', restaurantId).eq('status', 'accepted').order('created_at', { ascending: false }).limit(200),
             API_TIMEOUT
           )
         ])
@@ -183,6 +185,16 @@ function App() {
   useEffect(() => {
     const handleClick = (e) => {
       if (profileRef.current && !profileRef.current.contains(e.target)) setShowProfile(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  useEffect(() => {
+    const handleClick = (e) => {
+      if (popupMenuRef.current && !popupMenuRef.current.contains(e.target)) {
+        setPopupMenuOpen(false)
+      }
     }
     document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
@@ -454,7 +466,7 @@ function App() {
                 }
                 return [resolved, ...prev].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
               })
-            } else {
+            } else if (newStatus === 'accepted') {
               setPastOrders(prev => {
                 if (prev.some(o => o.id === newOrderId)) return prev.map(o => o.id === newOrderId ? { ...o, ...resolved } : o)
                 return [resolved, ...prev].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
@@ -467,9 +479,8 @@ function App() {
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'live_orders' },
         (payload) => {
           const { id, status } = payload.new
-          const isPastStatus = ['accepted', 'confirmed', 'completed'].includes(status)
 
-          if (!isPastStatus && status !== 'pending') return
+          if (status !== 'pending' && status !== 'accepted' && status !== 'confirmed' && status !== 'completed') return
 
           setOrders(prev => {
             if (!prev.some(o => o.id === id)) return prev
@@ -479,23 +490,21 @@ function App() {
             return prev.filter(o => o.id !== id)
           })
 
-          setPastOrders(prev => {
-            const exists = prev.some(o => o.id === id)
-            if (status === 'pending') {
-              return exists ? prev.filter(o => o.id !== id) : prev
-            }
-            if (exists) {
-              return prev.map(o => o.id === id ? { ...o, ...payload.new, restaurant_tables: o.restaurant_tables || payload.new.restaurant_tables } : o)
-            }
-            return [{ ...payload.new, restaurant_tables: null }, ...prev].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-          })
-
-          if (isPastStatus) {
+          if (status === 'accepted') {
+            setPastOrders(prev => {
+              const exists = prev.some(o => o.id === id)
+              if (exists) {
+                return prev.map(o => o.id === id ? { ...o, ...payload.new, restaurant_tables: o.restaurant_tables || payload.new.restaurant_tables } : o)
+              }
+              return [{ ...payload.new, restaurant_tables: null }, ...prev].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+            })
             supabase.from('live_orders').select('*, restaurant_tables(table_number)').eq('id', id).single().then(({ data }) => {
               if (data) {
                 setPastOrders(prev => prev.map(o => o.id === id ? { ...o, ...data } : o))
               }
             })
+          } else {
+            setPastOrders(prev => prev.filter(o => o.id !== id))
           }
         }
       )
@@ -654,8 +663,8 @@ function App() {
   }
 
   const handleConfirm = async (orderId) => {
-    const prevOrders = pastOrders
-    setPastOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'confirmed' } : o))
+    const prevOrders = [...pastOrders]
+    setPastOrders(prev => prev.filter(o => o.id !== orderId))
     try {
       const { error } = await supabase.from('live_orders').update({ status: 'confirmed' }).eq('id', orderId)
       if (error) throw error
@@ -668,8 +677,8 @@ function App() {
   }
 
   const handleComplete = async (orderId) => {
-    const prevOrders = pastOrders
-    setPastOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'completed' } : o))
+    const prevOrders = [...pastOrders]
+    setPastOrders(prev => prev.filter(o => o.id !== orderId))
     try {
       const { error } = await supabase.from('live_orders').update({ status: 'completed' }).eq('id', orderId)
       if (error) throw error
@@ -723,16 +732,8 @@ function App() {
     }
   }
 
-  // Popup mode: standalone orders window with Live/Past tabs
+  // Popup mode: standalone orders window with hamburger menu
   if (isPopupMode) {
-    const popupPastFiltered = popupTab === 'past' ? (() => {
-      const now = new Date()
-      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0)
-      return pastOrders.filter(o => new Date(o.created_at) >= todayStart)
-    })() : []
-
-    const popupPastCount = popupPastFiltered.length
-
     return (
       <div className="app popup-mode">
         {toast && <Toast message={toast.message} type={toast.type} />}
@@ -742,22 +743,35 @@ function App() {
         <OfflineBanner />
         <div className="popup-orders-window">
           <div className="popup-orders-header popup-drag-header">
-            <div className="popup-tab-bar">
-              <button
-                className={`popup-tab ${popupTab === 'live' ? 'active' : ''}`}
-                onClick={() => setPopupTab('live')}
-              >
-                Live Orders
-                <span className="popup-tab-badge">{orders.length}</span>
+            <div className="popup-header-left" ref={popupMenuRef}>
+              <button className="popup-hamburger-btn" onClick={() => setPopupMenuOpen(!popupMenuOpen)}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <line x1="3" y1="6" x2="21" y2="6" />
+                  <line x1="3" y1="12" x2="21" y2="12" />
+                  <line x1="3" y1="18" x2="21" y2="18" />
+                </svg>
               </button>
-              <button
-                className={`popup-tab ${popupTab === 'past' ? 'active' : ''}`}
-                onClick={() => setPopupTab('past')}
-              >
-                Past Orders
-                <span className="popup-tab-badge">{pastOrders.length}</span>
-              </button>
+              {popupMenuOpen && (
+                <div className="popup-menu-dropdown">
+                  <button
+                    className={`popup-menu-item ${popupTab === 'live' ? 'active' : ''}`}
+                    onClick={() => { setPopupTab('live'); setPopupMenuOpen(false) }}
+                  >
+                    Live Orders
+                    <span className="popup-menu-count">{orders.length}</span>
+                  </button>
+                  <button
+                    className={`popup-menu-item ${popupTab === 'past' ? 'active' : ''}`}
+                    onClick={() => { setPopupTab('past'); setPopupMenuOpen(false) }}
+                  >
+                    Past Orders
+                    <span className="popup-menu-count">{pastOrders.length}</span>
+                  </button>
+                </div>
+              )}
             </div>
+            <h2 className="popup-header-title">{popupTab === 'live' ? 'Live Orders' : 'Past Orders'}</h2>
+            <div className="popup-header-right"></div>
           </div>
           <div className="popup-orders-body">
             {popupTab === 'live' ? (
@@ -851,8 +865,6 @@ function App() {
                     const totalPrice = safeOrder.total_price != null ? safeOrder.total_price : 0
                     const orderId = safeOrder.id || 'unknown'
                     const orderCode = safeOrder.order_code || (safeOrder.id ? safeOrder.id.slice(0, 8).toUpperCase() : 'N/A')
-                    const status = safeOrder.status || 'accepted'
-                    const STATUS_COLORS = { accepted: '#3b82f6', confirmed: '#f59e0b', completed: '#22c55e' }
 
                     return (
                       <div key={orderId} className="pos-order-card">
@@ -889,23 +901,8 @@ function App() {
                           <span className="pos-total-amount">₹{totalPrice}</span>
                         </div>
                         <div className="pos-card-footer">
-                          <span className="pos-past-status-badge" style={{
-                            fontSize: '12px', fontWeight: 600, padding: '5px 14px',
-                            borderRadius: '20px', border: '1px solid',
-                            background: STATUS_COLORS[status] ? `${STATUS_COLORS[status]}18` : 'rgba(255,255,255,0.05)',
-                            color: STATUS_COLORS[status] || '#666', borderColor: STATUS_COLORS[status] || '#666',
-                            letterSpacing: '0.2px'
-                          }}>
-                            {status.charAt(0).toUpperCase() + status.slice(1)}
-                          </span>
-                          <div className="pos-card-footer-right">
-                            {status === 'accepted' && (
-                              <button className="pos-confirm-btn" onClick={() => handleConfirm(orderId)}>Confirm</button>
-                            )}
-                            {status === 'confirmed' && (
-                              <button className="pos-complete-btn" onClick={() => handleComplete(orderId)}>Complete</button>
-                            )}
-                          </div>
+                          <span className="pos-past-status-badge accepted">Accepted</span>
+                          <button className="pos-confirm-btn" onClick={() => handleConfirm(orderId)}>Confirm</button>
                         </div>
                       </div>
                     )
