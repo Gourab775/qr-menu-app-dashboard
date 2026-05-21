@@ -1,33 +1,14 @@
-const { app, BrowserWindow, globalShortcut, shell, net, session, Menu, ipcMain } = require('electron');
+const { app, BrowserWindow, shell, net, session, Menu } = require('electron');
 const path = require('path');
-const fs = require('fs');
 
 const APP_URL = 'https://qr-menu-app-dashboard.vercel.app/';
 const CONNECTIVITY_CHECK_URL = 'https://clients3.google.com/generate_204';
 const CONNECTIVITY_CHECK_INTERVAL = 3000;
 
 let mainWindow = null;
-let quickWindow = null;
 let splashWindow = null;
 let connectivityInterval = null;
 let wasOffline = false;
-
-const BOUNDS_PATH = path.join(app.getPath('userData'), 'popup-bounds.json');
-
-function loadPopupBounds() {
-  try {
-    if (fs.existsSync(BOUNDS_PATH)) {
-      return JSON.parse(fs.readFileSync(BOUNDS_PATH, 'utf-8'));
-    }
-  } catch (_) {}
-  return null;
-}
-
-function savePopupBounds(bounds) {
-  try {
-    fs.writeFileSync(BOUNDS_PATH, JSON.stringify(bounds));
-  } catch (_) {}
-}
 
 function createSplashWindow() {
   splashWindow = new BrowserWindow({
@@ -111,91 +92,7 @@ function createMainWindow() {
   });
 }
 
-function createQuickWindow() {
-  const savedBounds = loadPopupBounds();
 
-  quickWindow = new BrowserWindow({
-    width: savedBounds?.width || 400,
-    height: savedBounds?.height || 600,
-    minWidth: 320,
-    minHeight: 420,
-    x: savedBounds?.x,
-    y: savedBounds?.y,
-    center: !savedBounds,
-    alwaysOnTop: true,
-    resizable: true,
-    maximizable: false,
-    fullscreenable: false,
-    frame: false,
-    show: false,
-    title: 'QR Menu Dashboard',
-    icon: path.join(__dirname, '..', 'assets', 'icon.png'),
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.cjs'),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-    },
-  });
-
-  const debouncedSaveBounds = (() => {
-    let timer = null;
-    return () => {
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(() => {
-        timer = null;
-        if (quickWindow && !quickWindow.isDestroyed()) {
-          savePopupBounds(quickWindow.getBounds());
-        }
-      }, 200);
-    };
-  })();
-
-  quickWindow.on('resize', debouncedSaveBounds);
-  quickWindow.on('move', debouncedSaveBounds);
-
-  const popupUrl = new URL(APP_URL);
-  popupUrl.searchParams.set('mode', 'popup-orders');
-  quickWindow.loadURL(popupUrl.toString());
-
-  quickWindow.webContents.on('did-finish-load', () => {
-    if (!quickWindow || quickWindow.isDestroyed()) return;
-  });
-
-  quickWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith('https:') || url.startsWith('http:')) {
-      shell.openExternal(url);
-    }
-    return { action: 'deny' };
-  });
-
-  quickWindow.webContents.on('will-navigate', (event, url) => {
-    const isInternal = url.startsWith(APP_URL) || url.startsWith('http://localhost');
-    if (!isInternal && (url.startsWith('https:') || url.startsWith('http:'))) {
-      event.preventDefault();
-      shell.openExternal(url);
-    }
-  });
-
-  quickWindow.on('close', (event) => {
-    if (!quickWindow.isDestroyed()) {
-      event.preventDefault();
-      quickWindow.hide();
-    }
-  });
-}
-
-function toggleQuickWindow() {
-  if (!quickWindow || quickWindow.isDestroyed()) {
-    createQuickWindow();
-  }
-  if (quickWindow.isVisible()) {
-    quickWindow.hide();
-  } else {
-    quickWindow.show();
-    quickWindow.focus();
-  }
-}
 
 function closeSplash() {
   if (splashWindow && !splashWindow.isDestroyed()) {
@@ -241,7 +138,7 @@ app.whenReady().then(() => {
   createSplashWindow();
   createMainWindow();
 
-  globalShortcut.register('CommandOrControl+Space', toggleQuickWindow);
+
 
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     callback({
@@ -262,20 +159,9 @@ app.on('session-created', (ses) => {
   });
 });
 
-ipcMain.handle('get-popup-bounds', () => loadPopupBounds());
-
-ipcMain.on('save-popup-bounds', (_event, bounds) => {
-  savePopupBounds(bounds);
-});
-
 app.on('window-all-closed', () => {
   stopConnectivityCheck();
-  globalShortcut.unregisterAll();
   app.quit();
-});
-
-app.on('will-quit', () => {
-  globalShortcut.unregisterAll();
 });
 
 app.on('activate', () => {

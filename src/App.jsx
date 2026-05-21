@@ -15,6 +15,7 @@ import SettingsPage from './pages/SettingsPage'
 import TablesPage from './pages/TablesPage'
 import PastOrdersPage from './pages/PastOrdersPage'
 import { formatDateTime, formatOrderDateTime } from './utils/formatDateTime'
+import FloatingOrderPopup from './components/FloatingOrderPopup'
 import './App.css'
 import './theme.css'
 
@@ -56,6 +57,7 @@ function App() {
   const profileRef = useRef(null)
   const abortControllerRef = useRef(null)
   const ordersLoadingRef = useRef(false)
+  const floatingPopupRef = useRef(null)
 
   const isMountedRef = useRef(true)
   const logoutRef = useRef(false)
@@ -517,6 +519,19 @@ function App() {
 
 
 
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.ctrlKey && e.code === 'Space') {
+        e.preventDefault()
+        if (floatingPopupRef.current) {
+          floatingPopupRef.current.toggle()
+        }
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
+
   // [Polling disabled - auto-decline background check removed]
 
   const handleSaveItem = useCallback(async (id, updates) => {
@@ -864,92 +879,12 @@ function App() {
 
         {activeTab === 'featured' && <FeaturedItemsPanel restaurantId={restaurantId} />}
 
-        {activeTab === 'live-orders' && (
-          <div className="live-orders-page">
-            {loading || (!firstOrdersFetchDone.current && orders.length === 0) ? (
-              <div className="loading-grid">
-                {[1, 2, 3, 4].map(i => (
-                  <div key={i} className="skeleton-card">
-                    <div className="skeleton-line" style={{ width: '30%' }}></div>
-                    <div className="skeleton-line"></div>
-                    <div className="skeleton-line short"></div>
-                  </div>
-                ))}
-              </div>
-            ) : orders.length === 0 ? (
-              <div className="empty-state">
-                <div className="empty-icon">🕐</div>
-                <h3>No live orders</h3>
-                <p>Pending orders from customers will appear here</p>
-              </div>
-            ) : (
-              <div className="orders-list">
-                <div className="orders-count-bar">{orders.length} order{orders.length !== 1 ? 's' : ''} waiting</div>
-                {orders.map(order => {
-                  const safeOrder = order || {}
-                  const tableNum = safeOrder.restaurant_tables?.table_number;
-                  const items = Array.isArray(safeOrder.items) ? safeOrder.items : []
-                  const totalPrice = safeOrder.total_price != null ? safeOrder.total_price : 0
-                  const orderId = safeOrder.id || 'unknown'
-                  const orderCode = safeOrder.order_code || (safeOrder.id ? safeOrder.id.slice(0, 8).toUpperCase() : 'N/A')
-                  const status = safeOrder.status || 'pending'
-
-                  return (
-                    <div key={orderId} className="pos-order-card">
-                      <div className="pos-card-header">
-                        <div className="pos-card-header-left">
-                          <span className="pos-order-id">#{orderCode}</span>
-                          <span className="pos-table-badge">Table {tableNum || '—'}</span>
-                        </div>
-                        <div className="pos-card-header-right">
-                          <span className="pos-order-date">{safeOrder.created_at ? formatOrderDateTime(safeOrder.created_at) : ''}</span>
-                        </div>
-                      </div>
-                      <div className="pos-items">
-                        {items.length > 0 ? items.map((item, i) => (
-                          <div key={i} className="pos-item">
-                            <span className="pos-item-name">{item?.name || 'Item'}</span>
-                            <span className="pos-item-qty">x{item?.quantity != null ? item.quantity : 1}</span>
-                            <span className="pos-item-price">₹{((item?.price ?? 0) * (item?.quantity ?? 1)).toFixed(0)}</span>
-                          </div>
-                        )) : (
-                          <div className="pos-item">
-                            <span className="pos-item-name" style={{ color: '#555', fontStyle: 'italic' }}>No items</span>
-                          </div>
-                        )}
-                      </div>
-                      {safeOrder.note && (
-                        <div className="pos-order-note">
-                          <span className="pos-note-label">Note</span>
-                          <span>{safeOrder.note}</span>
-                        </div>
-                      )}
-                      <div className="pos-total-row">
-                        <span className="pos-total-label">Total</span>
-                        <span className="pos-total-amount">₹{totalPrice}</span>
-                      </div>
-                      <div className="pos-card-footer">
-                        {status === 'accepted' ? (
-                          <span className="pos-accepted-label">Accepted</span>
-                        ) : (
-                          <>
-                            <button className="pos-decline-btn" onClick={() => handleDecline(orderId, orderCode)}>Decline</button>
-                            <button className="pos-accept-btn" onClick={() => handleAccept(orderId)}>Accept</button>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-        )}
+        {activeTab === 'live-orders' && null}
 
         {activeTab === 'past-orders' && <PastOrdersPage pastOrders={pastOrders} loading={loading} onToast={showToast} />}
       </main>
 
-      <Sidebar isOpen={sidebarOpen} onClose={closeSidebar} activeTab={activeTab} setActiveTab={setActiveTab} />
+      <Sidebar isOpen={sidebarOpen} onClose={closeSidebar} activeTab={activeTab} setActiveTab={setActiveTab} onOpenOrders={() => floatingPopupRef.current?.open()} />
 
       {showAddModal && (
         <AddItemModal
@@ -959,13 +894,13 @@ function App() {
         />
       )}
 
-
+      <FloatingOrderPopup ref={floatingPopupRef} />
 
     </div>
   )
 }
 
-function Sidebar({ isOpen, onClose, activeTab, setActiveTab }) {
+function Sidebar({ isOpen, onClose, activeTab, setActiveTab, onOpenOrders }) {
   return (
     <>
       {isOpen && <div className="overlay" onClick={onClose} />}
@@ -1001,7 +936,7 @@ function Sidebar({ isOpen, onClose, activeTab, setActiveTab }) {
           </button>
           <button
             className={`nav-item ${activeTab === 'live-orders' ? 'active' : ''}`}
-            onClick={() => { setActiveTab('live-orders'); onClose(); }}
+            onClick={() => { onOpenOrders?.(); onClose(); }}
           >
             🔴 Live Orders
           </button>
