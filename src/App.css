@@ -43,10 +43,11 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px 20px;
+  padding: 8px 16px;
   background: #000;
   border-bottom: none;
   z-index: 100;
+  height: 48px;
 }
 
 .menu-btn {
@@ -139,14 +140,14 @@ body {
 
 /* Main Content */
 .main-content {
-  padding: 16px 16px 20px;
-  max-width: 1300px;
+  padding: 12px 12px 20px;
+  max-width: 1400px;
   margin: 0 auto;
 }
 
 @media (min-width: 768px) {
   .main-content {
-    padding: 24px 24px 24px;
+    padding: 20px 20px 24px;
   }
 }
 
@@ -346,7 +347,7 @@ body {
   }
 
   .orders-section {
-    padding: 0 12px;
+    padding: 0 8px;
   }
 }
 
@@ -414,7 +415,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 20px;
+  padding: 6px 16px;
   background: #000;
   flex-shrink: 0;
   min-height: 36px;
@@ -457,15 +458,15 @@ body {
 .popup-orders-body {
   flex: 1;
   overflow-y: auto;
-  padding: 0 20px 16px;
+  padding: 0 12px 16px;
 }
 
 /* Stacked list — zero gap from header */
 .popup-orders-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 0;
+  gap: 10px;
+  padding: 8px 0 0;
 }
 
 /* Loading skeletons also stacked */
@@ -477,106 +478,175 @@ body {
 }
 
 /* =========================================
-   POS Order Card — Clean Restaurant POS Style
+   POS Order Card — Premium Restaurant POS Style
    ========================================= */
 .pos-order-card {
-  background: #0d0d0d;
-  border-radius: 0;
-  padding: 12px 16px;
+  background: #111113;
+  border-radius: 12px;
+  padding: 14px 16px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 0;
+  border: 1px solid #1e1e20;
+  transition: border-color 0.2s;
 }
 
+.pos-order-card:hover {
+  border-color: #2a2a2d;
+}
+
+/* ── Card Header: Order ID + Table on left, Date + Time on right ── */
 .pos-card-header {
   display: flex;
-  align-items: center;
-  gap: 12px;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
 }
 
-.pos-order-id {
-  font-size: 14px;
-  font-weight: 700;
-  color: #fff;
-  letter-spacing: 0.2px;
-}
-
-.pos-table-badge {
-  font-size: 11px;
-  font-weight: 600;
-  color: #60a5fa;
-  padding: 1px 6px;
-}
-
-.pos-order-time {
-  font-size: 11px;
-  color: #555;
-  margin-left: auto;
-}
-
-.pos-total {
-  font-size: 14px;
-  font-weight: 700;
-  color: #22c55e;
-}
-
-/* Note row */
-.pos-order-note {
-  font-size: 11px;
-  color: #a16207;
-  padding: 4px 0;
-}
-
-/* Items list */
-.pos-items {
+.pos-card-header-left {
   display: flex;
   flex-direction: column;
+  gap: 3px;
+}
+
+.pos-card-header-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
   gap: 2px;
 }
 
-.pos-item {
+.pos-order-id {
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 0.3px;
+}
+
+.pos-table-badge {
+  font-size: 12px;
+  font-weight: 500;
+  color: #60a5fa;
+}
+
+.pos-order-date {
+  font-size: 11px;
+  color: #71717a;
+  font-weight: 400;
+  line-height: 1.3;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* ── Items List ── */
+.pos-items {
   display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 10px 0;
+  border-top: 1px solid #1e1e20;
+  border-bottom: 1px solid #1e1e20;
+}
+
+.pos-item {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 12px;
   align-items: center;
-  gap: 8px;
-  padding: 2px 0;
+  padding: 5px 0;
+}
+
+.pos-item + .pos-item {
+  border-top: 1px solid #18181b;
 }
 
 .pos-item-name {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
   color: #d4d4d8;
 }
 
 .pos-item-qty {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   color: #52525b;
-  margin-left: auto;
+  text-align: center;
+  min-width: 28px;
 }
 
-/* Card footer — one primary action */
+.pos-item-price {
+  font-size: 13px;
+  font-weight: 600;
+  color: #a1a1aa;
+  text-align: right;
+  min-width: 60px;
+}
+
+/* ── Note Section ── */
+.pos-order-note {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 10px 0;
+  font-size: 12px;
+  color: #d4d4d8;
+  border-bottom: 1px solid #1e1e20;
+}
+
+.pos-note-label {
+  font-weight: 600;
+  color: #a16207;
+  flex-shrink: 0;
+}
+
+/* ── Total Row ── */
+.pos-total-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid #1e1e20;
+}
+
+.pos-total-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #71717a;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.pos-total-amount {
+  font-size: 18px;
+  font-weight: 700;
+  color: #22c55e;
+}
+
+/* ── Action Buttons ── */
 .pos-card-footer {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 6px;
-  padding-top: 2px;
+  gap: 8px;
+  padding-top: 12px;
 }
 
 .pos-decline-btn {
   background: none;
-  border: none;
-  color: #444;
-  font-size: 11px;
-  font-weight: 500;
+  border: 1px solid #27272a;
+  color: #a1a1aa;
+  font-size: 12px;
+  font-weight: 600;
   cursor: pointer;
-  padding: 5px 10px;
-  border-radius: 4px;
+  padding: 8px 18px;
+  border-radius: 8px;
   transition: all 0.15s;
+  letter-spacing: 0.2px;
 }
 
 .pos-decline-btn:hover {
   color: #ef4444;
+  border-color: #ef4444;
   background: rgba(239, 68, 68, 0.06);
 }
 
@@ -584,23 +654,28 @@ body {
   background: #22c55e;
   color: #000;
   border: none;
-  border-radius: 4px;
-  padding: 7px 18px;
-  font-size: 12px;
+  border-radius: 8px;
+  padding: 8px 22px;
+  font-size: 13px;
   font-weight: 700;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background 0.15s, transform 0.15s;
+  letter-spacing: 0.2px;
 }
 
 .pos-accept-btn:hover {
   background: #16a34a;
+  transform: scale(1.02);
 }
 
 .pos-accepted-label {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   color: #22c55e;
-  padding: 7px 0;
+  padding: 8px 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 /* Empty state */
@@ -614,9 +689,12 @@ body {
 }
 
 .popup-empty-icon {
-  font-size: 30px;
-  margin-bottom: 10px;
-  opacity: 0.25;
+  width: 40px;
+  height: 40px;
+  margin-bottom: 12px;
+  border-radius: 50%;
+  background: #1a1a1d;
+  border: 1px solid #27272a;
 }
 
 .popup-empty-state p {
@@ -1775,21 +1853,22 @@ body {
 
 .new-order-toast {
   position: fixed;
-  top: 70px;
+  top: 60px;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 14px 24px;
-  background: linear-gradient(135deg, var(--blue), #2563eb);
-  border-radius: 14px;
-  box-shadow: 0 8px 24px rgba(59, 130, 246, 0.4);
+  gap: 8px;
+  padding: 10px 20px;
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
   animation: slideDown 0.3s ease;
   z-index: 500;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
-  color: white;
+  color: #f1f5f9;
 }
 
 @keyframes slideDown {

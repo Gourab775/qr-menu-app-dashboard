@@ -13,7 +13,8 @@ import CategoriesPage from './pages/CategoriesPage'
 import OverviewPage from './pages/OverviewPage'
 import SettingsPage from './pages/SettingsPage'
 import TablesPage from './pages/TablesPage'
-import { formatDateTime } from './utils/formatDateTime'
+import PastOrdersPage from './pages/PastOrdersPage'
+import { formatDateTime, formatOrderDateTime } from './utils/formatDateTime'
 import './App.css'
 import './theme.css'
 
@@ -26,6 +27,7 @@ function App() {
   const [restaurantSlug, setRestaurantSlug] = useState('')
   const [restaurantName, setRestaurantName] = useState('')
   const [orders, setOrders] = useState([])
+  const [pastOrders, setPastOrders] = useState([])
   const [menuItems, setMenuItems] = useState([])
   const [categories, setCategories] = useState([])
   const [loading, setLoading] = useState(false)
@@ -86,30 +88,38 @@ function App() {
 
     const executeLoad = async () => {
       try {
-        const query = supabase
-          .from('live_orders')
-          .select('id, restaurant_id, total_price, status, items, created_at, order_code, table_id, note, restaurant_tables(table_number)')
-          .eq('restaurant_id', restaurantId)
-          .order('created_at', { ascending: false })
-          .limit(200)
+        const baseSelect = 'id, restaurant_id, total_price, status, items, created_at, order_code, table_id, note, restaurant_tables(table_number)'
 
-        const { data, error } = await fetchWithTimeout(query, API_TIMEOUT)
+        const [liveResult, pastResult] = await Promise.all([
+          fetchWithTimeout(
+            supabase.from('live_orders').select(baseSelect).eq('restaurant_id', restaurantId).eq('status', 'pending').order('created_at', { ascending: false }).limit(200),
+            API_TIMEOUT
+          ),
+          fetchWithTimeout(
+            supabase.from('live_orders').select(baseSelect + ', completed_at').eq('restaurant_id', restaurantId).in('status', ['accepted', 'confirmed', 'completed']).order('created_at', { ascending: false }).limit(200),
+            API_TIMEOUT
+          )
+        ])
 
         if (signal?.aborted) return { aborted: true }
 
-        if (error && error.code !== 'PGRST116') {
-          console.error('[Orders] Load error:', error)
-          return { error }
+        if ((liveResult.error && liveResult.error.code !== 'PGRST116') || (pastResult.error && pastResult.error.code !== 'PGRST116')) {
+          console.error('[Orders] Load error:', liveResult.error || pastResult.error)
+          return { error: liveResult.error || pastResult.error }
         }
 
-        const unresolvedIds = [...new Set((data || []).filter(o => o.table_id && !o.restaurant_tables?.table_number).map(o => o.table_id))]
+        const liveData = liveResult.data || []
+        const pastData = pastResult.data || []
+        const allOrders = [...liveData, ...pastData]
+        const unresolvedIds = [...new Set(allOrders.filter(o => o.table_id && !o.restaurant_tables?.table_number).map(o => o.table_id))]
+
         if (unresolvedIds.length > 0) {
           const tablesPromise = supabase.from('restaurant_tables').select('id, table_number').in('id', unresolvedIds)
           const { data: tr } = await fetchWithTimeout(tablesPromise, API_TIMEOUT)
-          if (!signal?.aborted) {
+          if (!signal?.aborted && tr) {
             const tMap = {}
-            ;(tr || []).forEach(t => { tMap[t.id] = t.table_number })
-            ;(data || []).forEach(o => {
+            tr.forEach(t => { tMap[t.id] = t.table_number })
+            allOrders.forEach(o => {
               if (o.table_id && tMap[o.table_id] !== undefined) {
                 o.restaurant_tables = { table_number: tMap[o.table_id] }
               }
@@ -119,7 +129,7 @@ function App() {
 
         if (signal?.aborted) return { aborted: true }
 
-        return { data: data || [] }
+        return { data: liveData, pastData }
       } catch (err) {
         console.error('[Orders] Exception:', err)
         return { error: err }
@@ -136,8 +146,10 @@ function App() {
     if (result.error) {
       setToast({ message: 'Failed to load orders', type: 'error' })
       setOrders([])
-    } else if (result.data) {
+      setPastOrders([])
+    } else if (result.data !== undefined) {
       setOrders(result.data)
+      setPastOrders(result.pastData || [])
     }
 
     if (isManualFetch) {
@@ -183,6 +195,7 @@ function App() {
       setRestaurantSlug('')
       setRestaurantName('')
       setOrders([])
+      setPastOrders([])
       setMenuItems([])
       setCategories([])
 
@@ -391,6 +404,7 @@ function App() {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'live_orders' },
         (payload) => {
           const newOrderId = payload.new.id
+          const newStatus = payload.new.status || 'pending'
           if (lastPlayedOrderRef.current === newOrderId) return
           lastPlayedOrderRef.current = newOrderId
 
@@ -406,32 +420,61 @@ function App() {
               if (tr) resolved = { ...freshOrder, restaurant_tables: { table_number: tr.table_number } }
             }
 
-            setOrders(prev => {
-              if (prev.some(o => o.id === newOrderId)) return prev.map(o => o.id === newOrderId ? { ...o, ...resolved } : o)
-              if (!isPopupMode && !ordersPopupOpenedRef.current) {
-                console.log('[Popup] New order arrived, auto-opening popup')
-                ordersPopupOpenedRef.current = true
-                setOrdersPopupOpen(true)
-              }
-              if (preferences.soundEnabled) playSound()
-              if (preferences.orderNotifications) {
-                const code = resolved.order_code || newOrderId.slice(0, 8).toUpperCase()
-                setNewOrderToast(`📦 New Order #${code}`)
-                setTimeout(() => setNewOrderToast(null), 4000)
-              }
-              return [resolved, ...prev].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-            })
+            if (newStatus === 'pending') {
+              setOrders(prev => {
+                if (prev.some(o => o.id === newOrderId)) return prev.map(o => o.id === newOrderId ? { ...o, ...resolved } : o)
+                if (!isPopupMode && !ordersPopupOpenedRef.current) {
+                  console.log('[Popup] New order arrived, auto-opening popup')
+                  ordersPopupOpenedRef.current = true
+                  setOrdersPopupOpen(true)
+                }
+                if (preferences.soundEnabled) playSound()
+                if (preferences.orderNotifications) {
+                  const code = resolved.order_code || newOrderId.slice(0, 8).toUpperCase()
+                  setNewOrderToast(`New Order #${code}`)
+                  setTimeout(() => setNewOrderToast(null), 4000)
+                }
+                return [resolved, ...prev].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+              })
+            } else {
+              setPastOrders(prev => {
+                if (prev.some(o => o.id === newOrderId)) return prev.map(o => o.id === newOrderId ? { ...o, ...resolved } : o)
+                return [resolved, ...prev].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+              })
+            }
           }
           fetchAndAddOrder()
         }
       )
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'live_orders' },
         (payload) => {
-          setOrders(prev => prev.map(o => o.id === payload.new.id ? { ...o, ...payload.new } : o))
+          const { id, status } = payload.new
+          setOrders(prev => {
+            const order = prev.find(o => o.id === id)
+            if (!order) return prev
+            if (status === 'pending') {
+              return prev.map(o => o.id === id ? { ...o, ...payload.new } : o)
+            }
+            setPastOrders(past => {
+              if (past.some(o => o.id === id)) return past.map(o => o.id === id ? { ...o, ...order, ...payload.new } : o)
+              return [{ ...order, ...payload.new }, ...past]
+            })
+            return prev.filter(o => o.id !== id)
+          })
+          setPastOrders(prev => {
+            if (prev.some(o => o.id === id)) {
+              if (status === 'pending') return prev.filter(o => o.id !== id)
+              return prev.map(o => o.id === id ? { ...o, ...payload.new } : o)
+            }
+            return prev
+          })
         }
       )
       .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'live_orders' },
-        (payload) => { setOrders(prev => prev.filter(o => o.id !== payload.old.id)) }
+        (payload) => {
+          setOrders(prev => prev.filter(o => o.id !== payload.old.id))
+          setPastOrders(prev => prev.filter(o => o.id !== payload.old.id))
+        }
       )
       .subscribe()
 
@@ -554,7 +597,15 @@ function App() {
   }
 
   const handleAccept = async (orderId) => {
-    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'accepted' } : o))
+    let movedOrder = null
+    setOrders(prev => {
+      const order = prev.find(o => o.id === orderId)
+      if (order) movedOrder = { ...order, status: 'accepted' }
+      return prev.filter(o => o.id !== orderId)
+    })
+    if (movedOrder) {
+      setPastOrders(prev => [movedOrder, ...prev])
+    }
 
     try {
       await supabase.from('live_orders').update({ status: 'accepted' }).eq('id', orderId)
@@ -562,6 +613,29 @@ function App() {
     } catch (err) {
       console.error('Error in handleAccept:', err)
       showToast('Failed to process order', 'error')
+    }
+  }
+
+  const handleConfirm = async (orderId) => {
+    setPastOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'confirmed' } : o))
+    try {
+      await supabase.from('live_orders').update({ status: 'confirmed' }).eq('id', orderId)
+      showToast('Order confirmed')
+    } catch (err) {
+      console.error('Error confirming order:', err)
+      showToast('Failed to confirm order', 'error')
+    }
+  }
+
+  const handleComplete = async (orderId) => {
+    const now = new Date().toISOString()
+    setPastOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'completed', completed_at: now } : o))
+    try {
+      await supabase.from('live_orders').update({ status: 'completed', completed_at: now }).eq('id', orderId)
+      showToast('Order completed')
+    } catch (err) {
+      console.error('Error completing order:', err)
+      showToast('Failed to complete order', 'error')
     }
   }
 
@@ -618,7 +692,7 @@ function App() {
         <OfflineBanner />
         <div className="popup-orders-window">
           <div className="popup-orders-header popup-drag-header">
-            <h2>📋 Live Orders</h2>
+            <h2>Live Orders</h2>
             <span className="popup-orders-badge">{orders.length} active</span>
           </div>
           <div className="popup-orders-body">
@@ -634,9 +708,9 @@ function App() {
               </div>
             ) : orders.length === 0 ? (
               <div className="popup-empty-state">
-                <div className="popup-empty-icon">📦</div>
-                <p>No orders</p>
-              </div>
+                  <div className="popup-empty-icon"></div>
+                  <p>No orders</p>
+                </div>
             ) : (
               <div className="popup-orders-list">
                 {orders.map(order => {
@@ -651,33 +725,44 @@ function App() {
                   return (
                     <div key={orderId} className="pos-order-card">
                       <div className="pos-card-header">
-                        <span className="pos-order-id">#{orderCode}</span>
-                        <span className="pos-table-badge">T{tableNum || '—'}</span>
-                        <span className="pos-order-time">{safeOrder.created_at ? <RunningTimer createdAt={safeOrder.created_at} /> : ''}</span>
-                        <span className="pos-total">₹{totalPrice}</span>
+                        <div className="pos-card-header-left">
+                          <span className="pos-order-id">#{orderCode}</span>
+                          <span className="pos-table-badge">Table {tableNum || '—'}</span>
+                        </div>
+                        <div className="pos-card-header-right">
+                          <span className="pos-order-date">{safeOrder.created_at ? formatOrderDateTime(safeOrder.created_at) : ''}</span>
+                        </div>
                       </div>
 
-                      {safeOrder.note && (
-                        <div className="pos-order-note">{safeOrder.note}</div>
-                      )}
-
                       <div className="pos-items">
-                        {items.map((item, i) => (
+                        {items.length > 0 ? items.map((item, i) => (
                           <div key={i} className="pos-item">
                             <span className="pos-item-name">{item?.name || 'Item'}</span>
                             <span className="pos-item-qty">x{item?.quantity != null ? item.quantity : 1}</span>
+                            <span className="pos-item-price">₹{((item?.price ?? 0) * (item?.quantity ?? 1)).toFixed(0)}</span>
                           </div>
-                        ))}
-                        {items.length === 0 && (
+                        )) : (
                           <div className="pos-item">
                             <span className="pos-item-name" style={{ color: '#555', fontStyle: 'italic' }}>No items</span>
                           </div>
                         )}
                       </div>
 
+                      {safeOrder.note && (
+                        <div className="pos-order-note">
+                          <span className="pos-note-label">Note</span>
+                          <span>{safeOrder.note}</span>
+                        </div>
+                      )}
+
+                      <div className="pos-total-row">
+                        <span className="pos-total-label">Total</span>
+                        <span className="pos-total-amount">₹{totalPrice}</span>
+                      </div>
+
                       <div className="pos-card-footer">
                         {status === 'accepted' ? (
-                          <span className="pos-accepted-label">✓ Accepted</span>
+                          <span className="pos-accepted-label">Accepted</span>
                         ) : (
                           <>
                             <button className="pos-decline-btn" onClick={() => handleDecline(orderId, orderCode)}>Decline</button>
@@ -708,16 +793,17 @@ function App() {
 
       <header className="header">
         <button className="menu-btn" onClick={() => setSidebarOpen(true)}>☰</button>
-        <h2 className="header-title">
-          {activeTab === 'analytics' && '📊 Analytics'}
-          {activeTab === 'menu_items' && '🍽️ Menu Items'}
-          {activeTab === 'categories' && '📂 Categories'}
-          {activeTab === 'tables' && '🪑 Tables'}
-          {activeTab === 'settings' && '⚙️ Settings'}
-        </h2>
+<h2 className="header-title">
+  {activeTab === 'analytics' && 'Analytics'}
+  {activeTab === 'menu_items' && 'Menu Items'}
+  {activeTab === 'categories' && 'Categories'}
+  {activeTab === 'tables' && 'Tables'}
+  {activeTab === 'settings' && 'Settings'}
+  {activeTab === 'past-orders' && 'Past Orders'}
+</h2>
         <div className="profile-wrapper" ref={profileRef}>
           <div className="profile-icon" onClick={() => setShowProfile(!showProfile)} title={userFullName}>
-            {userFullName ? userFullName.charAt(0).toUpperCase() : '👤'}
+            {userFullName ? userFullName.charAt(0).toUpperCase() : '?'}
           </div>
           {showProfile && (
             <div className="profile-dropdown">
@@ -869,6 +955,8 @@ function App() {
         {activeTab === 'settings' && <SettingsPage preferences={preferences} setPreferences={setPreferences} onToast={showToast} restaurantId={restaurantId} />}
 
         {activeTab === 'featured' && <FeaturedItemsPanel restaurantId={restaurantId} />}
+
+        {activeTab === 'past-orders' && <PastOrdersPage pastOrders={pastOrders} onToast={showToast} />}
       </main>
 
       <Sidebar isOpen={sidebarOpen} onClose={closeSidebar} activeTab={activeTab} setActiveTab={setActiveTab} />
@@ -904,7 +992,7 @@ function App() {
                 </div>
               ) : orders.length === 0 ? (
                 <div className="popup-empty-state">
-                  <div className="popup-empty-icon">📦</div>
+                  <div className="popup-empty-icon"></div>
                   <p>No orders</p>
                 </div>
               ) : (
@@ -921,33 +1009,44 @@ function App() {
                     return (
                       <div key={orderId} className="pos-order-card">
                         <div className="pos-card-header">
-                          <span className="pos-order-id">#{orderCode}</span>
-                          <span className="pos-table-badge">T{tableNum || '—'}</span>
-                          <span className="pos-order-time">{safeOrder.created_at ? <RunningTimer createdAt={safeOrder.created_at} /> : ''}</span>
-                          <span className="pos-total">₹{totalPrice}</span>
+                          <div className="pos-card-header-left">
+                            <span className="pos-order-id">#{orderCode}</span>
+                            <span className="pos-table-badge">Table {tableNum || '—'}</span>
+                          </div>
+                          <div className="pos-card-header-right">
+                            <span className="pos-order-date">{safeOrder.created_at ? formatOrderDateTime(safeOrder.created_at) : ''}</span>
+                          </div>
                         </div>
 
-                        {safeOrder.note && (
-                          <div className="pos-order-note">{safeOrder.note}</div>
-                        )}
-
                         <div className="pos-items">
-                          {items.map((item, i) => (
+                          {items.length > 0 ? items.map((item, i) => (
                             <div key={i} className="pos-item">
                               <span className="pos-item-name">{item?.name || 'Item'}</span>
                               <span className="pos-item-qty">x{item?.quantity != null ? item.quantity : 1}</span>
+                              <span className="pos-item-price">₹{((item?.price ?? 0) * (item?.quantity ?? 1)).toFixed(0)}</span>
                             </div>
-                          ))}
-                          {items.length === 0 && (
+                          )) : (
                             <div className="pos-item">
                               <span className="pos-item-name" style={{ color: '#555', fontStyle: 'italic' }}>No items</span>
                             </div>
                           )}
                         </div>
 
+                        {safeOrder.note && (
+                          <div className="pos-order-note">
+                            <span className="pos-note-label">Note</span>
+                            <span>{safeOrder.note}</span>
+                          </div>
+                        )}
+
+                        <div className="pos-total-row">
+                          <span className="pos-total-label">Total</span>
+                          <span className="pos-total-amount">₹{totalPrice}</span>
+                        </div>
+
                         <div className="pos-card-footer">
                           {status === 'accepted' ? (
-                            <span className="pos-accepted-label">✓ Accepted</span>
+                            <span className="pos-accepted-label">Accepted</span>
                           ) : (
                             <>
                               <button className="pos-decline-btn" onClick={() => handleDecline(orderId, orderCode)}>Decline</button>
@@ -1004,6 +1103,12 @@ function Sidebar({ isOpen, onClose, activeTab, setActiveTab }) {
             🎯 Featured
           </button>
           <button
+            className={`nav-item ${activeTab === 'past-orders' ? 'active' : ''}`}
+            onClick={() => { setActiveTab('past-orders'); onClose(); }}
+          >
+            📋 Past Orders
+          </button>
+          <button
             className={`nav-item ${activeTab === 'tables' ? 'active' : ''}`}
             onClick={() => { setActiveTab('tables'); onClose(); }}
           >
@@ -1055,27 +1160,6 @@ class PopupErrorBoundary extends React.Component {
     }
     return this.props.children
   }
-}
-
-function RunningTimer({ createdAt }) {
-  const [elapsed, setElapsed] = useState('')
-
-  useEffect(() => {
-    const update = () => {
-      const now = new Date()
-      const start = new Date(createdAt)
-      const diff = Math.floor((now - start) / 1000)
-      if (diff < 60) setElapsed(`${diff}s ago`)
-      else if (diff < 3600) setElapsed(`${Math.floor(diff / 60)}m ago`)
-      else setElapsed(`${Math.floor(diff / 3600)}h ${Math.floor((diff % 3600) / 60)}m ago`)
-    }
-
-    update()
-    const interval = setInterval(update, 1000)
-    return () => clearInterval(interval)
-  }, [createdAt])
-
-  return <span>{elapsed}</span>
 }
 
 export default App
