@@ -7522,5 +7522,37 @@ body {
   -webkit-app-region: drag;
 }
 
+.popup-no-drag {
+  -webkit-app-region: no-drag;
+}
+
+.popup-resize-handle {
+  position: fixed;
+  bottom: 0;
+  right: 0;
+  width: 20px;
+  height: 20px;
+  cursor: nwse-resize;
+  z-index: 10;
+  pointer-events: auto;
+}
+
+.popup-resize-handle::after {
+  content: '';
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  width: 10px;
+  height: 10px;
+  border-right: 2px solid rgba(255,255,255,0.15);
+  border-bottom: 2px solid rgba(255,255,255,0.15);
+  border-radius: 0 0 3px 0;
+}
+
+.popup-resize-handle:hover::after {
+  border-right-color: rgba(255,255,255,0.4);
+  border-bottom-color: rgba(255,255,255,0.4);
+}
+
 /* End of PC Analytics Dashboard */
 

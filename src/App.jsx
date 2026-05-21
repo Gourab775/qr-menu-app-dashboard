@@ -614,6 +614,60 @@ function App() {
     }
   }, [isPopupMode, orders])
 
+  // Persist popup window bounds via localStorage (works in both Electron and browser)
+  useEffect(() => {
+    if (!isPopupMode) return;
+
+    const loadBounds = async () => {
+      try {
+        let bounds = null;
+        if (window.electronAPI?.getPopupBounds) {
+          bounds = await window.electronAPI.getPopupBounds();
+        } else {
+          const saved = localStorage.getItem('popup_window_bounds');
+          if (saved) bounds = JSON.parse(saved);
+        }
+        if (bounds) {
+          console.log('[Popup] Restored bounds:', bounds);
+        }
+      } catch (_) {}
+    };
+    loadBounds();
+
+    let saveTimer = null;
+    const handleResize = () => {
+      if (saveTimer) clearTimeout(saveTimer);
+      saveTimer = setTimeout(() => {
+        const b = { width: window.outerWidth, height: window.outerHeight, x: window.screenX, y: window.screenY };
+        try {
+          localStorage.setItem('popup_window_bounds', JSON.stringify(b));
+          if (window.electronAPI?.savePopupBounds) {
+            window.electronAPI.savePopupBounds(b);
+          }
+        } catch (_) {}
+      }, 300);
+    };
+
+    window.addEventListener('resize', handleResize);
+    // Poll for position changes (move events not available in web)
+    let moveCheckTimer = null;
+    let lastX = window.screenX, lastY = window.screenY;
+    const checkMove = () => {
+      if (window.screenX !== lastX || window.screenY !== lastY) {
+        lastX = window.screenX; lastY = window.screenY;
+        handleResize();
+      }
+      moveCheckTimer = setTimeout(checkMove, 500);
+    };
+    moveCheckTimer = setTimeout(checkMove, 500);
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      if (saveTimer) clearTimeout(saveTimer);
+      if (moveCheckTimer) clearTimeout(moveCheckTimer);
+    };
+  }, [isPopupMode])
+
   const handleSaveItem = useCallback(async (id, updates) => {
     const prevItems = [...menuItems]
     setMenuItems(prev => prev.map(item => item.id === id ? { ...item, ...updates } : item))
@@ -796,9 +850,9 @@ function App() {
         )}
         <OfflineBanner />
         <div className="popup-orders-window">
-          <div className="popup-orders-header popup-drag-header">
-            <div className="popup-header-left" ref={popupMenuRef}>
-              <button className="popup-hamburger-btn" onClick={() => setPopupMenuOpen(!popupMenuOpen)}>
+          <div className="popup-orders-header popup-drag-header" onDoubleClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
+            <div className="popup-header-left popup-no-drag" ref={popupMenuRef}>
+              <button className="popup-hamburger-btn popup-no-drag" onClick={() => setPopupMenuOpen(!popupMenuOpen)}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                   <line x1="3" y1="6" x2="21" y2="6" />
                   <line x1="3" y1="12" x2="21" y2="12" />
@@ -965,6 +1019,7 @@ function App() {
               )
             )}
           </div>
+          <div className="popup-resize-handle popup-no-drag"></div>
         </div>
       </div>
     )

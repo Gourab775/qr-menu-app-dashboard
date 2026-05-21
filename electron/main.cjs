@@ -1,5 +1,6 @@
-const { app, BrowserWindow, globalShortcut, shell, net, session, Menu } = require('electron');
+const { app, BrowserWindow, globalShortcut, shell, net, session, Menu, ipcMain } = require('electron');
 const path = require('path');
+const fs = require('fs');
 
 const APP_URL = 'https://qr-menu-app-dashboard.vercel.app/';
 const CONNECTIVITY_CHECK_URL = 'https://clients3.google.com/generate_204';
@@ -10,6 +11,23 @@ let quickWindow = null;
 let splashWindow = null;
 let connectivityInterval = null;
 let wasOffline = false;
+
+const BOUNDS_PATH = path.join(app.getPath('userData'), 'popup-bounds.json');
+
+function loadPopupBounds() {
+  try {
+    if (fs.existsSync(BOUNDS_PATH)) {
+      return JSON.parse(fs.readFileSync(BOUNDS_PATH, 'utf-8'));
+    }
+  } catch (_) {}
+  return null;
+}
+
+function savePopupBounds(bounds) {
+  try {
+    fs.writeFileSync(BOUNDS_PATH, JSON.stringify(bounds));
+  } catch (_) {}
+}
 
 function createSplashWindow() {
   splashWindow = new BrowserWindow({
@@ -94,12 +112,20 @@ function createMainWindow() {
 }
 
 function createQuickWindow() {
+  const savedBounds = loadPopupBounds();
+
   quickWindow = new BrowserWindow({
-    width: 380,
-    height: 560,
-    center: true,
+    width: savedBounds?.width || 400,
+    height: savedBounds?.height || 600,
+    minWidth: 320,
+    minHeight: 420,
+    x: savedBounds?.x,
+    y: savedBounds?.y,
+    center: !savedBounds,
     alwaysOnTop: true,
-    resizable: false,
+    resizable: true,
+    maximizable: false,
+    fullscreenable: false,
     frame: false,
     show: false,
     title: 'QR Menu Dashboard',
@@ -111,14 +137,29 @@ function createQuickWindow() {
       sandbox: true,
     },
   });
+
+  const debouncedSaveBounds = (() => {
+    let timer = null;
+    return () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        timer = null;
+        if (quickWindow && !quickWindow.isDestroyed()) {
+          savePopupBounds(quickWindow.getBounds());
+        }
+      }, 200);
+    };
+  })();
+
+  quickWindow.on('resize', debouncedSaveBounds);
+  quickWindow.on('move', debouncedSaveBounds);
+
   const popupUrl = new URL(APP_URL);
   popupUrl.searchParams.set('mode', 'popup-orders');
   quickWindow.loadURL(popupUrl.toString());
 
   quickWindow.webContents.on('did-finish-load', () => {
     if (!quickWindow || quickWindow.isDestroyed()) return;
-    // Drag bar is handled by the React app's Live Orders header (-webkit-app-region: drag)
-    // No CSS/JS injection needed for the dedicated orders popup window
   });
 
   quickWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -152,7 +193,6 @@ function toggleQuickWindow() {
     quickWindow.hide();
   } else {
     quickWindow.show();
-    quickWindow.center();
     quickWindow.focus();
   }
 }
@@ -220,6 +260,12 @@ app.on('session-created', (ses) => {
     const allowed = ['clipboard-read', 'clipboard-sanitized-write'];
     callback(allowed.includes(permission));
   });
+});
+
+ipcMain.handle('get-popup-bounds', () => loadPopupBounds());
+
+ipcMain.on('save-popup-bounds', (_event, bounds) => {
+  savePopupBounds(bounds);
 });
 
 app.on('window-all-closed', () => {
