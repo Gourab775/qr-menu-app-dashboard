@@ -1010,7 +1010,6 @@ function App() {
                         </div>
                         <div className="pos-card-footer">
                           <span className="pos-past-status-badge accepted">Accepted</span>
-                          <button className="pos-confirm-btn" onClick={() => handleConfirm(orderId)}>Confirm</button>
                         </div>
                       </div>
                     )

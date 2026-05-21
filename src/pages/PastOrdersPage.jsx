@@ -1,15 +1,18 @@
 import React, { useState, useMemo } from 'react'
-import { supabase } from '../lib/supabase'
 import { formatDate, formatTime } from '../utils/formatDateTime'
 import './PastOrdersPage.css'
 
 const STATUS_CONFIG = {
-  accepted: { label: 'Accepted', color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.12)' }
+  pending:     { label: 'Pending',     color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.12)' },
+  accepted:    { label: 'Accepted',    color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.12)' },
+  confirmed:   { label: 'Confirmed',   color: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.12)' },
+  completed:   { label: 'Completed',   color: '#22c55e', bg: 'rgba(34, 197, 94, 0.12)' },
+  cancelled:   { label: 'Cancelled',   color: '#ef4444', bg: 'rgba(239, 68, 68, 0.12)' },
+  declined:    { label: 'Declined',    color: '#ef4444', bg: 'rgba(239, 68, 68, 0.12)' },
 }
 
 function PastOrdersPage({ pastOrders, loading, onToast }) {
   const [timeFilter, setTimeFilter] = useState('today')
-  const [actionLoading, setActionLoading] = useState(null)
 
   const filteredOrders = useMemo(() => {
     const now = new Date()
@@ -24,40 +27,12 @@ function PastOrdersPage({ pastOrders, loading, onToast }) {
     })
   }, [pastOrders, timeFilter])
 
-  const handleAction = async (orderId, newStatus) => {
-    if (actionLoading) return
-    setActionLoading(orderId)
-    try {
-      const { error } = await supabase.from('live_orders').update({ status: newStatus }).eq('id', orderId)
-      if (error) throw error
-      if (onToast) onToast(`Order ${newStatus === 'completed' ? 'completed' : newStatus === 'confirmed' ? 'confirmed' : 'updated'}`, 'success')
-    } catch (err) {
-      console.error(`Error updating order ${orderId}:`, err)
-      if (onToast) onToast('Failed to update order', 'error')
-    } finally {
-      setActionLoading(null)
-    }
-  }
-
   const getStatusBadge = (status) => {
     const cfg = STATUS_CONFIG[status] || { label: status, color: '#666', bg: 'rgba(255,255,255,0.05)' }
     return (
       <span className="past-status-badge" style={{ background: cfg.bg, color: cfg.color, borderColor: cfg.color }}>
         {cfg.label}
       </span>
-    )
-  }
-
-  const getNextActions = (order) => {
-    if (order.status !== 'accepted') return null
-    return (
-      <button
-        className="past-action-btn past-action-confirm"
-        onClick={() => handleAction(order.id, 'confirmed')}
-        disabled={actionLoading === order.id}
-      >
-        Confirm
-      </button>
     )
   }
 
@@ -185,7 +160,6 @@ function PastOrdersPage({ pastOrders, loading, onToast }) {
                   </div>
                   <div className="past-card-footer-row">
                     {getStatusBadge(order.status)}
-                    {getNextActions(order)}
                   </div>
                 </div>
               </div>
