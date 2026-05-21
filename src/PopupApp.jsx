@@ -23,6 +23,15 @@ function PopupApp() {
   const [toast, setToast] = useState(null)
   const [isDragging, setIsDragging] = useState(false)
   const [isResizing, setIsResizing] = useState(false)
+  const [activeSubTab, setActiveSubTab] = useState('orders')
+  const [preferences, setPreferences] = useState(() => {
+    try {
+      const saved = localStorage.getItem('popup_preferences')
+      return saved ? JSON.parse(saved) : { soundEnabled: true, orderNotifications: true, notificationSound: 'beep' }
+    } catch {
+      return { soundEnabled: true, orderNotifications: true, notificationSound: 'beep' }
+    }
+  })
 
   const popupRef = useRef(null)
   const abortControllerRef = useRef(null)
@@ -440,7 +449,7 @@ function PopupApp() {
             <span></span>
             <span></span>
           </button>
-          <span className="popup-titlebar-title">Orders</span>
+          <span className="popup-titlebar-title">{activeView === 'live' ? 'Live Orders' : 'Past Orders'}</span>
         </div>
         <div className="popup-titlebar-right">
           <button
@@ -464,7 +473,7 @@ function PopupApp() {
           <div className="popup-menu-dropdown">
             <button
               className={`popup-menu-item ${activeView === 'live' ? 'active' : ''}`}
-              onClick={() => { setActiveView('live'); setMenuOpen(false) }}
+              onClick={() => { setActiveView('live'); setActiveSubTab('orders'); setMenuOpen(false) }}
             >
               Live Orders
               {orders.length > 0 && <span className="popup-menu-badge">{orders.length}</span>}
@@ -480,23 +489,29 @@ function PopupApp() {
       )}
 
       <div className="popup-content">
-        <div className="popup-tabs">
-          <button
-            className={`popup-tab ${activeView === 'live' ? 'active' : ''}`}
-            onClick={() => setActiveView('live')}
-          >
-            Live Orders
-            {orders.length > 0 && <span className="popup-tab-badge">{orders.length}</span>}
-          </button>
-          <button
-            className={`popup-tab ${activeView === 'past' ? 'active' : ''}`}
-            onClick={() => setActiveView('past')}
-          >
-            Past Orders
-          </button>
-        </div>
-
         {activeView === 'live' ? (
+          <div className="popup-subtabs">
+            <button
+              className={`popup-subtab ${activeSubTab === 'orders' ? 'active' : ''}`}
+              onClick={() => setActiveSubTab('orders')}
+            >
+              Live Orders
+              {orders.length > 0 && <span className="popup-tab-badge">{orders.length}</span>}
+            </button>
+            <button
+              className={`popup-subtab ${activeSubTab === 'notifications' ? 'active' : ''}`}
+              onClick={() => setActiveSubTab('notifications')}
+            >
+              Notifications
+            </button>
+          </div>
+        ) : (
+          <div className="popup-subtabs">
+            <div className="popup-subtab-label">Past Orders</div>
+          </div>
+        )}
+
+        {activeView === 'live' && activeSubTab === 'orders' ? (
           <div className="popup-orders-area">
             {!firstOrdersFetchDone.current && loading ? (
               <div className="popup-loading-grid">
@@ -570,6 +585,68 @@ function PopupApp() {
                 </div>
               </>
             )}
+          </div>
+        ) : activeView === 'live' && activeSubTab === 'notifications' ? (
+          <div className="popup-orders-area">
+            <div className="popup-notifications-panel">
+              <h3 className="popup-notifications-title">Notification Settings</h3>
+
+              <div className="popup-notif-row">
+                <div className="popup-notif-info">
+                  <span className="popup-notif-label">Sound Alerts</span>
+                  <span className="popup-notif-desc">Play sound when a new order arrives</span>
+                </div>
+                <button
+                  className={`popup-toggle ${preferences.soundEnabled ? 'active' : ''}`}
+                  onClick={() => setPreferences(prev => {
+                    const next = { ...prev, soundEnabled: !prev.soundEnabled }
+                    try { localStorage.setItem('popup_preferences', JSON.stringify(next)) } catch {}
+                    return next
+                  })}
+                >
+                  <span className="popup-toggle-knob" />
+                </button>
+              </div>
+
+              {preferences.soundEnabled && (
+                <div className="popup-notif-row">
+                  <div className="popup-notif-info">
+                    <span className="popup-notif-label">Notification Sound</span>
+                    <span className="popup-notif-desc">Choose the alert tone</span>
+                  </div>
+                  <select
+                    className="popup-notif-select"
+                    value={preferences.notificationSound}
+                    onChange={(e) => setPreferences(prev => {
+                      const next = { ...prev, notificationSound: e.target.value }
+                      try { localStorage.setItem('popup_preferences', JSON.stringify(next)) } catch {}
+                      return next
+                    })}
+                  >
+                    {SOUND_OPTIONS.map(s => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <div className="popup-notif-row">
+                <div className="popup-notif-info">
+                  <span className="popup-notif-label">Order Notifications</span>
+                  <span className="popup-notif-desc">Show desktop alerts for new orders</span>
+                </div>
+                <button
+                  className={`popup-toggle ${preferences.orderNotifications ? 'active' : ''}`}
+                  onClick={() => setPreferences(prev => {
+                    const next = { ...prev, orderNotifications: !prev.orderNotifications }
+                    try { localStorage.setItem('popup_preferences', JSON.stringify(next)) } catch {}
+                    return next
+                  })}
+                >
+                  <span className="popup-toggle-knob" />
+                </button>
+              </div>
+            </div>
           </div>
         ) : (
           <div className="popup-orders-area">

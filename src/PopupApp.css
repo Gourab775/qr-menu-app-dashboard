@@ -594,3 +594,151 @@
   height: 10px;
   cursor: se-resize;
 }
+
+.popup-subtabs {
+  display: flex;
+  gap: 0;
+  background: #08080e;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  min-height: 34px;
+  flex-shrink: 0;
+}
+
+.popup-subtab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 8px;
+  background: none;
+  border: none;
+  color: #555;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+  position: relative;
+  -webkit-app-region: no-drag;
+}
+
+.popup-subtab:hover {
+  color: #aaa;
+  background: rgba(255,255,255,0.02);
+}
+
+.popup-subtab.active {
+  color: #fff;
+}
+
+.popup-subtab.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 20%;
+  right: 20%;
+  height: 2px;
+  background: #3b82f6;
+  border-radius: 2px 2px 0 0;
+}
+
+.popup-subtab-label {
+  flex: 1;
+  text-align: center;
+  padding: 7px 8px;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.popup-notifications-panel {
+  padding: 4px 0;
+}
+
+.popup-notifications-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: #71717a;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  margin-bottom: 4px;
+}
+
+.popup-notif-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+}
+
+.popup-notif-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.popup-notif-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #d4d4d8;
+}
+
+.popup-notif-desc {
+  font-size: 10px;
+  color: #52525b;
+}
+
+.popup-toggle {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  border-radius: 10px;
+  background: #222;
+  border: none;
+  cursor: pointer;
+  transition: background 0.2s;
+  flex-shrink: 0;
+  -webkit-app-region: no-drag;
+  padding: 0;
+}
+
+.popup-toggle.active {
+  background: #22c55e;
+}
+
+.popup-toggle-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #555;
+  transition: transform 0.2s, background 0.2s;
+}
+
+.popup-toggle.active .popup-toggle-knob {
+  transform: translateX(16px);
+  background: #fff;
+}
+
+.popup-notif-select {
+  background: #1a1a1a;
+  color: #d4d4d8;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 6px;
+  padding: 5px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  outline: none;
+  -webkit-app-region: no-drag;
+  min-width: 120px;
+}
+
+.popup-notif-select:focus {
+  border-color: rgba(255,255,255,0.15);
+}
