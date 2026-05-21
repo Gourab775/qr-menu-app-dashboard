@@ -15,7 +15,6 @@ import SettingsPage from './pages/SettingsPage'
 import TablesPage from './pages/TablesPage'
 import PastOrdersPage from './pages/PastOrdersPage'
 import { formatDateTime, formatOrderDateTime } from './utils/formatDateTime'
-import FloatingOrderPopup from './components/FloatingOrderPopup'
 import './App.css'
 import './theme.css'
 
@@ -57,7 +56,6 @@ function App() {
   const profileRef = useRef(null)
   const abortControllerRef = useRef(null)
   const ordersLoadingRef = useRef(false)
-  const floatingPopupRef = useRef(null)
 
   const isMountedRef = useRef(true)
   const logoutRef = useRef(false)
@@ -519,18 +517,27 @@ function App() {
 
 
 
+  const openOrdersPopup = useCallback(() => {
+    if (window.electronAPI?.showPopup) {
+      window.electronAPI.showPopup()
+    } else {
+      const baseUrl = window.location.origin + window.location.pathname.replace(/\/+$/, '')
+      const popupUrl = baseUrl + '?mode=popup-orders'
+      const popup = window.open(popupUrl, 'live-orders-popup', 'width=440,height=700,menubar=no,toolbar=no,location=no,status=no')
+      if (popup) popup.focus()
+    }
+  }, [])
+
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.ctrlKey && e.code === 'Space') {
         e.preventDefault()
-        if (floatingPopupRef.current) {
-          floatingPopupRef.current.toggle()
-        }
+        openOrdersPopup()
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [])
+  }, [openOrdersPopup])
 
   // [Polling disabled - auto-decline background check removed]
 
@@ -884,7 +891,7 @@ function App() {
         {activeTab === 'past-orders' && <PastOrdersPage pastOrders={pastOrders} loading={loading} onToast={showToast} />}
       </main>
 
-      <Sidebar isOpen={sidebarOpen} onClose={closeSidebar} activeTab={activeTab} setActiveTab={setActiveTab} onOpenOrders={() => floatingPopupRef.current?.open()} />
+      <Sidebar isOpen={sidebarOpen} onClose={closeSidebar} activeTab={activeTab} setActiveTab={setActiveTab} onOpenOrders={openOrdersPopup} />
 
       {showAddModal && (
         <AddItemModal
@@ -893,8 +900,6 @@ function App() {
           categories={categories}
         />
       )}
-
-      <FloatingOrderPopup ref={floatingPopupRef} />
 
     </div>
   )
