@@ -23,7 +23,7 @@ function loadFromStorage(key, fallback) {
 
 const FloatingOrderPopup = forwardRef(function FloatingOrderPopup({ standalone = false, visible = true, onVisibilityChange }, ref) {
   const { session, restaurantId } = useAuth()
-  const [mode, setMode] = useState(standalone ? 'popup' : 'bubble')
+  const [mode, setMode] = useState(standalone ? 'popup' : 'closed')
   const [activeView, setActiveView] = useState('live')
   const [menuOpen, setMenuOpen] = useState(false)
   const [orders, setOrders] = useState([])
@@ -679,16 +679,15 @@ const FloatingOrderPopup = forwardRef(function FloatingOrderPopup({ standalone =
     </div>
   )
 
-  if (standalone) {
+  if (standalone || mode === 'popup') {
     return renderPopup()
   }
 
-  return (
-    <>
-      <div style={{ display: mode === 'popup' ? 'block' : 'none' }}>{renderPopup()}</div>
-      <div style={{ display: mode === 'bubble' ? 'block' : 'none' }}>{renderBubble()}</div>
-    </>
-  )
+  if (mode === 'bubble') {
+    return renderBubble()
+  }
+
+  return null
 })
 
 export default FloatingOrderPopup
