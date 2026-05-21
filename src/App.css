@@ -5,25 +5,25 @@
 }
 
 :root {
-  --bg: #0a0a0f;
-  --card: #12121a;
-  --card-glass: rgba(26, 26, 36, 0.8);
-  --border: #2a2a3a;
+  --bg: #000;
+  --card: #0d0d0d;
+  --card-glass: rgba(13, 13, 13, 0.95);
+  --border: transparent;
   --text: #ffffff;
-  --text-muted: #888;
+  --text-muted: #666;
   --green: #22c55e;
   --red: #ef4444;
   --orange: #f97316;
   --blue: #3b82f6;
   --purple: #8b5cf6;
-  --glass-bg: rgba(26, 26, 36, 0.85);
-  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-bg: rgba(13, 13, 13, 0.9);
+  --glass-border: transparent;
   --glow-blue: rgba(59, 130, 246, 0.4);
   --glow-orange: rgba(249, 115, 22, 0.4);
 }
 
 body {
-  background: var(--bg);
+  background: #000;
   color: var(--text);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   line-height: 1.5;
@@ -31,6 +31,7 @@ body {
 
 .app {
   min-height: 100vh;
+  background: #000;
 }
 
 /* Header */
@@ -43,8 +44,8 @@ body {
   justify-content: space-between;
   align-items: center;
   padding: 10px 20px;
-  background: var(--card);
-  border-bottom: 1px solid var(--border);
+  background: #000;
+  border-bottom: none;
   z-index: 100;
 }
 
@@ -270,6 +271,53 @@ body {
   padding: 0 16px;
   background: #000;
   min-height: calc(100vh - 60px);
+}
+
+.orders-section .order-card-new {
+  border: none;
+  background: #0d0d0d;
+  box-shadow: none;
+}
+
+.orders-section .order-card-new::before {
+  display: none;
+}
+
+.orders-section .order-card-new:hover {
+  border: none;
+  box-shadow: none;
+  transform: none;
+}
+
+.orders-section .order-card-new.accepted,
+.orders-section .order-card-new.warning,
+.orders-section .order-card-new.timeout {
+  border: none;
+}
+
+.orders-section .card-top-bar {
+  border-bottom: none;
+  padding-bottom: 8px;
+}
+
+.orders-section .card-main-info {
+  background: none;
+  padding: 8px 0;
+}
+
+.orders-section .item-row-new {
+  border-bottom: none;
+  padding: 6px 0;
+}
+
+.orders-section .card-actions-new {
+  border-top: none;
+  padding-top: 8px;
+}
+
+.orders-section .acceptance-confirmed {
+  border: none;
+  background: rgba(34, 197, 94, 0.08);
 }
 
 .orders-grid {

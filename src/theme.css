@@ -51,7 +51,7 @@
    ========================================= */
 body {
   font-family: 'Outfit', system-ui, -apple-system, sans-serif !important;
-  background-color: var(--bg) !important;
+  background-color: #000 !important;
   color: var(--text) !important;
   -webkit-font-smoothing: antialiased;
   letter-spacing: -0.01em;
@@ -63,16 +63,16 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--bg);
+  background: #000;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--border);
+  background: #222;
   border-radius: var(--radius-md);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--text-muted);
+  background: #444;
 }
 
 button, input, select, textarea {
@@ -95,12 +95,9 @@ button, input, select, textarea {
 }
 
 .header {
-  background: var(--card-glass) !important;
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border-bottom: 1px solid var(--border) !important;
+  background: #000 !important;
+  border-bottom: none !important;
   padding: 10px 20px !important;
-  box-shadow: var(--shadow-sm);
   transition: all var(--trans-smooth);
 }
 
