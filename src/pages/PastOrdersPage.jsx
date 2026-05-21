@@ -11,10 +11,12 @@ const STATUS_CONFIG = {
   declined:    { label: 'Declined',    color: '#ef4444', bg: 'rgba(239, 68, 68, 0.12)' },
 }
 
-function PastOrdersPage({ pastOrders, loading, onToast }) {
+function PastOrdersPage({ pastOrders, loading, onToast, hideFilters }) {
   const [timeFilter, setTimeFilter] = useState('today')
 
   const filteredOrders = useMemo(() => {
+    if (hideFilters) return pastOrders
+
     const now = new Date()
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0)
     const weekAgo = new Date(todayStart.getTime() - 7 * 24 * 60 * 60 * 1000)
@@ -25,7 +27,7 @@ function PastOrdersPage({ pastOrders, loading, onToast }) {
       if (timeFilter === 'week') return date >= weekAgo
       return true
     })
-  }, [pastOrders, timeFilter])
+  }, [pastOrders, timeFilter, hideFilters])
 
   const getStatusBadge = (status) => {
     const cfg = STATUS_CONFIG[status] || { label: status, color: '#666', bg: 'rgba(255,255,255,0.05)' }
@@ -36,43 +38,49 @@ function PastOrdersPage({ pastOrders, loading, onToast }) {
     )
   }
 
-  const orderCounts = {
-    total: pastOrders.length,
-    today: filteredOrders.length
-  }
+  const displayOrders = hideFilters ? pastOrders : filteredOrders
 
   return (
     <div className="past-orders-page">
-      <div className="past-orders-header">
-        <div className="past-orders-title-row">
-          <h2 className="past-orders-title">Past Orders</h2>
-          <div className="past-orders-stats">
-            <span className="past-stat-badge">{pastOrders.length} total</span>
-            <span className="past-stat-badge past-stat-today">{orderCounts.today} shown</span>
+      {hideFilters ? (
+        <div className="past-orders-header-simple">
+          <span className="past-header-label">Past Orders</span>
+          <span className="past-header-total">Total: {pastOrders.length}</span>
+        </div>
+      ) : (
+        <div className="past-orders-header">
+          <div className="past-orders-title-row">
+            <h2 className="past-orders-title">Past Orders</h2>
+            <div className="past-orders-stats">
+              <span className="past-stat-badge">{pastOrders.length} total</span>
+              <span className="past-stat-badge past-stat-today">{filteredOrders.length} shown</span>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
-      <div className="past-filter-bar">
-        <button
-          className={`past-filter-btn ${timeFilter === 'today' ? 'active' : ''}`}
-          onClick={() => setTimeFilter('today')}
-        >
-          Today
-        </button>
-        <button
-          className={`past-filter-btn ${timeFilter === 'week' ? 'active' : ''}`}
-          onClick={() => setTimeFilter('week')}
-        >
-          Last 7 Days
-        </button>
-        <button
-          className={`past-filter-btn ${timeFilter === 'all' ? 'active' : ''}`}
-          onClick={() => setTimeFilter('all')}
-        >
-          All
-        </button>
-      </div>
+      {!hideFilters && (
+        <div className="past-filter-bar">
+          <button
+            className={`past-filter-btn ${timeFilter === 'today' ? 'active' : ''}`}
+            onClick={() => setTimeFilter('today')}
+          >
+            Today
+          </button>
+          <button
+            className={`past-filter-btn ${timeFilter === 'week' ? 'active' : ''}`}
+            onClick={() => setTimeFilter('week')}
+          >
+            Last 7 Days
+          </button>
+          <button
+            className={`past-filter-btn ${timeFilter === 'all' ? 'active' : ''}`}
+            onClick={() => setTimeFilter('all')}
+          >
+            All
+          </button>
+        </div>
+      )}
 
       {loading && pastOrders.length === 0 ? (
         <div className="past-loading-grid">
@@ -98,7 +106,7 @@ function PastOrdersPage({ pastOrders, loading, onToast }) {
           <p className="past-empty-text">No past orders yet</p>
           <p className="past-empty-hint">Accepted and completed orders will appear here</p>
         </div>
-      ) : filteredOrders.length === 0 ? (
+      ) : displayOrders.length === 0 ? (
         <div className="past-empty-state">
           <div className="past-empty-icon">
             <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" opacity="0.3">
@@ -111,7 +119,7 @@ function PastOrdersPage({ pastOrders, loading, onToast }) {
         </div>
       ) : (
         <div className="past-orders-grid">
-          {filteredOrders.map(order => {
+          {displayOrders.map(order => {
             const items = Array.isArray(order.items) ? order.items : []
             const tableNum = order.restaurant_tables?.table_number
             const orderCode = order.order_code || (order.id ? order.id.slice(0, 8).toUpperCase() : 'N/A')

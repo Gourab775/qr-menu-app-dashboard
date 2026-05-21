@@ -3,6 +3,27 @@
   width: 100%;
 }
 
+.past-orders-header-simple {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 0 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  margin-bottom: 10px;
+}
+
+.past-header-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #ccc;
+}
+
+.past-header-total {
+  font-size: 12px;
+  font-weight: 600;
+  color: #71717a;
+}
+
 .past-orders-header {
   margin-bottom: 20px;
 }

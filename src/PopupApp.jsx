@@ -20,7 +20,8 @@ function PopupApp() {
   const [orders, setOrders] = useState([])
   const [pastOrders, setPastOrders] = useState([])
   const [loading, setLoading] = useState(false)
-  const [activeSection, setActiveSection] = useState('live')
+  const [activeView, setActiveView] = useState('past')
+  const [menuOpen, setMenuOpen] = useState(false)
   const [toast, setToast] = useState(null)
   const [isOnline, setIsOnline] = useState(navigator.onLine)
 
@@ -412,26 +413,44 @@ function PopupApp() {
         className="popup-titlebar"
         onPointerDown={!isElectron ? handleDragStart : undefined}
       >
+        <div className="popup-titlebar-left">
+          <button className="popup-hamburger" onClick={(e) => { e.stopPropagation(); setMenuOpen(!menuOpen) }} aria-label="Menu">
+            <span></span>
+            <span></span>
+            <span></span>
+          </button>
+        </div>
         <span className="popup-titlebar-title">Orders</span>
         <span className="popup-titlebar-user">{userFullName}</span>
       </div>
 
-      <div className="popup-tabs">
-        <button
-          className={`popup-tab ${activeSection === 'live' ? 'active' : ''}`}
-          onClick={() => setActiveSection('live')}
-        >
-          <span className="popup-tab-dot" />
-          Live Orders
-          {orders.length > 0 && <span className="popup-tab-badge">{orders.length}</span>}
-        </button>
-        <button
-          className={`popup-tab ${activeSection === 'past' ? 'active' : ''}`}
-          onClick={() => setActiveSection('past')}
-        >
-          Past Orders
-        </button>
-      </div>
+      {menuOpen && (
+        <>
+          <div className="popup-menu-overlay" onClick={() => setMenuOpen(false)} />
+          <div className="popup-menu-dropdown">
+            <button
+              className={`popup-menu-item ${activeView === 'live' ? 'active' : ''}`}
+              onClick={() => {
+                if (activeView === 'live') setActiveView('past')
+                else setActiveView('live')
+                setMenuOpen(false)
+              }}
+            >
+              Live Orders
+            </button>
+            <button
+              className={`popup-menu-item ${activeView === 'notification' ? 'active' : ''}`}
+              onClick={() => {
+                if (activeView === 'notification') setActiveView('past')
+                else setActiveView('notification')
+                setMenuOpen(false)
+              }}
+            >
+              Notification
+            </button>
+          </div>
+        </>
+      )}
 
       <div className="popup-content">
         {!isOnline && (
@@ -440,7 +459,13 @@ function PopupApp() {
           </div>
         )}
 
-        {activeSection === 'live' && (
+        {activeView === 'notification' && (
+          <div className="popup-notification-placeholder">
+            <p>Notifications coming soon</p>
+          </div>
+        )}
+
+        {activeView === 'live' && (
           <div className="popup-live-orders">
             {!firstOrdersFetchDone.current && loading ? (
               <div className="popup-loading-grid">
@@ -517,9 +542,9 @@ function PopupApp() {
           </div>
         )}
 
-        {activeSection === 'past' && (
+        {activeView === 'past' && (
           <div className="popup-past-orders">
-            <PastOrdersPage pastOrders={pastOrders} loading={loading} onToast={showToast} />
+            <PastOrdersPage pastOrders={pastOrders} loading={loading} onToast={showToast} hideFilters />
           </div>
         )}
       </div>
