@@ -2,6 +2,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { AuthProvider } from './contexts/AuthContext.jsx'
 import App from './App.jsx'
+import PopupApp from './PopupApp.jsx'
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -77,11 +78,14 @@ class ErrorBoundary extends React.Component {
   }
 }
 
+const params = new URLSearchParams(window.location.search)
+const isPopupMode = params.get('mode') === 'popup-orders'
+
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <ErrorBoundary>
       <AuthProvider>
-        <App />
+        {isPopupMode ? <PopupApp /> : <App />}
       </AuthProvider>
     </ErrorBoundary>
   </React.StrictMode>,
