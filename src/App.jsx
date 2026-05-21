@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from './lib/supabase'
 import { useAuth } from './contexts/AuthContext'
 import { fetchWithTimeout, deduplicateRequest } from './lib/apiUtils'
@@ -408,6 +408,7 @@ function App() {
             setOrders(prev => {
               if (prev.some(o => o.id === newOrderId)) return prev.map(o => o.id === newOrderId ? { ...o, ...resolved } : o)
               if (!ordersPopupOpenedRef.current) {
+                console.log('[Popup] New order arrived, auto-opening popup')
                 ordersPopupOpenedRef.current = true
                 setOrdersPopupOpen(true)
               }
@@ -471,6 +472,14 @@ function App() {
 
     return () => { mounted = false; clearInterval(intervalId) }
   }, [isLoggedIn, restaurantId, preferences.autoDeclineTimeout])
+
+  useEffect(() => {
+    if (orders.length === 0) {
+      console.log('[Popup] Order queue empty, closing popup')
+      setOrdersPopupOpen(false)
+      ordersPopupOpenedRef.current = false
+    }
+  }, [orders])
 
   const handleSaveItem = useCallback(async (id, updates) => {
     const prevItems = [...menuItems]
@@ -542,13 +551,6 @@ function App() {
       </div>
     )
   }
-
-  useEffect(() => {
-    if (orders.length === 0) {
-      setOrdersPopupOpen(false)
-      ordersPopupOpenedRef.current = false
-    }
-  }, [orders])
 
   const handleAccept = async (orderId) => {
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'accepted' } : o))
@@ -790,74 +792,87 @@ function App() {
       )}
 
       {ordersPopupOpen && (
-        <div className="popup-orders-overlay">
-          <div className="popup-orders-header">
-            <h2>Orders</h2>
-            <div className="popup-orders-header-right">
-              <span className="popup-orders-badge">{orders.length} orders</span>
-              <button className="popup-orders-close" onClick={() => { setOrdersPopupOpen(false); ordersPopupOpenedRef.current = false; }}>✕</button>
+        <PopupErrorBoundary onReset={() => { setOrdersPopupOpen(false); ordersPopupOpenedRef.current = false; }}>
+          <div className="popup-orders-overlay">
+            <div className="popup-orders-header">
+              <h2>Orders</h2>
+              <div className="popup-orders-header-right">
+                <span className="popup-orders-badge">{orders.length} orders</span>
+                <button className="popup-orders-close" onClick={() => { console.log('[Popup] Manual close'); setOrdersPopupOpen(false); ordersPopupOpenedRef.current = false; }}>✕</button>
+              </div>
+            </div>
+            <div className="popup-orders-body">
+              {loading || (!firstOrdersFetchDone.current && orders.length === 0) ? (
+                <div className="loading-grid">
+                  {[1, 2, 3, 4].map(i => (
+                    <div key={i} className="skeleton-card">
+                      <div className="skeleton-line" style={{ width: '30%' }}></div>
+                      <div className="skeleton-line"></div>
+                      <div className="skeleton-line short"></div>
+                    </div>
+                  ))}
+                </div>
+              ) : orders.length === 0 ? (
+                <div className="popup-empty-state">
+                  <div className="popup-empty-icon">📦</div>
+                  <p>No orders</p>
+                </div>
+              ) : (
+                <div className="popup-orders-list">
+                  {orders.map(order => {
+                    const safeOrder = order || {}
+                    const tableNum = safeOrder.restaurant_tables?.table_number;
+                    const items = Array.isArray(safeOrder.items) ? safeOrder.items : []
+                    const totalPrice = safeOrder.total_price != null ? safeOrder.total_price : 0
+                    const orderId = safeOrder.id || 'unknown'
+                    const orderCode = safeOrder.order_code || (safeOrder.id ? safeOrder.id.slice(0, 8).toUpperCase() : 'N/A')
+                    const status = safeOrder.status || 'pending'
+
+                    return (
+                      <div key={orderId} className="pos-order-card">
+                        <div className="pos-card-header">
+                          <span className="pos-order-id">#{orderCode}</span>
+                          <span className="pos-table-badge">T{tableNum || '—'}</span>
+                          <span className="pos-order-time">{safeOrder.created_at ? <RunningTimer createdAt={safeOrder.created_at} /> : ''}</span>
+                          <span className="pos-total">₹{totalPrice}</span>
+                        </div>
+
+                        {safeOrder.note && (
+                          <div className="pos-order-note">{safeOrder.note}</div>
+                        )}
+
+                        <div className="pos-items">
+                          {items.map((item, i) => (
+                            <div key={i} className="pos-item">
+                              <span className="pos-item-name">{item?.name || 'Item'}</span>
+                              <span className="pos-item-qty">x{item?.quantity != null ? item.quantity : 1}</span>
+                            </div>
+                          ))}
+                          {items.length === 0 && (
+                            <div className="pos-item">
+                              <span className="pos-item-name" style={{ color: '#555', fontStyle: 'italic' }}>No items</span>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="pos-card-footer">
+                          {status === 'accepted' ? (
+                            <span className="pos-accepted-label">✓ Accepted</span>
+                          ) : (
+                            <>
+                              <button className="pos-decline-btn" onClick={() => handleDecline(orderId, orderCode)}>Decline</button>
+                              <button className="pos-accept-btn" onClick={() => handleAccept(orderId)}>Accept</button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           </div>
-          <div className="popup-orders-body">
-            {loading || (!firstOrdersFetchDone.current && orders.length === 0) ? (
-              <div className="loading-grid">
-                {[1, 2, 3, 4].map(i => (
-                  <div key={i} className="skeleton-card">
-                    <div className="skeleton-line" style={{ width: '30%' }}></div>
-                    <div className="skeleton-line"></div>
-                    <div className="skeleton-line short"></div>
-                  </div>
-                ))}
-              </div>
-            ) : orders.length === 0 ? (
-              <div className="popup-empty-state">
-                <div className="popup-empty-icon">📦</div>
-                <p>No orders</p>
-              </div>
-            ) : (
-              <div className="popup-orders-list">
-                {orders.map(order => {
-                  const tableNum = order.restaurant_tables?.table_number;
-
-                  return (
-                    <div key={order.id} className="pos-order-card">
-                      <div className="pos-card-header">
-                        <span className="pos-order-id">#{order.order_code || order.id.slice(0, 8).toUpperCase()}</span>
-                        <span className="pos-table-badge">T{tableNum || '—'}</span>
-                        <span className="pos-order-time"><RunningTimer createdAt={order.created_at} /></span>
-                        <span className="pos-total">₹{order.total_price}</span>
-                      </div>
-
-                      {order.note && (
-                        <div className="pos-order-note">{order.note}</div>
-                      )}
-
-                      <div className="pos-items">
-                        {order.items?.map((item, i) => (
-                          <div key={i} className="pos-item">
-                            <span className="pos-item-name">{item.name}</span>
-                            <span className="pos-item-qty">x{item.quantity}</span>
-                          </div>
-                        ))}
-                      </div>
-
-                      <div className="pos-card-footer">
-                        {order.status === 'accepted' ? (
-                          <span className="pos-accepted-label">✓ Accepted</span>
-                        ) : (
-                          <>
-                            <button className="pos-decline-btn" onClick={() => handleDecline(order.id, order.order_code)}>Decline</button>
-                            <button className="pos-accept-btn" onClick={() => handleAccept(order.id)}>Accept</button>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-        </div>
+        </PopupErrorBoundary>
       )}
 
     </div>
@@ -914,6 +929,42 @@ function Sidebar({ isOpen, onClose, activeTab, setActiveTab }) {
       </aside>
     </>
   )
+}
+
+class PopupErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props)
+    this.state = { hasError: false, error: null }
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error }
+  }
+
+  componentDidCatch(error, info) {
+    console.error('[PopupErrorBoundary] Caught:', error, info)
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="popup-orders-overlay" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ textAlign: 'center', color: '#888' }}>
+            <div style={{ fontSize: '32px', marginBottom: '12px', opacity: 0.3 }}>⚠️</div>
+            <p style={{ fontSize: '14px', fontWeight: 500, marginBottom: '8px' }}>Orders encountered an error</p>
+            <p style={{ fontSize: '12px', color: '#555', marginBottom: '16px' }}>{this.state.error?.message || 'Unknown error'}</p>
+            <button
+              onClick={() => { this.setState({ hasError: false, error: null }); this.props.onReset?.() }}
+              style={{ background: '#22c55e', color: '#000', border: 'none', borderRadius: '4px', padding: '7px 18px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}
+            >
+              Reset
+            </button>
+          </div>
+        </div>
+      )
+    }
+    return this.props.children
+  }
 }
 
 function RunningTimer({ createdAt }) {
