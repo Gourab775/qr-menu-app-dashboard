@@ -26,13 +26,11 @@ function PastOrdersPage({ pastOrders, loading, onToast }) {
     })
   }, [pastOrders, timeFilter])
 
-  const handleAction = async (orderId, newStatus, completedAt = null) => {
+  const handleAction = async (orderId, newStatus) => {
     if (actionLoading) return
     setActionLoading(orderId)
     try {
-      const updates = { status: newStatus }
-      if (completedAt) updates.completed_at = completedAt
-      const { error } = await supabase.from('live_orders').update(updates).eq('id', orderId)
+      const { error } = await supabase.from('live_orders').update({ status: newStatus }).eq('id', orderId)
       if (error) throw error
       if (onToast) onToast(`Order ${newStatus === 'completed' ? 'completed' : newStatus === 'confirmed' ? 'confirmed' : 'updated'}`, 'success')
     } catch (err) {
@@ -68,7 +66,7 @@ function PastOrdersPage({ pastOrders, loading, onToast }) {
       return (
         <button
           className="past-action-btn past-action-complete"
-          onClick={() => handleAction(order.id, 'completed', new Date().toISOString())}
+          onClick={() => handleAction(order.id, 'completed')}
           disabled={actionLoading === order.id}
         >
           Complete

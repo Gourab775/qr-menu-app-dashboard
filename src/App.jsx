@@ -65,6 +65,7 @@ function App() {
   const logoutRef = useRef(false)
   const firstOrdersFetchDone = useRef(false)
   const ordersPopupOpenedRef = useRef(false)
+  const ordersFetchFailedRef = useRef(false)
 
   const userRole = role || 'staff'
   const userFullName = profile?.full_name || profile?.email || session?.user?.email || 'User'
@@ -97,7 +98,7 @@ function App() {
             API_TIMEOUT
           ),
           fetchWithTimeout(
-            supabase.from('live_orders').select(baseSelect + ', completed_at').eq('restaurant_id', restaurantId).in('status', ['accepted', 'confirmed', 'completed']).order('created_at', { ascending: false }).limit(200),
+            supabase.from('live_orders').select(baseSelect).eq('restaurant_id', restaurantId).in('status', ['accepted', 'confirmed', 'completed']).order('created_at', { ascending: false }).limit(200),
             API_TIMEOUT
           )
         ])
@@ -107,8 +108,11 @@ function App() {
         const liveError = liveResult.error && liveResult.error.code !== 'PGRST116' ? liveResult.error : null
         const pastError = pastResult.error && pastResult.error.code !== 'PGRST116' ? pastResult.error : null
 
-        if (liveError || pastError) {
-          console.error('[Orders] Load error:', liveError || pastError)
+        if (liveError) {
+          console.error('[Orders] Live query error:', liveError.message || liveError, 'code:', liveError.code)
+        }
+        if (pastError) {
+          console.error('[Orders] Past query error:', pastError.message || pastError, 'code:', pastError.code)
         }
 
         const liveData = liveResult.data || []
@@ -147,16 +151,22 @@ function App() {
     if (result.aborted) return
 
     if (result.error && !result.data && !result.pastData) {
+      console.error('[Orders] Both queries failed completely:', result.error?.message || result.error)
+      ordersFetchFailedRef.current = true
       setToast({ message: 'Failed to load orders', type: 'error' })
       setOrders([])
       setPastOrders([])
     } else if (result.error) {
-      console.warn('[Orders] Partial error, using available data:', result.error)
+      console.warn('[Orders] Partial query failure, using available data:', result.error?.message || result.error)
+      ordersFetchFailedRef.current = true
       if (result.data !== undefined) setOrders(result.data)
       if (result.pastData !== undefined) setPastOrders(result.pastData)
-    } else if (result.data !== undefined) {
-      setOrders(result.data)
-      setPastOrders(result.pastData || [])
+    } else {
+      ordersFetchFailedRef.current = false
+      if (result.data !== undefined) {
+        setOrders(result.data)
+        setPastOrders(result.pastData || [])
+      }
     }
 
     if (isManualFetch) {
@@ -537,10 +547,13 @@ function App() {
   }, [isLoggedIn, restaurantId, preferences.autoDeclineTimeout])
 
   useEffect(() => {
-    if (!isPopupMode && orders.length === 0) {
+    if (!isPopupMode && orders.length === 0 && !ordersFetchFailedRef.current) {
       console.log('[Popup] Order queue empty, closing popup')
       setOrdersPopupOpen(false)
       ordersPopupOpenedRef.current = false
+    }
+    if (orders.length === 0 && ordersFetchFailedRef.current) {
+      console.log('[Popup] Orders empty due to fetch failure — keeping popup open')
     }
   }, [isPopupMode, orders])
 
@@ -655,11 +668,10 @@ function App() {
   }
 
   const handleComplete = async (orderId) => {
-    const now = new Date().toISOString()
     const prevOrders = pastOrders
-    setPastOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'completed', completed_at: now } : o))
+    setPastOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'completed' } : o))
     try {
-      const { error } = await supabase.from('live_orders').update({ status: 'completed', completed_at: now }).eq('id', orderId)
+      const { error } = await supabase.from('live_orders').update({ status: 'completed' }).eq('id', orderId)
       if (error) throw error
       showToast('Order completed')
     } catch (err) {
