@@ -13,7 +13,6 @@ import CategoriesPage from './pages/CategoriesPage'
 import OverviewPage from './pages/OverviewPage'
 import SettingsPage from './pages/SettingsPage'
 import TablesPage from './pages/TablesPage'
-import KitchenPage from './pages/KitchenPage'
 import { formatDateTime } from './utils/formatDateTime'
 import './App.css'
 import './theme.css'
@@ -32,11 +31,9 @@ function App() {
   const [menuLoading, setMenuLoading] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [activeTab, setActiveTab] = useState('orders')
-  const [orderFilter, setOrderFilter] = useState('live')
   const [showProfile, setShowProfile] = useState(false)
   const [showAddModal, setShowAddModal] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
-  const [orderSearch, setOrderSearch] = useState('')
   const [filterType, setFilterType] = useState('all')
   const [toast, setToast] = useState(null)
   const [newOrderToast, setNewOrderToast] = useState(null)
@@ -59,11 +56,13 @@ function App() {
   const abortControllerRef = useRef(null)
   const ordersLoadingRef = useRef(false)
   const ordersPollingRef = useRef(null)
-  const orderFilterRef = useRef(orderFilter)
   const isMountedRef = useRef(true)
   const logoutRef = useRef(false)
-  const lastFetchKeyRef = useRef(null)
   const firstOrdersFetchDone = useRef(false)
+
+  useEffect(() => {
+    if (activeTab === 'kitchen') setActiveTab('orders')
+  }, [activeTab])
 
   const userRole = role || 'staff'
   const userFullName = profile?.full_name || profile?.email || session?.user?.email || 'User'
@@ -74,13 +73,10 @@ function App() {
     setTimeout(() => setToast(null), 3000)
   }, [])
 
-  const loadOrders = useCallback(async (signal = null, filterOverride = null) => {
+  const loadOrders = useCallback(async (signal = null) => {
     if (!restaurantId || !isMountedRef.current) return
 
-    const activeFilter = filterOverride !== null ? filterOverride : orderFilterRef.current
-    orderFilterRef.current = activeFilter
-
-    const fetchKey = `orders-${restaurantId}-${activeFilter}`
+    const fetchKey = `orders-${restaurantId}`
     const isManualFetch = signal === null
 
     if (isManualFetch) {
@@ -89,40 +85,16 @@ function App() {
       setLoading(true)
     }
 
-    const now = new Date()
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-    const formatDate = (d) => {
-      const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), day = String(d.getDate()).padStart(2, '0')
-      return `${y}-${m}-${day}`
-    }
-    const todayStr = formatDate(today)
-    const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1)
-    const yesterdayStr = formatDate(yesterday)
-
-    let bounds = { start: `${todayStr}T00:00:00`, end: null }
-    if (activeFilter === 'today') bounds = { start: `${yesterdayStr}T00:00:00`, end: `${yesterdayStr}T23:59:59` }
-    else if (activeFilter === '7days') {
-      const d = new Date(today); d.setDate(d.getDate() - 7)
-      bounds = { start: `${formatDate(d)}T00:00:00`, end: `${yesterdayStr}T23:59:59` }
-    } else if (activeFilter === '30days') {
-      const d = new Date(today); d.setDate(d.getDate() - 30)
-      bounds = { start: `${formatDate(d)}T00:00:00`, end: `${yesterdayStr}T23:59:59` }
-    }
-
     const executeLoad = async () => {
       try {
-        let query = supabase
+        const query = supabase
           .from('live_orders')
           .select('id, restaurant_id, total_price, status, items, created_at, order_code, table_id, note, restaurant_tables(table_number)')
           .eq('restaurant_id', restaurantId)
           .order('created_at', { ascending: false })
           .limit(200)
 
-        if (bounds.start) query = query.gte('created_at', bounds.start)
-        if (bounds.end) query = query.lte('created_at', bounds.end)
-
-        const fetchPromise = query
-        const { data, error } = await fetchWithTimeout(fetchPromise, API_TIMEOUT)
+        const { data, error } = await fetchWithTimeout(query, API_TIMEOUT)
 
         if (signal?.aborted) return { aborted: true }
 
@@ -131,32 +103,14 @@ function App() {
           return { error }
         }
 
-        const ids = (data || []).map(o => o.id)
-        let kitchenMap = {}
-        if (ids.length > 0) {
-          const kitchenPromise = supabase.from('kitchen_board').select('order_id, status').in('order_id', ids)
-          const { data: kr } = await fetchWithTimeout(kitchenPromise, API_TIMEOUT)
-          if (!signal?.aborted) {
-            (kr || []).forEach(k => { kitchenMap[k.order_id] = k.status })
-          }
-        }
-
-        if (signal?.aborted) return { aborted: true }
-
-        const resolved = (data || []).map(o => ({
-          ...o,
-          kitchen_status: kitchenMap[o.id] || null,
-          restaurant_tables: o.restaurant_tables || (o.table_id ? { table_number: null } : null)
-        }))
-
         const unresolvedIds = [...new Set((data || []).filter(o => o.table_id && !o.restaurant_tables?.table_number).map(o => o.table_id))]
         if (unresolvedIds.length > 0) {
           const tablesPromise = supabase.from('restaurant_tables').select('id, table_number').in('id', unresolvedIds)
           const { data: tr } = await fetchWithTimeout(tablesPromise, API_TIMEOUT)
           if (!signal?.aborted) {
             const tMap = {}
-              ; (tr || []).forEach(t => { tMap[t.id] = t.table_number })
-            resolved.forEach(o => {
+            ;(tr || []).forEach(t => { tMap[t.id] = t.table_number })
+            ;(data || []).forEach(o => {
               if (o.table_id && tMap[o.table_id] !== undefined) {
                 o.restaurant_tables = { table_number: tMap[o.table_id] }
               }
@@ -166,7 +120,7 @@ function App() {
 
         if (signal?.aborted) return { aborted: true }
 
-        return { data: resolved }
+        return { data: data || [] }
       } catch (err) {
         console.error('[Orders] Exception:', err)
         return { error: err }
@@ -178,7 +132,6 @@ function App() {
       : await executeLoad()
 
     if (signal?.aborted) return
-
     if (result.aborted) return
 
     if (result.error) {
@@ -320,12 +273,6 @@ function App() {
   useEffect(() => {
     if (!isLoggedIn || !restaurantId) return
 
-    orderFilterRef.current = orderFilter
-
-    const fetchKey = `${restaurantId}-${orderFilter}`
-    if (lastFetchKeyRef.current === fetchKey) return
-    lastFetchKeyRef.current = fetchKey
-
     if (ordersLoadingRef.current) return
     ordersLoadingRef.current = true
     setLoading(true)
@@ -343,18 +290,10 @@ function App() {
       controller.abort()
       ordersLoadingRef.current = false
     }
-  }, [isLoggedIn, restaurantId, orderFilter, loadOrders])
+  }, [isLoggedIn, restaurantId, loadOrders])
 
   useEffect(() => {
     if (!isLoggedIn || !restaurantId) {
-      if (ordersPollingRef.current) {
-        clearInterval(ordersPollingRef.current)
-        ordersPollingRef.current = null
-      }
-      return
-    }
-
-    if (orderFilter !== 'live') {
       if (ordersPollingRef.current) {
         clearInterval(ordersPollingRef.current)
         ordersPollingRef.current = null
@@ -383,7 +322,7 @@ function App() {
         ordersPollingRef.current = null
       }
     }
-  }, [isLoggedIn, orderFilter, restaurantId, loadOrders])
+  }, [isLoggedIn, restaurantId, loadOrders])
 
   useEffect(() => {
     if (!isLoggedIn || !restaurantId) return
@@ -483,16 +422,7 @@ function App() {
         }
       )
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'live_orders' },
-        async (payload) => {
-          if (payload.new.status === 'accepted' && payload.old.status !== 'accepted') {
-            const { data: ex } = await supabase.from('kitchen_board').select('id').eq('order_id', payload.new.id).maybeSingle()
-            if (!ex) {
-              const nowISO = new Date().toISOString()
-              await supabase.from('kitchen_board').insert({
-                order_id: payload.new.id, items: payload.new.items, table_id: payload.new.table_id, status: 'pending', created_at: nowISO, confirmed_at: nowISO
-              })
-            }
-          }
+        (payload) => {
           setOrders(prev => prev.map(o => o.id === payload.new.id ? { ...o, ...payload.new } : o))
         }
       )
@@ -509,25 +439,7 @@ function App() {
     }
   }, [isLoggedIn, restaurantId, preferences.soundEnabled, preferences.orderNotifications, preferences.notificationSound])
 
-  useEffect(() => {
-    if (!isLoggedIn || !restaurantId) return
 
-    const kitchenChannel = supabase
-      .channel('kitchen-sync-for-orders')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'kitchen_board' },
-        (payload) => {
-          setOrders(prev => prev.map(order => {
-            if ((payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') && order.id === payload.new?.order_id) {
-              return { ...order, kitchen_status: payload.new.status }
-            }
-            return order
-          }))
-        }
-      )
-      .subscribe()
-
-    return () => supabase.removeChannel(kitchenChannel)
-  }, [isLoggedIn, restaurantId])
 
   useEffect(() => {
     if (!isLoggedIn || !restaurantId) return
@@ -591,13 +503,6 @@ function App() {
     return matchSearch && matchFilter
   })
 
-  const filteredOrders = orders.filter(order => {
-    if (!orderSearch) return true
-    const code = (order.order_code || '').toLowerCase()
-    const oid = (order.id || '').toLowerCase()
-    return code.includes(orderSearch.toLowerCase()) || oid.includes(orderSearch.toLowerCase())
-  })
-
   if (resetMode) {
     return <ResetPassword onDone={() => { setResetMode(false); window.location.hash = '' }} />
   }
@@ -637,28 +542,11 @@ function App() {
   }
 
   const handleAccept = async (orderId) => {
-    const order = orders.find(o => o.id === orderId)
-    if (!order) return
-
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'accepted' } : o))
 
     try {
-      const nowISO = new Date().toISOString()
       await supabase.from('live_orders').update({ status: 'accepted' }).eq('id', orderId)
-
-      const { data: existing } = await supabase.from('kitchen_board').select('id').eq('order_id', orderId).maybeSingle()
-
-      if (!existing) {
-        const { error: insertError } = await supabase.from('kitchen_board').insert({
-          order_id: orderId, items: order.items, table_id: order.table_id, status: 'pending', created_at: nowISO, confirmed_at: nowISO
-        })
-
-        if (insertError && insertError.code !== '23505') {
-          showToast('Failed to send to kitchen', 'error')
-        } else {
-          showToast('Order sent to kitchen')
-        }
-      }
+      showToast('Order accepted')
     } catch (err) {
       console.error('Error in handleAccept:', err)
       showToast('Failed to process order', 'error')
@@ -722,7 +610,6 @@ function App() {
         <h2 className="header-title">
           {activeTab === 'analytics' && '📊 Analytics'}
           {activeTab === 'orders' && '📦 Orders'}
-          {activeTab === 'kitchen' && '🍳 Kitchen'}
           {activeTab === 'menu_items' && '🍽️ Menu Items'}
           {activeTab === 'categories' && '📂 Categories'}
           {activeTab === 'tables' && '🪑 Tables'}
@@ -753,56 +640,6 @@ function App() {
           <div className="orders-section">
             <div className="sticky-header">
               <div className="orders-header-row">
-                <div className="order-search-box">
-                  <input
-                    type="text"
-                    placeholder="Search by Order ID..."
-                    value={orderSearch}
-                    onChange={(e) => setOrderSearch(e.target.value)}
-                  />
-                </div>
-                <div className="order-filters">
-                  <button
-                    className={`filter-btn ${orderFilter === 'live' ? 'active' : ''}`}
-                    onClick={() => {
-                      if (orderFilter !== 'live') {
-                        setOrderFilter('live')
-                      }
-                    }}
-                  >
-                    <span className="live-dot"></span> Live
-                  </button>
-                  <button
-                    className={`filter-btn ${orderFilter === 'today' ? 'active' : ''}`}
-                    onClick={() => {
-                      if (orderFilter !== 'today') {
-                        setOrderFilter('today')
-                      }
-                    }}
-                  >
-                    Last Day
-                  </button>
-                  <button
-                    className={`filter-btn ${orderFilter === '7days' ? 'active' : ''}`}
-                    onClick={() => {
-                      if (orderFilter !== '7days') {
-                        setOrderFilter('7days')
-                      }
-                    }}
-                  >
-                    7 Days
-                  </button>
-                  <button
-                    className={`filter-btn ${orderFilter === '30days' ? 'active' : ''}`}
-                    onClick={() => {
-                      if (orderFilter !== '30days') {
-                        setOrderFilter('30days')
-                      }
-                    }}
-                  >
-                    30 Days
-                  </button>
-                </div>
                 <button onClick={() => loadOrders()} className="refresh-btn">
                   Refresh
                 </button>
@@ -822,110 +659,89 @@ function App() {
             ) : orders.length === 0 ? (
               <div className="empty-state">
                 <div className="empty-icon">📦</div>
-                <p>
-                  {orderFilter === 'live' && 'No live orders'}
-                  {orderFilter === 'today' && 'No last day orders'}
-                  {orderFilter === '7days' && 'No last 7 days orders'}
-                  {orderFilter === '30days' && 'No last 30 days orders'}
-                </p>
+                <p>No orders</p>
               </div>
             ) : (
-              <>
-                {filteredOrders.length === 0 && orderSearch && (
-                  <div className="empty-state">
-                    <div className="empty-icon">🔍</div>
-                    <p>No orders found for "{orderSearch}"</p>
-                  </div>
-                )}
-                <div className="orders-grid">
-                  {filteredOrders.map(order => {
-                    const orderTime = new Date(order.created_at)
-                    const now = new Date()
-                    const minutesOld = Math.floor((now - orderTime) / 60000)
-                    const isTimeout = minutesOld >= 10 && order.status !== 'accepted'
-                    const isWarning = minutesOld >= 8 && minutesOld < 10 && order.status !== 'accepted'
+              <div className="orders-grid">
+                {orders.map(order => {
+                  const orderTime = new Date(order.created_at)
+                  const now = new Date()
+                  const minutesOld = Math.floor((now - orderTime) / 60000)
+                  const isTimeout = minutesOld >= 10 && order.status !== 'accepted'
+                  const isWarning = minutesOld >= 8 && minutesOld < 10 && order.status !== 'accepted'
 
-                    const tableNum = order.restaurant_tables?.table_number;
+                  const tableNum = order.restaurant_tables?.table_number;
 
-                    return (
-                      <div
-                        key={order.id}
-                        className={`order-card-new ${order.status === 'accepted' ? 'accepted' : ''} ${isTimeout ? 'timeout' : ''} ${isWarning ? 'warning' : ''}`}
-                      >
-                        <div className="card-top-bar">
-                          <div className="order-id-group">
-                            <span className="order-badge">#{order.order_code || order.id.slice(0, 8).toUpperCase()}</span>
-                            <span className="order-timestamp">{formatDateTime(order.created_at)}</span>
-                          </div>
-                          <div className="order-status-group">
-                            {order.status === 'accepted' && (
-                              <span className={`ready-badge ${order.kitchen_status || 'pending'}`}>
-                                <span className="dot">●</span> {order.kitchen_status?.toUpperCase() || 'ACCEPTED'}
-                              </span>
-                            )}
-
-                          </div>
-                        </div>
-
-                        <div className="card-main-info">
-                          <div className="info-item">
-                            <span className="info-label">Table</span>
-                            <span className="info-value highlighted">{tableNum || 'N/A'}</span>
-                          </div>
-                          <div className="info-item" style={{ alignItems: 'flex-end' }}>
-                            <span className="info-label">Total</span>
-                            <span className="info-value price">₹{order.total_price}</span>
-                          </div>
-                          {order.status !== 'accepted' && (
-                            <div className="info-item" style={{ gridColumn: 'span 2', marginTop: '4px' }}>
-                              <span className="info-label">Time Elapsed</span>
-                              <span className={`info-value ${minutesOld >= 8 ? 'urgent' : ''}`} style={{ fontSize: '13px' }}>
-                                ⏱️ <RunningTimer createdAt={order.created_at} />
-                              </span>
-                            </div>
-                          )}
-                        </div>
-
-                        {order.note && (
-                          <div className="order-special-note" style={{ fontSize: '12px', padding: '8px', borderRadius: '8px' }}>
-                            <strong>Note:</strong> {order.note}
-                          </div>
-                        )}
-
-                        <div className="order-items-container">
-                          <div className="items-header">Order Items ({order.items?.length || 0})</div>
-                          <div className="items-list-new">
-                            {order.items?.map((item, i) => (
-                              <div key={i} className="item-row-new">
-                                <div className="item-main-desc">
-                                  <span className={`veg-indicator ${item.is_veg ? 'veg' : 'non-veg'}`} style={{ color: item.is_veg ? 'var(--green)' : 'var(--red)' }}></span>
-                                  <span className="item-name-text">{item.name}</span>
-                                </div>
-                                <div className="item-qty-tag">x{item.quantity}</div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-
-                        <div className="card-actions-new">
-                          <div style={{ flex: 1, display: 'flex', gap: '8px' }}>
-                            {order.status === 'accepted' ? (
-                              <div className="acceptance-confirmed">
-                                <span className="check-icon">✓</span> Order Confirmed
-                              </div>
-                            ) : (
-                              <>
-                                <button className="action-btn decline" onClick={() => handleDecline(order.id, order.order_code)}>Decline</button>
-                                <button className="action-btn accept" onClick={() => handleAccept(order.id)}>Accept</button>
-                              </>
-                            )}
-                          </div>
+                  return (
+                    <div
+                      key={order.id}
+                      className={`order-card-new ${order.status === 'accepted' ? 'accepted' : ''} ${isTimeout ? 'timeout' : ''} ${isWarning ? 'warning' : ''}`}
+                    >
+                      <div className="card-top-bar">
+                        <div className="order-id-group">
+                          <span className="order-badge">#{order.order_code || order.id.slice(0, 8).toUpperCase()}</span>
+                          <span className="order-timestamp">{formatDateTime(order.created_at)}</span>
                         </div>
                       </div>
-                    )
-                  })}
-                </div>
-              </>
+
+                      <div className="card-main-info">
+                        <div className="info-item">
+                          <span className="info-label">Table</span>
+                          <span className="info-value highlighted">{tableNum || 'N/A'}</span>
+                        </div>
+                        <div className="info-item" style={{ alignItems: 'flex-end' }}>
+                          <span className="info-label">Total</span>
+                          <span className="info-value price">₹{order.total_price}</span>
+                        </div>
+                        {order.status !== 'accepted' && (
+                          <div className="info-item" style={{ gridColumn: 'span 2', marginTop: '4px' }}>
+                            <span className="info-label">Time Elapsed</span>
+                            <span className={`info-value ${minutesOld >= 8 ? 'urgent' : ''}`} style={{ fontSize: '13px' }}>
+                              ⏱️ <RunningTimer createdAt={order.created_at} />
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      {order.note && (
+                        <div className="order-special-note" style={{ fontSize: '12px', padding: '8px', borderRadius: '8px' }}>
+                          <strong>Note:</strong> {order.note}
+                        </div>
+                      )}
+
+                      <div className="order-items-container">
+                        <div className="items-header">Order Items ({order.items?.length || 0})</div>
+                        <div className="items-list-new">
+                          {order.items?.map((item, i) => (
+                            <div key={i} className="item-row-new">
+                              <div className="item-main-desc">
+                                <span className={`veg-indicator ${item.is_veg ? 'veg' : 'non-veg'}`} style={{ color: item.is_veg ? 'var(--green)' : 'var(--red)' }}></span>
+                                <span className="item-name-text">{item.name}</span>
+                              </div>
+                              <div className="item-qty-tag">x{item.quantity}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="card-actions-new">
+                        <div style={{ flex: 1, display: 'flex', gap: '8px' }}>
+                          {order.status === 'accepted' ? (
+                            <div className="acceptance-confirmed">
+                              <span className="check-icon">✓</span> Order Confirmed
+                            </div>
+                          ) : (
+                            <>
+                              <button className="action-btn decline" onClick={() => handleDecline(order.id, order.order_code)}>Decline</button>
+                              <button className="action-btn accept" onClick={() => handleAccept(order.id)}>Accept</button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
             )}
           </div>
         )}
@@ -1060,8 +876,6 @@ function App() {
 
         {activeTab === 'tables' && <TablesPage restaurantId={restaurantId} restaurantSlug={restaurantSlug} />}
 
-        {activeTab === 'kitchen' && <KitchenPage restaurantId={restaurantId} />}
-
         {activeTab === 'settings' && <SettingsPage preferences={preferences} setPreferences={setPreferences} onToast={showToast} restaurantId={restaurantId} />}
 
         {activeTab === 'featured' && <FeaturedItemsPanel restaurantId={restaurantId} />}
@@ -1102,12 +916,6 @@ function Sidebar({ isOpen, onClose, activeTab, setActiveTab }) {
             onClick={() => { setActiveTab('orders'); onClose(); }}
           >
             📦 Orders
-          </button>
-          <button
-            className={`nav-item ${activeTab === 'kitchen' ? 'active' : ''}`}
-            onClick={() => { setActiveTab('kitchen'); onClose(); }}
-          >
-            🍳 Kitchen
           </button>
           <button
             className={`nav-item ${activeTab === 'menu_items' ? 'active' : ''}`}

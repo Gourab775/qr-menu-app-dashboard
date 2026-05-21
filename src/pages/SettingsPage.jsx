@@ -161,7 +161,7 @@ const HELP_RESPONSES = {
       { q: 'How to decline an order?', a: 'Click Decline button on pending order. Confirm when prompted.' },
       { q: 'Can I decline specific items?', a: 'Decline applies to entire order. Contact customer for partial changes.' },
       { q: 'Is decline reversible?', a: 'No, declined orders are permanently removed from your dashboard.' },
-      { q: 'Why would I decline?', a: 'Common reasons: item unavailable, kitchen closed, customer requested cancellation.' }
+      { q: 'Why would I decline?', a: 'Common reasons: item unavailable, customer requested cancellation.' }
     ]
   },
   timeout: {

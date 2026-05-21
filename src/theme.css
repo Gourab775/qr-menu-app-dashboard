@@ -197,17 +197,6 @@ button, input, select, textarea {
   color: #fff !important;
 }
 
-.filter-btn {
-  border-radius: var(--radius-sm) !important;
-  padding: 8px 16px !important;
-  font-weight: 500 !important;
-}
-
-.filter-btn.active {
-  background: var(--primary) !important;
-  border-color: var(--primary) !important;
-}
-
 .refresh-btn, .accept-btn {
   border-radius: var(--radius-md) !important;
   font-weight: 500 !important;
@@ -237,10 +226,6 @@ input:focus, textarea:focus, select:focus {
   border-color: var(--primary) !important;
   box-shadow: 0 0 0 3px var(--primary-glow) !important;
   outline: none;
-}
-
-.order-search-box input {
-  border-radius: var(--radius-md) !important;
 }
 
 /* =========================================
