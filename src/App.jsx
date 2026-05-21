@@ -637,104 +637,113 @@ function App() {
         {activeTab === 'analytics' && <OverviewPage restaurantId={restaurantId} />}
 
         {activeTab === 'orders' && (
-          <div className="orders-section">
-            {loading || (!firstOrdersFetchDone.current && orders.length === 0) ? (
-              <div className="loading-grid">
-                {[1, 2, 3, 4].map(i => (
-                  <div key={i} className="skeleton-card">
-                    <div className="skeleton-line" style={{ width: '30%' }}></div>
-                    <div className="skeleton-line"></div>
-                    <div className="skeleton-line short"></div>
-                  </div>
-                ))}
+          <div className="popup-orders-overlay">
+            <div className="popup-orders-header">
+              <h2>Live Orders</h2>
+              <div className="popup-orders-actions">
+                <span className="popup-orders-count">{orders.length} active</span>
+                <button className="popup-orders-close" onClick={() => setActiveTab('analytics')}>✕</button>
               </div>
-            ) : orders.length === 0 ? (
-              <div className="empty-state">
-                <div className="empty-icon">📦</div>
-                <p>No orders</p>
-              </div>
-            ) : (
-              <div className="orders-grid">
-                {orders.map(order => {
-                  const orderTime = new Date(order.created_at)
-                  const now = new Date()
-                  const minutesOld = Math.floor((now - orderTime) / 60000)
-                  const isTimeout = minutesOld >= 10 && order.status !== 'accepted'
-                  const isWarning = minutesOld >= 8 && minutesOld < 10 && order.status !== 'accepted'
+            </div>
+            <div className="popup-orders-body">
+              {loading || (!firstOrdersFetchDone.current && orders.length === 0) ? (
+                <div className="loading-grid">
+                  {[1, 2, 3, 4].map(i => (
+                    <div key={i} className="skeleton-card">
+                      <div className="skeleton-line" style={{ width: '30%' }}></div>
+                      <div className="skeleton-line"></div>
+                      <div className="skeleton-line short"></div>
+                    </div>
+                  ))}
+                </div>
+              ) : orders.length === 0 ? (
+                <div className="popup-empty-state">
+                  <div className="popup-empty-icon">📦</div>
+                  <p>No orders</p>
+                </div>
+              ) : (
+                <div className="orders-grid">
+                  {orders.map(order => {
+                    const orderTime = new Date(order.created_at)
+                    const now = new Date()
+                    const minutesOld = Math.floor((now - orderTime) / 60000)
+                    const isTimeout = minutesOld >= 10 && order.status !== 'accepted'
+                    const isWarning = minutesOld >= 8 && minutesOld < 10 && order.status !== 'accepted'
 
-                  const tableNum = order.restaurant_tables?.table_number;
+                    const tableNum = order.restaurant_tables?.table_number;
 
-                  return (
-                    <div
-                      key={order.id}
-                      className={`order-card-new ${order.status === 'accepted' ? 'accepted' : ''} ${isTimeout ? 'timeout' : ''} ${isWarning ? 'warning' : ''}`}
-                    >
-                      <div className="card-top-bar">
-                        <div className="order-id-group">
-                          <span className="order-badge">#{order.order_code || order.id.slice(0, 8).toUpperCase()}</span>
-                          <span className="order-timestamp">{formatDateTime(order.created_at)}</span>
-                        </div>
-                      </div>
-
-                      <div className="card-main-info">
-                        <div className="info-item">
-                          <span className="info-label">Table</span>
-                          <span className="info-value highlighted">{tableNum || 'N/A'}</span>
-                        </div>
-                        <div className="info-item" style={{ alignItems: 'flex-end' }}>
-                          <span className="info-label">Total</span>
-                          <span className="info-value price">₹{order.total_price}</span>
-                        </div>
-                        {order.status !== 'accepted' && (
-                          <div className="info-item" style={{ gridColumn: 'span 2', marginTop: '4px' }}>
-                            <span className="info-label">Time Elapsed</span>
-                            <span className={`info-value ${minutesOld >= 8 ? 'urgent' : ''}`} style={{ fontSize: '13px' }}>
-                              ⏱️ <RunningTimer createdAt={order.created_at} />
-                            </span>
+                    return (
+                      <div
+                        key={order.id}
+                        className={`order-card-new ${order.status === 'accepted' ? 'accepted' : ''} ${isTimeout ? 'timeout' : ''} ${isWarning ? 'warning' : ''}`}
+                      >
+                        <div className="card-top-bar">
+                          <div className="order-id-group">
+                            <span className="order-badge">#{order.order_code || order.id.slice(0, 8).toUpperCase()}</span>
+                            <span className="order-timestamp">{formatDateTime(order.created_at)}</span>
                           </div>
-                        )}
-                      </div>
-
-                      {order.note && (
-                        <div className="order-special-note" style={{ fontSize: '12px', padding: '8px', borderRadius: '8px' }}>
-                          <strong>Note:</strong> {order.note}
                         </div>
-                      )}
 
-                      <div className="order-items-container">
-                        <div className="items-header">Order Items ({order.items?.length || 0})</div>
-                        <div className="items-list-new">
-                          {order.items?.map((item, i) => (
-                            <div key={i} className="item-row-new">
-                              <div className="item-main-desc">
-                                <span className={`veg-indicator ${item.is_veg ? 'veg' : 'non-veg'}`} style={{ color: item.is_veg ? 'var(--green)' : 'var(--red)' }}></span>
-                                <span className="item-name-text">{item.name}</span>
-                              </div>
-                              <div className="item-qty-tag">x{item.quantity}</div>
+                        <div className="card-main-info">
+                          <div className="info-item">
+                            <span className="info-label">Table</span>
+                            <span className="info-value highlighted">{tableNum || 'N/A'}</span>
+                          </div>
+                          <div className="info-item" style={{ alignItems: 'flex-end' }}>
+                            <span className="info-label">Total</span>
+                            <span className="info-value price">₹{order.total_price}</span>
+                          </div>
+                          {order.status !== 'accepted' && (
+                            <div className="info-item" style={{ gridColumn: 'span 2', marginTop: '4px' }}>
+                              <span className="info-label">Time Elapsed</span>
+                              <span className={`info-value ${minutesOld >= 8 ? 'urgent' : ''}`} style={{ fontSize: '13px' }}>
+                                ⏱️ <RunningTimer createdAt={order.created_at} />
+                              </span>
                             </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="card-actions-new">
-                        <div style={{ flex: 1, display: 'flex', gap: '8px' }}>
-                          {order.status === 'accepted' ? (
-                            <div className="acceptance-confirmed">
-                              <span className="check-icon">✓</span> Order Confirmed
-                            </div>
-                          ) : (
-                            <>
-                              <button className="action-btn decline" onClick={() => handleDecline(order.id, order.order_code)}>Decline</button>
-                              <button className="action-btn accept" onClick={() => handleAccept(order.id)}>Accept</button>
-                            </>
                           )}
                         </div>
+
+                        {order.note && (
+                          <div className="order-special-note">
+                            <strong>Note:</strong> {order.note}
+                          </div>
+                        )}
+
+                        <div className="order-items-container">
+                          <div className="items-header">Order Items ({order.items?.length || 0})</div>
+                          <div className="items-list-new">
+                            {order.items?.map((item, i) => (
+                              <div key={i} className="item-row-new">
+                                <div className="item-main-desc">
+                                  <span className={`veg-indicator ${item.is_veg ? 'veg' : 'non-veg'}`} style={{ color: item.is_veg ? 'var(--green)' : 'var(--red)' }}></span>
+                                  <span className="item-name-text">{item.name}</span>
+                                </div>
+                                <div className="item-qty-tag">x{item.quantity}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="card-actions-new">
+                          <div style={{ flex: 1, display: 'flex', gap: '8px' }}>
+                            {order.status === 'accepted' ? (
+                              <div className="acceptance-confirmed">
+                                <span className="check-icon">✓</span> Order Confirmed
+                              </div>
+                            ) : (
+                              <>
+                                <button className="action-btn decline" onClick={() => handleDecline(order.id, order.order_code)}>Decline</button>
+                                <button className="action-btn accept" onClick={() => handleAccept(order.id)}>Accept</button>
+                              </>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
+                    )
+                  })}
+                </div>
+              )}
+            </div>
           </div>
         )}
 
