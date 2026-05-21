@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body {
+  width: 80px;
+  height: 80px;
+  overflow: hidden;
+  background: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.bubble {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #e94560, #c23152);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 4px 20px rgba(233, 69, 96, 0.5);
+  transition: transform 0.15s ease;
+  touch-action: none;
+}
+.bubble:hover {
+  transform: scale(1.08);
+}
+.bubble:active {
+  transform: scale(0.95);
+}
+.bubble-icon {
+  color: #fff;
+  font-size: 24px;
+  line-height: 1;
+  pointer-events: none;
+}
+.badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 22px;
+  height: 22px;
+  border-radius: 11px;
+  background: #ff1744;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 5px;
+  box-shadow: 0 2px 8px rgba(255, 23, 68, 0.5);
+  border: 2px solid #0a0a0f;
+  line-height: 1;
+  pointer-events: none;
+}
+.badge.hidden {
+  display: none;
+}
+</style>
+</head>
+<body>
+<div class="bubble" id="bubble">
+  <span class="bubble-icon">📋</span>
+  <div class="badge hidden" id="badge">0</div>
+</div>
+<script>
+(function() {
+  const bubble = document.getElementById('bubble');
+  const badge = document.getElementById('badge');
+  let isDragging = false;
+  let dragStarted = false;
+  let startX = 0;
+  let startY = 0;
+  let startScreenX = 0;
+  let startScreenY = 0;
+
+  bubble.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    dragStarted = false;
+    startX = e.clientX;
+    startY = e.clientY;
+    startScreenX = e.screenX;
+    startScreenY = e.screenY;
+    bubble.setPointerCapture(e.pointerId);
+  });
+
+  bubble.addEventListener('pointermove', (e) => {
+    if (!e.hasPointerCapture(bubble)) return;
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+      dragStarted = true;
+      isDragging = true;
+    }
+    if (isDragging) {
+      window.moveTo(
+        window.screenX + (e.screenX - startScreenX),
+        window.screenY + (e.screenY - startScreenY)
+      );
+      startScreenX = e.screenX;
+      startScreenY = e.screenY;
+    }
+  });
+
+  bubble.addEventListener('pointerup', (e) => {
+    bubble.releasePointerCapture(e.pointerId);
+    if (isDragging) {
+      isDragging = false;
+      dragStarted = false;
+      if (window.electronAPI && window.electronAPI.saveBubbleBounds) {
+        const pos = { x: window.screenX, y: window.screenY };
+        window.electronAPI.saveBubbleBounds(pos);
+      }
+      return;
+    }
+    if (!dragStarted && window.electronAPI && window.electronAPI.bubbleClicked) {
+      window.electronAPI.bubbleClicked();
+    }
+  });
+
+  bubble.addEventListener('pointercancel', (e) => {
+    bubble.releasePointerCapture(e.pointerId);
+    isDragging = false;
+    dragStarted = false;
+  });
+
+  if (window.electronAPI && window.electronAPI.onOrderCountChanged) {
+    window.electronAPI.onOrderCountChanged((count) => {
+      badge.textContent = count;
+      if (count > 0) {
+        badge.classList.remove('hidden');
+      } else {
+        badge.classList.add('hidden');
+      }
+    });
+  }
+})();
+</script>
+</body>
+</html>

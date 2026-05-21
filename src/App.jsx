@@ -529,6 +529,7 @@ function App() {
   }, [])
 
   useEffect(() => {
+    if (window.electronAPI?.isElectron) return;
     const handleKeyDown = (e) => {
       if (e.ctrlKey && e.code === 'Space') {
         e.preventDefault()

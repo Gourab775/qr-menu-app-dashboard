@@ -9,10 +9,17 @@ const CONNECTIVITY_CHECK_INTERVAL = 3000;
 let mainWindow = null;
 let quickWindow = null;
 let splashWindow = null;
+let bubbleWindow = null;
 let connectivityInterval = null;
 let wasOffline = false;
 
+// Popup state machine: 'closed' | 'popup' | 'bubble'
+let popupState = 'closed';
+let pendingOrderCount = 0;
+let isQuitting = false;
+
 const BOUNDS_PATH = path.join(app.getPath('userData'), 'popup-bounds.json');
+const BUBBLE_BOUNDS_PATH = path.join(app.getPath('userData'), 'bubble-bounds.json');
 
 function loadPopupBounds() {
   try {
@@ -26,6 +33,21 @@ function loadPopupBounds() {
 function savePopupBounds(bounds) {
   try {
     fs.writeFileSync(BOUNDS_PATH, JSON.stringify(bounds));
+  } catch (_) {}
+}
+
+function loadBubbleBounds() {
+  try {
+    if (fs.existsSync(BUBBLE_BOUNDS_PATH)) {
+      return JSON.parse(fs.readFileSync(BUBBLE_BOUNDS_PATH, 'utf-8'));
+    }
+  } catch (_) {}
+  return { x: 0, y: 300 };
+}
+
+function saveBubbleBounds(bounds) {
+  try {
+    fs.writeFileSync(BUBBLE_BOUNDS_PATH, JSON.stringify(bounds));
   } catch (_) {}
 }
 
@@ -155,10 +177,6 @@ function createQuickWindow() {
   popupUrl.searchParams.set('mode', 'popup-orders');
   quickWindow.loadURL(popupUrl.toString());
 
-  quickWindow.webContents.on('did-finish-load', () => {
-    if (!quickWindow || quickWindow.isDestroyed()) return;
-  });
-
   quickWindow.webContents.setWindowOpenHandler(() => {
     return { action: 'deny' };
   });
@@ -172,10 +190,9 @@ function createQuickWindow() {
   });
 
   quickWindow.on('close', (event) => {
-    if (!quickWindow.isDestroyed()) {
-      event.preventDefault();
-      quickWindow.hide();
-    }
+    if (isQuitting) return;
+    event.preventDefault();
+    minimizePopupToBubble();
   });
 
   quickWindow.on('closed', () => {
@@ -183,15 +200,98 @@ function createQuickWindow() {
   });
 }
 
-function showQuickWindow() {
-  if (!quickWindow || quickWindow.isDestroyed()) {
-    createQuickWindow();
+function createBubbleWindow() {
+  const savedBounds = loadBubbleBounds();
+
+  bubbleWindow = new BrowserWindow({
+    width: 80,
+    height: 80,
+    x: savedBounds.x,
+    y: savedBounds.y,
+    frame: false,
+    transparent: true,
+    resizable: false,
+    alwaysOnTop: true,
+    show: false,
+    skipTaskbar: true,
+    hasShadow: false,
+    title: '',
+    icon: path.join(__dirname, '..', 'assets', 'icon.png'),
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.cjs'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  });
+
+  bubbleWindow.loadFile(path.join(__dirname, 'bubble.html'));
+
+  bubbleWindow.on('closed', () => {
+    bubbleWindow = null;
+  });
+}
+
+function showBubble() {
+  if (!bubbleWindow || bubbleWindow.isDestroyed()) {
+    createBubbleWindow();
   }
-  if (quickWindow.isVisible()) {
-    quickWindow.focus();
-  } else {
+  const savedBounds = loadBubbleBounds();
+  bubbleWindow.setPosition(savedBounds.x, savedBounds.y);
+  bubbleWindow.show();
+  bubbleWindow.focus();
+  bubbleWindow.webContents.send('order-count-changed', pendingOrderCount);
+}
+
+function hideBubble() {
+  if (bubbleWindow && !bubbleWindow.isDestroyed()) {
+    const pos = bubbleWindow.getPosition();
+    saveBubbleBounds({ x: pos[0], y: pos[1] });
+    bubbleWindow.hide();
+  }
+}
+
+function togglePopup() {
+  switch (popupState) {
+    case 'closed':
+      if (!quickWindow || quickWindow.isDestroyed()) createQuickWindow();
+      if (bubbleWindow && !bubbleWindow.isDestroyed()) {
+        hideBubble();
+      }
+      quickWindow.show();
+      quickWindow.focus();
+      popupState = 'popup';
+      break;
+    case 'popup':
+      minimizePopupToBubble();
+      break;
+    case 'bubble':
+      hideBubble();
+      if (!quickWindow || quickWindow.isDestroyed()) createQuickWindow();
+      quickWindow.show();
+      quickWindow.focus();
+      popupState = 'popup';
+      break;
+  }
+}
+
+function minimizePopupToBubble() {
+  if (popupState === 'popup') {
+    if (quickWindow && !quickWindow.isDestroyed()) {
+      quickWindow.hide();
+    }
+    showBubble();
+    popupState = 'bubble';
+  }
+}
+
+function restoreFromBubble() {
+  if (popupState === 'bubble') {
+    hideBubble();
+    if (!quickWindow || quickWindow.isDestroyed()) createQuickWindow();
     quickWindow.show();
     quickWindow.focus();
+    popupState = 'popup';
   }
 }
 
@@ -239,11 +339,50 @@ app.whenReady().then(() => {
   createSplashWindow();
   createMainWindow();
 
+  // Initialize popup window hidden at startup
+  createQuickWindow();
+  popupState = 'closed';
+
+  // IPC: show popup from renderer (sidebar button click)
   ipcMain.on('show-popup', () => {
-    showQuickWindow();
+    if (popupState === 'bubble') {
+      restoreFromBubble();
+    } else {
+      if (!quickWindow || quickWindow.isDestroyed()) createQuickWindow();
+      if (bubbleWindow && !bubbleWindow.isDestroyed()) hideBubble();
+      quickWindow.show();
+      quickWindow.focus();
+      popupState = 'popup';
+    }
   });
 
-  globalShortcut.register('CommandOrControl+Space', showQuickWindow);
+  // IPC: minimize popup to bubble from renderer
+  ipcMain.on('minimize-popup', () => {
+    minimizePopupToBubble();
+  });
+
+  // IPC: update pending order count from popup renderer
+  ipcMain.on('send-order-count', (_event, count) => {
+    pendingOrderCount = count;
+    if (bubbleWindow && !bubbleWindow.isDestroyed()) {
+      bubbleWindow.webContents.send('order-count-changed', count);
+    }
+  });
+
+  // IPC: save bubble bounds from bubble renderer
+  ipcMain.on('save-bubble-bounds', (_event, bounds) => {
+    saveBubbleBounds(bounds);
+  });
+
+  // IPC: bubble clicked (restore popup)
+  ipcMain.on('bubble-clicked', () => {
+    restoreFromBubble();
+  });
+
+  const registered = globalShortcut.register('CommandOrControl+Space', togglePopup);
+  if (!registered) {
+    console.error('[Main] Failed to register global shortcut CommandOrControl+Space');
+  }
 
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     callback({
@@ -271,12 +410,18 @@ ipcMain.on('save-popup-bounds', (_event, bounds) => {
 });
 
 app.on('window-all-closed', () => {
-  stopConnectivityCheck();
-  globalShortcut.unregisterAll();
-  app.quit();
+  // Don't quit if popup system is still active
+  const hasPopup = quickWindow && !quickWindow.isDestroyed();
+  const hasBubble = bubbleWindow && !bubbleWindow.isDestroyed();
+  if (!hasPopup && !hasBubble) {
+    stopConnectivityCheck();
+    globalShortcut.unregisterAll();
+    app.quit();
+  }
 });
 
 app.on('will-quit', () => {
+  isQuitting = true;
   globalShortcut.unregisterAll();
 });
 

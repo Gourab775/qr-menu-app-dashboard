@@ -81,6 +81,32 @@
   letter-spacing: 0.2px;
 }
 
+.popup-titlebar-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  -webkit-app-region: no-drag;
+}
+
+.popup-minimize-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #555;
+  transition: color 0.15s, background 0.15s;
+  -webkit-app-region: no-drag;
+}
+
+.popup-minimize-btn:hover {
+  color: #aaa;
+  background: rgba(255,255,255,0.06);
+}
+
 .popup-titlebar-user {
   font-size: 11px;
   color: #555;

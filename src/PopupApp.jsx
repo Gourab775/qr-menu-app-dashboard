@@ -115,6 +115,12 @@ function PopupApp() {
   }, [isLoggedIn, restaurantId, loadOrders])
 
   useEffect(() => {
+    if (window.electronAPI && window.electronAPI.sendOrderCount) {
+      window.electronAPI.sendOrderCount(orders.length)
+    }
+  }, [orders])
+
+  useEffect(() => {
     if (!isLoggedIn || !restaurantId) return
 
     const lastPlayedRef = { current: null }
@@ -436,7 +442,20 @@ function PopupApp() {
           </button>
           <span className="popup-titlebar-title">Orders</span>
         </div>
-        <span className="popup-titlebar-user">{userFullName}</span>
+        <div className="popup-titlebar-right">
+          <button
+            className="popup-minimize-btn"
+            onClick={(e) => { e.stopPropagation(); if (window.electronAPI?.minimizePopup) window.electronAPI.minimizePopup() }}
+            aria-label="Minimize to bubble"
+            title="Minimize to bubble"
+          >
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <circle cx="6" cy="6" r="5" stroke="currentColor" strokeWidth="1.2" fill="none"/>
+              <circle cx="6" cy="6" r="2" fill="currentColor"/>
+            </svg>
+          </button>
+          <span className="popup-titlebar-user">{userFullName}</span>
+        </div>
       </div>
 
       {menuOpen && (
