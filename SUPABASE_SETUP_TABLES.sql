@@ -1,5 +1,15 @@
 -- Run this SQL in Supabase Dashboard -> SQL Editor
 
+-- =====================================
+-- Ensure live_orders status defaults to 'pending'
+-- =====================================
+ALTER TABLE live_orders
+ALTER COLUMN status SET DEFAULT 'pending';
+
+-- Backfill any existing rows with NULL/empty status to 'pending'
+UPDATE live_orders SET status = 'pending' WHERE status IS NULL OR status = '';
+
+-- =====================================
 -- Create the restaurant_tables table
 CREATE TABLE IF NOT EXISTS restaurant_tables (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

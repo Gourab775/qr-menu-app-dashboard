@@ -120,6 +120,13 @@ function App() {
         const liveData = liveResult.data || []
         const pastData = pastResult.data || []
         const allOrders = [...liveData, ...pastData]
+
+        console.log('[Orders] loadOrders result:', {
+          pendingCount: liveData.length,
+          acceptedCount: pastData.length,
+          pendingStatuses: [...new Set(liveData.map(o => o.status))],
+          acceptedStatuses: [...new Set(pastData.map(o => o.status))]
+        })
         const unresolvedIds = [...new Set(allOrders.filter(o => o.table_id && !o.restaurant_tables?.table_number).map(o => o.table_id))]
 
         if (unresolvedIds.length > 0) {
@@ -434,9 +441,27 @@ function App() {
         (payload) => {
           if (payload.new.restaurant_id !== restaurantId) return
           const newOrderId = payload.new.id
-          const newStatus = payload.new.status || 'pending'
+          const rawStatus = payload.new.status
+          const newStatus = rawStatus || 'pending'
           if (lastPlayedOrderRef.current === newOrderId) return
           lastPlayedOrderRef.current = newOrderId
+
+          console.log('[Orders] INSERT event received:', {
+            id: newOrderId,
+            status: rawStatus,
+            resolvedStatus: newStatus,
+            order_code: payload.new.order_code,
+            created_at: payload.new.created_at
+          })
+
+          if (newStatus !== 'pending') {
+            console.warn('[Orders] New order inserted with non-pending status:', {
+              id: newOrderId,
+              status: rawStatus,
+              expected: 'pending',
+              order_code: payload.new.order_code
+            })
+          }
 
           const fetchAndAddOrder = async () => {
             const { data: freshOrder } = await supabase
@@ -471,6 +496,14 @@ function App() {
                 if (prev.some(o => o.id === newOrderId)) return prev.map(o => o.id === newOrderId ? { ...o, ...resolved } : o)
                 return [resolved, ...prev].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
               })
+            } else {
+              console.warn('[Orders] INSERT with unrecognized status, defaulting to pending routing:', {
+                id: newOrderId, status: newStatus
+              })
+              setOrders(prev => {
+                if (prev.some(o => o.id === newOrderId)) return prev
+                return [resolved, ...prev].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+              })
             }
           }
           fetchAndAddOrder()
@@ -479,8 +512,23 @@ function App() {
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'live_orders' },
         (payload) => {
           const { id, status } = payload.new
+          const oldStatus = payload.old?.status
 
-          if (status !== 'pending' && status !== 'accepted' && status !== 'confirmed' && status !== 'completed') return
+          console.log('[Orders] UPDATE event:', {
+            id,
+            oldStatus,
+            newStatus: status,
+            order_code: payload.new.order_code || 'N/A'
+          })
+
+          if (status !== 'pending' && status !== 'accepted' && status !== 'confirmed' && status !== 'completed') {
+            console.warn('[Orders] UPDATE with unknown status, ignoring:', { id, status })
+            return
+          }
+
+          if (oldStatus === status) {
+            console.log('[Orders] UPDATE with same status, no transition:', { id, status })
+          }
 
           setOrders(prev => {
             if (!prev.some(o => o.id === id)) return prev
@@ -645,6 +693,12 @@ function App() {
       return prev.filter(o => o.id !== orderId)
     })
     if (movedOrder) {
+      console.log('[Orders] Accepting order:', {
+        id: orderId,
+        order_code: movedOrder.order_code,
+        fromStatus: movedOrder.status,
+        toStatus: 'accepted'
+      })
       setPastOrders(prev => [movedOrder, ...prev])
     }
 

@@ -199,8 +199,8 @@ export default function OverviewPage({ restaurantId }) {
 
       if (!mountedRef.current) return
 
-      const completed = list.filter(o => o.status === 'accepted')
-      const pending = list.filter(o => o.status !== 'accepted' && o.status !== 'rejected')
+      const completed = list.filter(o => o.status === 'accepted' || o.status === 'confirmed' || o.status === 'completed')
+      const pending = list.filter(o => o.status === 'pending')
 
       const items = {}
 
