@@ -19,7 +19,7 @@ html, body {
   width: 60px;
   height: 60px;
   border-radius: 50%;
-  background: #0a0a0f;
+  background: #7C3AED;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -30,10 +30,14 @@ html, body {
   cursor: grabbing;
 }
 .bubble-icon {
-  color: #fff;
-  font-size: 26px;
-  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   pointer-events: none;
+}
+.bubble-icon svg {
+  width: 30px;
+  height: 30px;
 }
 .badge {
   position: absolute;
@@ -60,7 +64,16 @@ html, body {
 </head>
 <body>
 <div class="bubble" id="bubble">
-  <span class="bubble-icon">🍽️</span>
+  <div class="bubble-icon">
+    <svg viewBox="-11.5 -10.232 23 20.463" xmlns="http://www.w3.org/2000/svg" fill="#fff">
+      <circle r="2.05"/>
+      <g stroke="#fff" stroke-width="1" fill="none">
+        <ellipse rx="11" ry="4.2"/>
+        <ellipse rx="11" ry="4.2" transform="rotate(60)"/>
+        <ellipse rx="11" ry="4.2" transform="rotate(120)"/>
+      </g>
+    </svg>
+  </div>
   <div class="badge hidden" id="badge">0</div>
 </div>
 <script>

@@ -13,7 +13,7 @@ let bubbleWindow = null;
 let connectivityInterval = null;
 let wasOffline = false;
 
-// Popup state machine: 'closed' | 'popup' | 'bubble'
+// Popup state machine: 'closed' | 'open' | 'bubble'
 let popupState = 'closed';
 let pendingOrderCount = 0;
 let isQuitting = false;
@@ -251,32 +251,23 @@ function hideBubble() {
   }
 }
 
-function togglePopup() {
-  switch (popupState) {
-    case 'closed':
-      if (!quickWindow || quickWindow.isDestroyed()) createQuickWindow();
-      if (bubbleWindow && !bubbleWindow.isDestroyed()) {
-        hideBubble();
-      }
-      quickWindow.show();
-      quickWindow.focus();
-      popupState = 'popup';
-      break;
-    case 'popup':
-      minimizePopupToBubble();
-      break;
-    case 'bubble':
-      hideBubble();
-      if (!quickWindow || quickWindow.isDestroyed()) createQuickWindow();
-      quickWindow.show();
-      quickWindow.focus();
-      popupState = 'popup';
-      break;
+function openOrFocusPopup() {
+  if (popupState === 'bubble') {
+    hideBubble();
+    if (!quickWindow || quickWindow.isDestroyed()) createQuickWindow();
+    quickWindow.show();
+    quickWindow.focus();
+  } else {
+    if (!quickWindow || quickWindow.isDestroyed()) createQuickWindow();
+    if (bubbleWindow && !bubbleWindow.isDestroyed()) hideBubble();
+    quickWindow.show();
+    quickWindow.focus();
   }
+  popupState = 'open';
 }
 
 function minimizePopupToBubble() {
-  if (popupState === 'popup') {
+  if (popupState === 'open') {
     if (quickWindow && !quickWindow.isDestroyed()) {
       quickWindow.hide();
     }
@@ -291,7 +282,7 @@ function restoreFromBubble() {
     if (!quickWindow || quickWindow.isDestroyed()) createQuickWindow();
     quickWindow.show();
     quickWindow.focus();
-    popupState = 'popup';
+    popupState = 'open';
   }
 }
 
@@ -339,21 +330,11 @@ app.whenReady().then(() => {
   createSplashWindow();
   createMainWindow();
 
-  // Initialize popup window hidden at startup
-  createQuickWindow();
-  popupState = 'closed';
+  // Popup created lazily on first use — no early initialization
 
   // IPC: show popup from renderer (sidebar button click)
   ipcMain.on('show-popup', () => {
-    if (popupState === 'bubble') {
-      restoreFromBubble();
-    } else {
-      if (!quickWindow || quickWindow.isDestroyed()) createQuickWindow();
-      if (bubbleWindow && !bubbleWindow.isDestroyed()) hideBubble();
-      quickWindow.show();
-      quickWindow.focus();
-      popupState = 'popup';
-    }
+    openOrFocusPopup();
   });
 
   // IPC: minimize popup to bubble from renderer
@@ -379,7 +360,7 @@ app.whenReady().then(() => {
     restoreFromBubble();
   });
 
-  const registered = globalShortcut.register('CommandOrControl+Space', togglePopup);
+  const registered = globalShortcut.register('CommandOrControl+Space', openOrFocusPopup);
   if (!registered) {
     console.error('[Main] Failed to register global shortcut CommandOrControl+Space');
   }
