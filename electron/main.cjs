@@ -1,22 +1,24 @@
-const { app, BrowserWindow, globalShortcut, shell, net, session, Menu, ipcMain } = require('electron');
+const { app, BrowserWindow, globalShortcut, shell, net, session, Menu, ipcMain, Tray, nativeImage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
 const APP_URL = 'https://qr-menu-app-dashboard.vercel.app/';
 const CONNECTIVITY_CHECK_URL = 'https://clients3.google.com/generate_204';
 const CONNECTIVITY_CHECK_INTERVAL = 3000;
+const TOGGLE_COOLDOWN = 250;
 
 let mainWindow = null;
 let quickWindow = null;
 let splashWindow = null;
 let bubbleWindow = null;
+let tray = null;
 let connectivityInterval = null;
 let wasOffline = false;
 
-// Popup state machine: 'closed' | 'open' | 'bubble'
 let popupState = 'closed';
 let pendingOrderCount = 0;
 let isQuitting = false;
+let lastToggleTime = 0;
 
 const BOUNDS_PATH = path.join(app.getPath('userData'), 'popup-bounds.json');
 const BUBBLE_BOUNDS_PATH = path.join(app.getPath('userData'), 'bubble-bounds.json');
@@ -49,6 +51,49 @@ function saveBubbleBounds(bounds) {
   try {
     fs.writeFileSync(BUBBLE_BOUNDS_PATH, JSON.stringify(bounds));
   } catch (_) {}
+}
+
+function createTray() {
+  const iconPath = path.join(__dirname, '..', 'assets', 'icon.png');
+  let trayIcon;
+  try {
+    trayIcon = nativeImage.createFromPath(iconPath);
+    trayIcon = trayIcon.resize({ width: 16, height: 16 });
+  } catch {
+    trayIcon = nativeImage.createEmpty();
+  }
+
+  tray = new Tray(trayIcon);
+  tray.setToolTip('QR Menu Dashboard');
+
+  const contextMenu = Menu.buildFromTemplate([
+    {
+      label: 'Open Popup',
+      click: () => openOrFocusPopup(),
+    },
+    {
+      label: 'Show Dashboard',
+      click: () => {
+        if (!mainWindow || mainWindow.isDestroyed()) {
+          createMainWindow();
+        } else {
+          mainWindow.show();
+          mainWindow.focus();
+        }
+      },
+    },
+    { type: 'separator' },
+    {
+      label: 'Quit',
+      click: () => {
+        isQuitting = true;
+        app.quit();
+      },
+    },
+  ]);
+
+  tray.setContextMenu(contextMenu);
+  tray.on('click', () => openOrFocusPopup());
 }
 
 function createSplashWindow() {
@@ -131,6 +176,7 @@ function createMainWindow() {
 }
 
 function createQuickWindow() {
+  if (quickWindow && !quickWindow.isDestroyed()) return;
   const savedBounds = loadPopupBounds();
 
   quickWindow = new BrowserWindow({
@@ -201,6 +247,7 @@ function createQuickWindow() {
 }
 
 function createBubbleWindow() {
+  if (bubbleWindow && !bubbleWindow.isDestroyed()) return;
   const savedBounds = loadBubbleBounds();
 
   bubbleWindow = new BrowserWindow({
@@ -252,22 +299,29 @@ function hideBubble() {
 }
 
 function openOrFocusPopup() {
-  if (popupState === 'bubble') {
-    hideBubble();
-    if (!quickWindow || quickWindow.isDestroyed()) createQuickWindow();
-    quickWindow.show();
-    quickWindow.focus();
-  } else {
-    if (!quickWindow || quickWindow.isDestroyed()) createQuickWindow();
-    if (bubbleWindow && !bubbleWindow.isDestroyed()) hideBubble();
-    quickWindow.show();
-    quickWindow.focus();
+  const now = Date.now();
+  if (now - lastToggleTime < TOGGLE_COOLDOWN) return;
+  lastToggleTime = now;
+
+  const popupExists = quickWindow && !quickWindow.isDestroyed();
+  const popupVisible = popupExists && quickWindow.isVisible();
+  const bubbleExists = bubbleWindow && !bubbleWindow.isDestroyed();
+
+  if (popupState === 'open' && popupVisible) {
+    minimizePopupToBubble();
+    return;
   }
+
+  if (bubbleExists) hideBubble();
+  if (!popupExists) createQuickWindow();
+  quickWindow.show();
+  quickWindow.focus();
   popupState = 'open';
+  quickWindow.webContents.send('focus-input');
 }
 
 function minimizePopupToBubble() {
-  if (popupState === 'open') {
+  if (popupState === 'open' || (quickWindow && !quickWindow.isDestroyed())) {
     if (quickWindow && !quickWindow.isDestroyed()) {
       quickWindow.hide();
     }
@@ -283,6 +337,7 @@ function restoreFromBubble() {
     quickWindow.show();
     quickWindow.focus();
     popupState = 'open';
+    quickWindow.webContents.send('focus-input');
   }
 }
 
@@ -327,10 +382,12 @@ function stopConnectivityCheck() {
 app.whenReady().then(() => {
   Menu.setApplicationMenu(null);
 
-  createSplashWindow();
-  createMainWindow();
+  createTray();
 
-  // Popup created lazily on first use — no early initialization
+  const registered = globalShortcut.register('CommandOrControl+Space', openOrFocusPopup);
+  if (!registered) {
+    console.error('[Main] Failed to register global shortcut CommandOrControl+Space');
+  }
 
   // IPC: show popup from renderer (sidebar button click)
   ipcMain.on('show-popup', () => {
@@ -360,11 +417,6 @@ app.whenReady().then(() => {
     restoreFromBubble();
   });
 
-  const registered = globalShortcut.register('CommandOrControl+Space', openOrFocusPopup);
-  if (!registered) {
-    console.error('[Main] Failed to register global shortcut CommandOrControl+Space');
-  }
-
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     callback({
       responseHeaders: {
@@ -391,14 +443,7 @@ ipcMain.on('save-popup-bounds', (_event, bounds) => {
 });
 
 app.on('window-all-closed', () => {
-  // Don't quit if popup system is still active
-  const hasPopup = quickWindow && !quickWindow.isDestroyed();
-  const hasBubble = bubbleWindow && !bubbleWindow.isDestroyed();
-  if (!hasPopup && !hasBubble) {
-    stopConnectivityCheck();
-    globalShortcut.unregisterAll();
-    app.quit();
-  }
+  // App stays alive in system tray; quit via tray menu or will-quit
 });
 
 app.on('will-quit', () => {

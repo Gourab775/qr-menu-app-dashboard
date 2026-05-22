@@ -27,4 +27,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.removeListener('order-count-changed', handler);
     };
   },
+
+  // Listen for focus-input signal (sent to popup when opened via Ctrl+Space)
+  onFocusInput: (callback) => {
+    const handler = () => callback();
+    ipcRenderer.on('focus-input', handler);
+    return () => {
+      ipcRenderer.removeListener('focus-input', handler);
+    };
+  },
 });

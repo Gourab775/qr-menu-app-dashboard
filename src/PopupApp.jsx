@@ -130,6 +130,18 @@ function PopupApp() {
   }, [orders])
 
   useEffect(() => {
+    if (window.electronAPI && window.electronAPI.onFocusInput) {
+      const cleanup = window.electronAPI.onFocusInput(() => {
+        if (popupRef.current) {
+          popupRef.current.focus({ preventScroll: false })
+        }
+        window.focus()
+      })
+      return cleanup
+    }
+  }, [])
+
+  useEffect(() => {
     if (!isLoggedIn || !restaurantId) return
 
     const lastPlayedRef = { current: null }
