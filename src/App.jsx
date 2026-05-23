@@ -580,17 +580,27 @@ function App() {
   useEffect(() => {
     if (!isLoggedIn || !restaurantId) return
 
+    let isSubscribed = true
+    let pollInterval = null
+
+    console.log('[Waiter] Effect running with filters:', { restaurant_id: restaurantId, status: 'pending' })
+
     const fetchPending = async () => {
       setWaiterCallsLoading(true)
       try {
         console.log('[Waiter] Fetching pending calls for restaurant:', restaurantId)
         const { data, error } = await supabase
           .from('waiter_calls')
-          .select('*')
+          .select('id, restaurant_id, table_id, order_code, session_order_id, status, created_at')
           .eq('restaurant_id', restaurantId)
           .eq('status', 'pending')
           .order('created_at', { ascending: false })
-        console.log('[Waiter] Query response:', { count: data?.length, error: error?.message || null, code: error?.code || null })
+        console.log('[Waiter] Fetch result:', {
+          count: data?.length,
+          error: error?.message || null,
+          code: error?.code || null,
+          filters: { restaurant_id: restaurantId, status: 'pending' }
+        })
         if (error) throw error
         if (data) {
           const tableIds = [...new Set(data.filter(c => c.table_id).map(c => c.table_id))]
@@ -602,27 +612,49 @@ function App() {
               data.forEach(c => { if (c.table_id && tMap[c.table_id]) c.restaurant_tables = { table_number: tMap[c.table_id] } })
             }
           }
-          setWaiterCalls(data)
+          if (isSubscribed) {
+            setWaiterCalls(data)
+            console.log('[Waiter] State set with', data.length, 'pending calls')
+          }
         }
       } catch (err) {
         console.error('[Waiter] Fetch error:', err.message || err)
         showToast('Failed to load waiter requests', 'error')
       } finally {
-        setWaiterCallsLoading(false)
+        if (isSubscribed) setWaiterCallsLoading(false)
       }
     }
+
     fetchPending()
+
+    // Periodic polling fallback for when Realtime is not enabled for waiter_calls table
+    pollInterval = setInterval(() => {
+      console.log('[Waiter] Polling fallback...')
+      fetchPending()
+    }, 10000)
+
+    const normalizeRid = (val) => String(val).toLowerCase().trim()
 
     const channel = supabase
       .channel('waiter-calls-dashboard')
       .on('postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'waiter_calls' },
         (payload) => {
-          if (payload.new.restaurant_id !== restaurantId) return
+          const incomingRid = normalizeRid(payload.new.restaurant_id)
+          const currentRid = normalizeRid(restaurantId)
+          console.log('[Waiter] INSERT event:', {
+            id: payload.new.id,
+            restaurant_id: incomingRid,
+            expected_rid: currentRid,
+            status: payload.new.status,
+            match: incomingRid === currentRid
+          })
+          if (incomingRid !== currentRid) return
           if (payload.new.status === 'pending') {
             setWaiterCalls(prev => {
               if (prev.some(c => c.id === payload.new.id)) return prev
               const enriched = { ...payload.new, restaurant_tables: null }
+              console.log('[Waiter] Added call via INSERT event:', payload.new.id)
               return [enriched, ...prev]
             })
           }
@@ -631,9 +663,21 @@ function App() {
       .on('postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'waiter_calls' },
         (payload) => {
-          if (payload.new.restaurant_id !== restaurantId) return
+          const incomingRid = normalizeRid(payload.new.restaurant_id)
+          const currentRid = normalizeRid(restaurantId)
+          console.log('[Waiter] UPDATE event:', {
+            id: payload.new.id,
+            status: payload.new.status,
+            restaurant_id: incomingRid,
+            match: incomingRid === currentRid
+          })
+          if (incomingRid !== currentRid) return
           if (payload.new.status !== 'pending') {
-            setWaiterCalls(prev => prev.filter(c => c.id !== payload.new.id))
+            setWaiterCalls(prev => {
+              const filtered = prev.filter(c => c.id !== payload.new.id)
+              if (filtered.length !== prev.length) console.log('[Waiter] Removed via UPDATE (status changed):', payload.new.id)
+              return filtered
+            })
           } else {
             setWaiterCalls(prev => {
               if (prev.some(c => c.id === payload.new.id)) return prev
@@ -645,17 +689,27 @@ function App() {
       .on('postgres_changes',
         { event: 'DELETE', schema: 'public', table: 'waiter_calls' },
         (payload) => {
-          setWaiterCalls(prev => prev.filter(c => c.id !== payload.old.id))
+          console.log('[Waiter] DELETE event:', { id: payload.old.id })
+          setWaiterCalls(prev => {
+            const filtered = prev.filter(c => c.id !== payload.old.id)
+            if (filtered.length !== prev.length) console.log('[Waiter] Removed via DELETE event:', payload.old.id)
+            return filtered
+          })
         }
       )
       .subscribe((status) => {
+        console.log('[Waiter] Subscription status:', status)
+        if (status === 'SUBSCRIBED') {
+          console.log('[Waiter] Successfully subscribed to waiter_calls changes')
+        }
         if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-          console.warn('[Waiter] Subscription issue, re-fetching:', status)
-          fetchPending()
+          console.warn('[Waiter] Subscription issue, will re-fetch on next poll interval:', status)
         }
       })
 
     return () => {
+      isSubscribed = false
+      if (pollInterval) clearInterval(pollInterval)
       supabase.removeChannel(channel)
     }
   }, [isLoggedIn, restaurantId])
