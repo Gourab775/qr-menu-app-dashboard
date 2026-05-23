@@ -1,11 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from './lib/supabase'
 import { useAuth } from './contexts/AuthContext'
-import { fetchWithTimeout } from './lib/apiUtils'
 import { formatOrderDateTime } from './utils/formatDateTime'
+import * as orderStore from './services/orderStore'
 import './PopupApp.css'
-
-const API_TIMEOUT = 15000
 
 const SOUND_OPTIONS = [
   { id: 'beep', name: 'Default Beep', freq: [800, 1000], duration: 0.3 },
@@ -15,9 +13,8 @@ const SOUND_OPTIONS = [
 
 function PopupApp() {
   const { session, profile, loading: authLoading, initialized, restaurantId } = useAuth()
-  const [orders, setOrders] = useState([])
-  const [pastOrders, setPastOrders] = useState([])
-  const [loading, setLoading] = useState(false)
+  const [orders, setOrders] = useState(() => orderStore.getPending())
+  const [pastOrders, setPastOrders] = useState(() => orderStore.getPast())
   const [activeView, setActiveView] = useState('live')
   const [menuOpen, setMenuOpen] = useState(false)
   const [toast, setToast] = useState(null)
@@ -34,13 +31,9 @@ function PopupApp() {
   })
 
   const popupRef = useRef(null)
-  const abortControllerRef = useRef(null)
-  const ordersLoadingRef = useRef(false)
   const isMountedRef = useRef(true)
-  const firstOrdersFetchDone = useRef(false)
-  const subscriptionActiveRef = useRef(false)
-  const needsReconnectRefetch = useRef(false)
-  const reconnectTimerRef = useRef(null)
+  const lastOrderIds = useRef(new Set())
+  const soundEnabledRef = useRef(preferences.soundEnabled)
 
   const isLoggedIn = !!session
   const userFullName = profile?.full_name || profile?.email || session?.user?.email || 'User'
@@ -51,93 +44,10 @@ function PopupApp() {
     setTimeout(() => setToast(null), 3000)
   }, [])
 
-  const loadOrders = useCallback(async (signal = null) => {
-    if (!restaurantId || !isMountedRef.current) return
-
-    const isManual = signal === null
-    if (isManual) {
-      if (ordersLoadingRef.current) return
-      ordersLoadingRef.current = true
-    }
-    setLoading(true)
-
-    try {
-      const baseSelect = 'id, restaurant_id, total_price, status, items, created_at, order_code, table_id, note, restaurant_tables(table_number)'
-
-      const [liveResult, pastResult] = await Promise.all([
-        fetchWithTimeout(
-          supabase.from('live_orders').select(baseSelect).eq('restaurant_id', restaurantId).eq('status', 'pending').order('created_at', { ascending: false }).limit(200),
-          API_TIMEOUT
-        ),
-        fetchWithTimeout(
-          supabase.from('live_orders').select(baseSelect).eq('restaurant_id', restaurantId).eq('status', 'accepted').order('created_at', { ascending: false }).limit(200),
-          API_TIMEOUT
-        )
-      ])
-
-      if (signal?.aborted) return
-      if (!isMountedRef.current) return
-
-      const liveError = liveResult.error && liveResult.error.code !== 'PGRST116' ? liveResult.error : null
-      const pastError = pastResult.error && pastResult.error.code !== 'PGRST116' ? pastResult.error : null
-      if (liveError) console.error('[Popup] Live query error:', liveError.message || liveError)
-      if (pastError) console.error('[Popup] Past query error:', pastError.message || pastError)
-
-      const liveData = liveResult.data || []
-      const pastData = pastResult.data || []
-      const allOrders = [...liveData, ...pastData]
-
-      const unresolvedIds = [...new Set(allOrders.filter(o => o.table_id && !o.restaurant_tables?.table_number).map(o => o.table_id))]
-      if (unresolvedIds.length > 0) {
-        const { data: tr } = await fetchWithTimeout(
-          supabase.from('restaurant_tables').select('id, table_number').in('id', unresolvedIds),
-          API_TIMEOUT
-        )
-        if (signal?.aborted) return
-        if (isMountedRef.current && tr) {
-          const tMap = {}
-          tr.forEach(t => { tMap[t.id] = t.table_number })
-          allOrders.forEach(o => {
-            if (o.table_id && tMap[o.table_id] !== undefined) {
-              o.restaurant_tables = { table_number: tMap[o.table_id] }
-            }
-          })
-        }
-      }
-
-      if (signal?.aborted) return
-      if (isMountedRef.current) {
-        setOrders(prev => {
-          const merged = new Map(prev.map(o => [o.id, o]))
-          liveData.forEach(o => merged.set(o.id, o))
-          return Array.from(merged.values()).sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-        })
-        setPastOrders(prev => {
-          const merged = new Map(prev.map(o => [o.id, o]))
-          pastData.forEach(o => merged.set(o.id, o))
-          return Array.from(merged.values()).sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-        })
-        firstOrdersFetchDone.current = true
-      }
-    } catch (err) {
-      console.error('[Popup] loadOrders exception:', err)
-    } finally {
-      if (isMountedRef.current) {
-        ordersLoadingRef.current = false
-        setLoading(false)
-      }
-    }
-  }, [restaurantId])
-
   useEffect(() => {
-    if (!isLoggedIn || !restaurantId) return
     isMountedRef.current = true
-    ordersLoadingRef.current = false
-    return () => {
-      isMountedRef.current = false
-      ordersLoadingRef.current = false
-    }
-  }, [isLoggedIn, restaurantId])
+    return () => { isMountedRef.current = false }
+  }, [])
 
   useEffect(() => {
     if (window.electronAPI && window.electronAPI.sendOrderCount) {
@@ -160,11 +70,11 @@ function PopupApp() {
   useEffect(() => {
     if (!isLoggedIn || !restaurantId) return
 
-    const initialFetchAbort = new AbortController()
-    const lastPlayedRef = { current: null }
+    soundEnabledRef.current = preferences.soundEnabled
+
     const soundReadyRef = { current: false }
     const audioCtxRef = { current: null }
-    let initialFetchDone = false
+    let playFn = null
 
     const createSound = () => {
       const AudioContext = window.AudioContext || window.webkitAudioContext
@@ -172,160 +82,69 @@ function PopupApp() {
       try {
         const ctx = new AudioContext()
         audioCtxRef.current = ctx
-        const selSound = SOUND_OPTIONS[0]
         return () => {
           if (ctx.state === 'suspended') ctx.resume()
           let delay = 0
-          selSound.freq.forEach((freq, i) => {
+          SOUND_OPTIONS[0].freq.forEach((freq, i) => {
             setTimeout(() => {
               const osc = ctx.createOscillator()
               const gain = ctx.createGain()
               osc.connect(gain); gain.connect(ctx.destination)
               osc.frequency.value = freq; osc.type = 'sine'
-              const td = selSound.duration / selSound.freq.length
+              const td = SOUND_OPTIONS[0].duration / SOUND_OPTIONS[0].freq.length
               gain.gain.setValueAtTime(0.25, ctx.currentTime)
               gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + td)
               osc.start(ctx.currentTime); osc.stop(ctx.currentTime + td)
             }, delay)
-            delay += (selSound.duration * 1000) / selSound.freq.length
+            delay += (SOUND_OPTIONS[0].duration * 1000) / SOUND_OPTIONS[0].freq.length
           })
         }
       } catch { return null }
     }
 
-    let playFn = null
     const initAudio = () => {
       if (soundReadyRef.current) return
       playFn = createSound()
       soundReadyRef.current = true
     }
-
     const handleGesture = () => { initAudio(); document.removeEventListener('click', handleGesture); document.removeEventListener('keydown', handleGesture) }
     document.addEventListener('click', handleGesture)
     document.addEventListener('keydown', handleGesture)
 
-    const channel = supabase
-      .channel('popup-live-orders')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'live_orders', filter: `restaurant_id=eq.${restaurantId}` },
-        (payload) => {
-          const newOrderId = payload.new.id
-          const rawStatus = payload.new.status
-          if (lastPlayedRef.current === newOrderId) return
-          lastPlayedRef.current = newOrderId
+    const cleanup = orderStore.startConsumer((pending, past) => {
+      if (!isMountedRef.current) return
+      if (!soundReadyRef.current) initAudio()
 
-          if (rawStatus === 'pending' && playFn) {
-            try { playFn() } catch {}
-          }
+      const prevIds = lastOrderIds.current
+      const currIds = new Set(pending.map(o => o.id))
+      const hasNewOrder = pending.some(o => !prevIds.has(o.id))
+      if (hasNewOrder && soundEnabledRef.current && playFn) {
+        try { playFn() } catch {}
+      }
+      lastOrderIds.current = currIds
 
-          const fetchAndAddOrder = async () => {
-            const { data: freshOrder } = await supabase
-              .from('live_orders').select('*, restaurant_tables(table_number)')
-              .eq('id', newOrderId).single()
-            if (!freshOrder) return
-
-            let resolved = freshOrder
-            if (freshOrder.table_id && !freshOrder.restaurant_tables?.table_number) {
-              const { data: tr } = await supabase.from('restaurant_tables').select('id, table_number').eq('id', freshOrder.table_id).maybeSingle()
-              if (tr) resolved = { ...freshOrder, restaurant_tables: { table_number: tr.table_number } }
-            }
-
-            if (rawStatus === 'pending') {
-              setOrders(prev => {
-                if (prev.some(o => o.id === newOrderId)) return prev.map(o => o.id === newOrderId ? { ...o, ...resolved } : o)
-                return [resolved, ...prev].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-              })
-            } else {
-              setPastOrders(prev => {
-                if (prev.some(o => o.id === newOrderId)) return prev
-                return [resolved, ...prev].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-              })
-            }
-          }
-          fetchAndAddOrder()
-        }
-      )
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'live_orders', filter: `restaurant_id=eq.${restaurantId}` },
-        (payload) => {
-          const { id, status } = payload.new
-
-          setOrders(prev => {
-            if (!prev.some(o => o.id === id)) return prev
-            if (status === 'pending') return prev.map(o => o.id === id ? { ...o, ...payload.new } : o)
-            return prev.filter(o => o.id !== id)
-          })
-
-          if (status === 'accepted') {
-            setPastOrders(prev => {
-              const exists = prev.some(o => o.id === id)
-              if (exists) return prev.map(o => o.id === id ? { ...o, ...payload.new, restaurant_tables: o.restaurant_tables || payload.new.restaurant_tables } : o)
-              return [{ ...payload.new, restaurant_tables: null }, ...prev].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-            })
-            supabase.from('live_orders').select('*, restaurant_tables(table_number)').eq('id', id).single().then(({ data }) => {
-              if (data) setPastOrders(prev => prev.map(o => o.id === id ? { ...o, ...data } : o))
-            })
-          } else {
-            setPastOrders(prev => prev.filter(o => o.id !== id))
-          }
-        }
-      )
-      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'live_orders', filter: `restaurant_id=eq.${restaurantId}` },
-        (payload) => {
-          setOrders(prev => prev.filter(o => o.id !== payload.old.id))
-          setPastOrders(prev => prev.filter(o => o.id !== payload.old.id))
-        }
-      )
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          if (!initialFetchDone && isMountedRef.current) {
-            initialFetchDone = true
-            loadOrders(initialFetchAbort.signal)
-          }
-          if (needsReconnectRefetch.current) {
-            needsReconnectRefetch.current = false
-            if (!initialFetchDone && isMountedRef.current) {
-              initialFetchDone = true
-              loadOrders(initialFetchAbort.signal)
-            }
-          }
-          subscriptionActiveRef.current = true
-        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-          if (subscriptionActiveRef.current) {
-            needsReconnectRefetch.current = true
-            if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current)
-            reconnectTimerRef.current = setTimeout(() => {
-              if (isMountedRef.current && !subscriptionActiveRef.current) {
-                loadOrders()
-              }
-            }, 10000)
-          }
-          subscriptionActiveRef.current = false
-        }
-      })
+      setOrders(pending)
+      setPastOrders(past)
+    })
 
     return () => {
       document.removeEventListener('click', handleGesture)
       document.removeEventListener('keydown', handleGesture)
-      initialFetchAbort.abort()
-      if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current)
       if (audioCtxRef.current) { try { audioCtxRef.current.close() } catch {} }
-      needsReconnectRefetch.current = false
-      subscriptionActiveRef.current = false
-      supabase.removeChannel(channel)
+      cleanup()
     }
-  }, [isLoggedIn, restaurantId, loadOrders])
+  }, [isLoggedIn, restaurantId, preferences.soundEnabled])
 
   useEffect(() => {
-    if (!isLoggedIn || !restaurantId) return
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') {
-        loadOrders()
+        setOrders(orderStore.getPending())
+        setPastOrders(orderStore.getPast())
       }
     }
     document.addEventListener('visibilitychange', handleVisibility)
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibility)
-    }
-  }, [isLoggedIn, restaurantId, loadOrders])
+    return () => document.removeEventListener('visibilitychange', handleVisibility)
+  }, [])
 
   const handleAccept = async (orderId) => {
     let movedOrder = null
@@ -585,17 +404,7 @@ function PopupApp() {
 
         {activeView === 'live' && activeSubTab === 'orders' ? (
           <div className="popup-orders-area">
-            {!firstOrdersFetchDone.current && loading ? (
-              <div className="popup-loading-grid">
-                {[1, 2, 3].map(i => (
-                  <div key={i} className="popup-skeleton-card">
-                    <div className="popup-skeleton-line" style={{ width: '40%' }} />
-                    <div className="popup-skeleton-line" />
-                    <div className="popup-skeleton-line" style={{ width: '60%' }} />
-                  </div>
-                ))}
-              </div>
-            ) : orders.length === 0 ? (
+            {orders.length === 0 ? (
               <div className="popup-empty">
                 <div className="popup-empty-icon">{'\uD83D\uDD50'}</div>
                 <h3>No live orders</h3>

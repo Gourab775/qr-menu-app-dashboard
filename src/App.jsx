@@ -15,6 +15,7 @@ import SettingsPage from './pages/SettingsPage'
 import TablesPage from './pages/TablesPage'
 import PastOrdersPage from './pages/PastOrdersPage'
 import { formatDateTime, formatOrderDateTime } from './utils/formatDateTime'
+import * as orderStore from './services/orderStore'
 import './App.css'
 import './theme.css'
 
@@ -559,7 +560,9 @@ function App() {
     }
   }, [isLoggedIn, restaurantId, preferences.soundEnabled, preferences.orderNotifications, preferences.notificationSound, loadOrders])
 
-
+  useEffect(() => {
+    orderStore.publish(orders, pastOrders)
+  }, [orders, pastOrders])
 
   const openOrdersPopup = useCallback(() => {
     if (window.electronAPI?.showPopup) {
