@@ -51,10 +51,14 @@ function PopupApp() {
     setTimeout(() => setToast(null), 3000)
   }, [])
 
-  const loadOrders = useCallback(async () => {
+  const loadOrders = useCallback(async (signal = null) => {
     if (!restaurantId || !isMountedRef.current) return
-    if (ordersLoadingRef.current) return
-    ordersLoadingRef.current = true
+
+    const isManual = signal === null
+    if (isManual) {
+      if (ordersLoadingRef.current) return
+      ordersLoadingRef.current = true
+    }
     setLoading(true)
 
     try {
@@ -71,6 +75,7 @@ function PopupApp() {
         )
       ])
 
+      if (signal?.aborted) return
       if (!isMountedRef.current) return
 
       const liveError = liveResult.error && liveResult.error.code !== 'PGRST116' ? liveResult.error : null
@@ -88,6 +93,7 @@ function PopupApp() {
           supabase.from('restaurant_tables').select('id, table_number').in('id', unresolvedIds),
           API_TIMEOUT
         )
+        if (signal?.aborted) return
         if (isMountedRef.current && tr) {
           const tMap = {}
           tr.forEach(t => { tMap[t.id] = t.table_number })
@@ -99,6 +105,7 @@ function PopupApp() {
         }
       }
 
+      if (signal?.aborted) return
       if (isMountedRef.current) {
         setOrders(prev => {
           const merged = new Map(prev.map(o => [o.id, o]))
@@ -126,12 +133,11 @@ function PopupApp() {
     if (!isLoggedIn || !restaurantId) return
     isMountedRef.current = true
     ordersLoadingRef.current = false
-    loadOrders()
     return () => {
       isMountedRef.current = false
       ordersLoadingRef.current = false
     }
-  }, [isLoggedIn, restaurantId, loadOrders])
+  }, [isLoggedIn, restaurantId])
 
   useEffect(() => {
     if (window.electronAPI && window.electronAPI.sendOrderCount) {
@@ -154,9 +160,11 @@ function PopupApp() {
   useEffect(() => {
     if (!isLoggedIn || !restaurantId) return
 
+    const initialFetchAbort = new AbortController()
     const lastPlayedRef = { current: null }
     const soundReadyRef = { current: false }
     const audioCtxRef = { current: null }
+    let initialFetchDone = false
 
     const createSound = () => {
       const AudioContext = window.AudioContext || window.webkitAudioContext
@@ -198,9 +206,8 @@ function PopupApp() {
 
     const channel = supabase
       .channel('popup-live-orders')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'live_orders' },
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'live_orders', filter: `restaurant_id=eq.${restaurantId}` },
         (payload) => {
-          if (payload.new.restaurant_id !== restaurantId) return
           const newOrderId = payload.new.id
           const rawStatus = payload.new.status
           if (lastPlayedRef.current === newOrderId) return
@@ -237,7 +244,7 @@ function PopupApp() {
           fetchAndAddOrder()
         }
       )
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'live_orders' },
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'live_orders', filter: `restaurant_id=eq.${restaurantId}` },
         (payload) => {
           const { id, status } = payload.new
 
@@ -261,7 +268,7 @@ function PopupApp() {
           }
         }
       )
-      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'live_orders' },
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'live_orders', filter: `restaurant_id=eq.${restaurantId}` },
         (payload) => {
           setOrders(prev => prev.filter(o => o.id !== payload.old.id))
           setPastOrders(prev => prev.filter(o => o.id !== payload.old.id))
@@ -269,9 +276,16 @@ function PopupApp() {
       )
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
+          if (!initialFetchDone && isMountedRef.current) {
+            initialFetchDone = true
+            loadOrders(initialFetchAbort.signal)
+          }
           if (needsReconnectRefetch.current) {
             needsReconnectRefetch.current = false
-            loadOrders()
+            if (!initialFetchDone && isMountedRef.current) {
+              initialFetchDone = true
+              loadOrders(initialFetchAbort.signal)
+            }
           }
           subscriptionActiveRef.current = true
         } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
@@ -291,11 +305,25 @@ function PopupApp() {
     return () => {
       document.removeEventListener('click', handleGesture)
       document.removeEventListener('keydown', handleGesture)
+      initialFetchAbort.abort()
       if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current)
       if (audioCtxRef.current) { try { audioCtxRef.current.close() } catch {} }
       needsReconnectRefetch.current = false
       subscriptionActiveRef.current = false
       supabase.removeChannel(channel)
+    }
+  }, [isLoggedIn, restaurantId, loadOrders])
+
+  useEffect(() => {
+    if (!isLoggedIn || !restaurantId) return
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        loadOrders()
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibility)
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibility)
     }
   }, [isLoggedIn, restaurantId, loadOrders])
 
