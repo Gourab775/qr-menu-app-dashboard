@@ -490,6 +490,7 @@ function PopupApp() {
               onClick={() => setActiveSubTab('waiter-call')}
             >
               Waiter Call
+              {waiterCalls.length > 0 && <span className="popup-tab-badge">{waiterCalls.length}</span>}
             </button>
           </div>
         ) : (
