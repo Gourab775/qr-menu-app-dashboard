@@ -156,18 +156,36 @@ function App() {
       console.error('[Orders] Both queries failed completely:', result.error?.message || result.error)
       ordersFetchFailedRef.current = true
       setToast({ message: 'Failed to load orders', type: 'error' })
-      setOrders([])
-      setPastOrders([])
     } else if (result.error) {
       console.warn('[Orders] Partial query failure, using available data:', result.error?.message || result.error)
       ordersFetchFailedRef.current = true
-      if (result.data !== undefined) setOrders(result.data)
-      if (result.pastData !== undefined) setPastOrders(result.pastData)
+      if (result.data !== undefined) {
+        setOrders(prev => {
+          const merged = new Map(prev.map(o => [o.id, o]))
+          ;(result.data || []).forEach(o => merged.set(o.id, o))
+          return Array.from(merged.values()).sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+        })
+      }
+      if (result.pastData !== undefined) {
+        setPastOrders(prev => {
+          const merged = new Map(prev.map(o => [o.id, o]))
+          ;(result.pastData || []).forEach(o => merged.set(o.id, o))
+          return Array.from(merged.values()).sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+        })
+      }
     } else {
       ordersFetchFailedRef.current = false
       if (result.data !== undefined) {
-        setOrders(result.data)
-        setPastOrders(result.pastData || [])
+        setOrders(prev => {
+          const merged = new Map(prev.map(o => [o.id, o]))
+          ;(result.data || []).forEach(o => merged.set(o.id, o))
+          return Array.from(merged.values()).sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+        })
+        setPastOrders(prev => {
+          const merged = new Map(prev.map(o => [o.id, o]))
+          ;(result.pastData || []).forEach(o => merged.set(o.id, o))
+          return Array.from(merged.values()).sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+        })
       }
     }
 
@@ -388,6 +406,10 @@ function App() {
       try { playFn() } catch { }
     }
 
+    const subscriptionActiveRef = { current: false }
+    const needsReconnectRefetch = { current: false }
+    let reconnectTimer = null
+
     const channel = supabase
       .channel('live-orders')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'live_orders' },
@@ -505,15 +527,37 @@ function App() {
           setPastOrders(prev => prev.filter(o => o.id !== payload.old.id))
         }
       )
-      .subscribe()
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          if (needsReconnectRefetch.current) {
+            needsReconnectRefetch.current = false
+            loadOrders()
+          }
+          subscriptionActiveRef.current = true
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          if (subscriptionActiveRef.current) {
+            needsReconnectRefetch.current = true
+            if (reconnectTimer) clearTimeout(reconnectTimer)
+            reconnectTimer = setTimeout(() => {
+              if (!subscriptionActiveRef.current) {
+                loadOrders()
+              }
+            }, 10000)
+          }
+          subscriptionActiveRef.current = false
+        }
+      })
 
     return () => {
       document.removeEventListener('click', handleGesture)
       document.removeEventListener('keydown', handleGesture)
+      if (reconnectTimer) clearTimeout(reconnectTimer)
       if (audioCtxRef.current) { try { audioCtxRef.current.close() } catch { } }
+      needsReconnectRefetch.current = false
+      subscriptionActiveRef.current = false
       supabase.removeChannel(channel)
     }
-  }, [isLoggedIn, restaurantId, preferences.soundEnabled, preferences.orderNotifications, preferences.notificationSound])
+  }, [isLoggedIn, restaurantId, preferences.soundEnabled, preferences.orderNotifications, preferences.notificationSound, loadOrders])
 
 
 

@@ -23,6 +23,20 @@ let lastToggleTime = 0;
 const BOUNDS_PATH = path.join(app.getPath('userData'), 'popup-bounds.json');
 const BUBBLE_BOUNDS_PATH = path.join(app.getPath('userData'), 'bubble-bounds.json');
 
+function logError(context, error) {
+  console.error(`[Main][ERROR][${new Date().toISOString()}] ${context}:`, error?.message || error);
+  if (error?.stack) console.error(`[Main][STACK]`, error.stack);
+}
+
+function ensureWindowVisible(win) {
+  if (!win || win.isDestroyed()) return;
+  if (win.isMinimized()) win.restore();
+  win.show();
+  win.focus();
+  win.setAlwaysOnTop(true);
+  win.setAlwaysOnTop(false);
+}
+
 function loadPopupBounds() {
   try {
     if (fs.existsSync(BOUNDS_PATH)) {
@@ -54,46 +68,50 @@ function saveBubbleBounds(bounds) {
 }
 
 function createTray() {
-  const iconPath = path.join(__dirname, '..', 'assets', 'icon.png');
-  let trayIcon;
   try {
-    trayIcon = nativeImage.createFromPath(iconPath);
-    trayIcon = trayIcon.resize({ width: 16, height: 16 });
-  } catch {
-    trayIcon = nativeImage.createEmpty();
+    const iconPath = path.join(__dirname, '..', 'assets', 'icon.png');
+    let trayIcon;
+    try {
+      trayIcon = nativeImage.createFromPath(iconPath);
+      trayIcon = trayIcon.resize({ width: 16, height: 16 });
+    } catch {
+      trayIcon = nativeImage.createEmpty();
+    }
+
+    tray = new Tray(trayIcon);
+    tray.setToolTip('QR Menu Dashboard');
+
+    const contextMenu = Menu.buildFromTemplate([
+      {
+        label: 'Open Popup',
+        click: () => openOrFocusPopup(),
+      },
+      {
+        label: 'Show Dashboard',
+        click: () => {
+          if (!mainWindow || mainWindow.isDestroyed()) {
+            createMainWindow();
+          } else {
+            ensureWindowVisible(mainWindow);
+          }
+        },
+      },
+      { type: 'separator' },
+      {
+        label: 'Quit',
+        click: () => {
+          isQuitting = true;
+          app.quit();
+        },
+      },
+    ]);
+
+    tray.setContextMenu(contextMenu);
+    tray.on('click', () => openOrFocusPopup());
+  } catch (err) {
+    logError('createTray failed', err);
+    tray = null;
   }
-
-  tray = new Tray(trayIcon);
-  tray.setToolTip('QR Menu Dashboard');
-
-  const contextMenu = Menu.buildFromTemplate([
-    {
-      label: 'Open Popup',
-      click: () => openOrFocusPopup(),
-    },
-    {
-      label: 'Show Dashboard',
-      click: () => {
-        if (!mainWindow || mainWindow.isDestroyed()) {
-          createMainWindow();
-        } else {
-          mainWindow.show();
-          mainWindow.focus();
-        }
-      },
-    },
-    { type: 'separator' },
-    {
-      label: 'Quit',
-      click: () => {
-        isQuitting = true;
-        app.quit();
-      },
-    },
-  ]);
-
-  tray.setContextMenu(contextMenu);
-  tray.on('click', () => openOrFocusPopup());
 }
 
 function createSplashWindow() {
@@ -119,60 +137,98 @@ function createSplashWindow() {
 }
 
 function createMainWindow() {
-  mainWindow = new BrowserWindow({
-    show: false,
-    title: 'QR Menu Dashboard',
-    icon: path.join(__dirname, '..', 'assets', 'icon.png'),
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.cjs'),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-    },
-  });
-  mainWindow.maximize();
-  mainWindow.loadURL(APP_URL);
-
-  mainWindow.webContents.setWindowOpenHandler(() => {
-    return { action: 'deny' };
-  });
-
-  mainWindow.webContents.on('will-navigate', (event, url) => {
-    const isInternal = url.startsWith(APP_URL) || url.startsWith('http://localhost');
-    if (!isInternal && (url.startsWith('https:') || url.startsWith('http:'))) {
-      event.preventDefault();
-      shell.openExternal(url);
+  try {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      ensureWindowVisible(mainWindow);
+      return;
     }
-  });
 
-  mainWindow.webContents.on('did-finish-load', () => {
-    wasOffline = false;
-    stopConnectivityCheck();
-    closeSplash();
-    mainWindow.show();
-  });
+    mainWindow = new BrowserWindow({
+      show: false,
+      title: 'QR Menu Dashboard',
+      icon: path.join(__dirname, '..', 'assets', 'icon.png'),
+      webPreferences: {
+        preload: path.join(__dirname, 'preload.cjs'),
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true,
+      },
+    });
+    mainWindow.maximize();
+    mainWindow.loadURL(APP_URL);
 
-  mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription) => {
-    const offlineErrors = [
-      'ERR_INTERNET_DISCONNECTED', 'ERR_NAME_NOT_RESOLVED',
-      'ERR_CONNECTION_REFUSED', 'ERR_CONNECTION_TIMED_OUT',
-      'ERR_NETWORK_CHANGED', 'ERR_NETWORK_IO_SUSPENDED', 'ERR_ADDRESS_UNREACHABLE',
-    ];
-    if (offlineErrors.includes(errorDescription) && !wasOffline) {
-      wasOffline = true;
+    mainWindow.webContents.setWindowOpenHandler(() => {
+      return { action: 'deny' };
+    });
+
+    mainWindow.webContents.on('will-navigate', (event, url) => {
+      const isInternal = url.startsWith(APP_URL) || url.startsWith('http://localhost');
+      if (!isInternal && (url.startsWith('https:') || url.startsWith('http:'))) {
+        event.preventDefault();
+        shell.openExternal(url);
+      }
+    });
+
+    mainWindow.webContents.on('did-finish-load', () => {
+      wasOffline = false;
+      stopConnectivityCheck();
       closeSplash();
-      showOfflineScreen();
+      ensureWindowVisible(mainWindow);
+    });
+
+    mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription) => {
+      const offlineErrors = [
+        'ERR_INTERNET_DISCONNECTED', 'ERR_NAME_NOT_RESOLVED',
+        'ERR_CONNECTION_REFUSED', 'ERR_CONNECTION_TIMED_OUT',
+        'ERR_NETWORK_CHANGED', 'ERR_NETWORK_IO_SUSPENDED', 'ERR_ADDRESS_UNREACHABLE',
+      ];
+      if (offlineErrors.includes(errorDescription) && !wasOffline) {
+        wasOffline = true;
+        closeSplash();
+        showOfflineScreen();
+      }
+    });
+
+    mainWindow.webContents.on('certificate-error', (event, _url, _error, _certificate, callback) => {
+      event.preventDefault();
+      callback(false);
+    });
+
+    mainWindow.on('closed', () => {
+      mainWindow = null;
+    });
+
+    setTimeout(() => {
+      if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
+        logError('Window visibility timeout', 'Window was not shown after 10s, forcing show');
+        closeSplash();
+        ensureWindowVisible(mainWindow);
+      }
+    }, 10000);
+  } catch (err) {
+    logError('createMainWindow failed', err);
+    closeSplash();
+    try {
+      mainWindow = new BrowserWindow({
+        width: 1280,
+        height: 720,
+        center: true,
+        title: 'QR Menu Dashboard',
+        icon: path.join(__dirname, '..', 'assets', 'icon.png'),
+        webPreferences: {
+          preload: path.join(__dirname, 'preload.cjs'),
+          contextIsolation: true,
+          nodeIntegration: false,
+          sandbox: true,
+        },
+      });
+      mainWindow.loadURL(APP_URL);
+      mainWindow.webContents.on('did-finish-load', () => ensureWindowVisible(mainWindow));
+      ensureWindowVisible(mainWindow);
+    } catch (fallbackErr) {
+      logError('Fallback window creation also failed', fallbackErr);
     }
-  });
-
-  mainWindow.webContents.on('certificate-error', (event, _url, _error, _certificate, callback) => {
-    event.preventDefault();
-    callback(false);
-  });
-
-  mainWindow.on('closed', () => {
-    mainWindow = null;
-  });
+  }
 }
 
 function createQuickWindow() {
@@ -235,6 +291,8 @@ function createQuickWindow() {
     }
   });
 
+  quickWindow.setAlwaysOnTop(true, 'pop-up-menu');
+
   quickWindow.on('close', (event) => {
     if (isQuitting) return;
     event.preventDefault();
@@ -273,6 +331,7 @@ function createBubbleWindow() {
   });
 
   bubbleWindow.loadFile(path.join(__dirname, 'bubble.html'));
+  bubbleWindow.setAlwaysOnTop(true, 'screen-saver');
 
   bubbleWindow.on('closed', () => {
     bubbleWindow = null;
@@ -285,6 +344,7 @@ function showBubble() {
   }
   const savedBounds = loadBubbleBounds();
   bubbleWindow.setPosition(savedBounds.x, savedBounds.y);
+  bubbleWindow.setAlwaysOnTop(true, 'screen-saver');
   bubbleWindow.show();
   bubbleWindow.focus();
   bubbleWindow.webContents.send('order-count-changed', pendingOrderCount);
@@ -314,6 +374,7 @@ function openOrFocusPopup() {
 
   if (bubbleExists) hideBubble();
   if (!popupExists) createQuickWindow();
+  quickWindow.setAlwaysOnTop(true, 'pop-up-menu');
   quickWindow.show();
   quickWindow.focus();
   popupState = 'open';
@@ -334,6 +395,7 @@ function restoreFromBubble() {
   if (popupState === 'bubble') {
     hideBubble();
     if (!quickWindow || quickWindow.isDestroyed()) createQuickWindow();
+    quickWindow.setAlwaysOnTop(true, 'pop-up-menu');
     quickWindow.show();
     quickWindow.focus();
     popupState = 'open';
@@ -379,55 +441,82 @@ function stopConnectivityCheck() {
   }
 }
 
-app.whenReady().then(() => {
-  Menu.setApplicationMenu(null);
+const gotTheLock = app.requestSingleInstanceLock();
 
-  createTray();
-
-  const registered = globalShortcut.register('CommandOrControl+Space', openOrFocusPopup);
-  if (!registered) {
-    console.error('[Main] Failed to register global shortcut CommandOrControl+Space');
-  }
-
-  // IPC: show popup from renderer (sidebar button click)
-  ipcMain.on('show-popup', () => {
-    openOrFocusPopup();
-  });
-
-  // IPC: minimize popup to bubble from renderer
-  ipcMain.on('minimize-popup', () => {
-    minimizePopupToBubble();
-  });
-
-  // IPC: update pending order count from popup renderer
-  ipcMain.on('send-order-count', (_event, count) => {
-    pendingOrderCount = count;
-    if (bubbleWindow && !bubbleWindow.isDestroyed()) {
-      bubbleWindow.webContents.send('order-count-changed', count);
+if (!gotTheLock) {
+  console.error('[Main] Another instance is already running — quitting this one.');
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    console.log('[Main] Second instance detected — focusing existing window');
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      ensureWindowVisible(mainWindow);
+    } else {
+      createMainWindow();
+    }
+    if (tray && process.platform === 'darwin' && typeof tray.setHighlightMode === 'function') {
+      try {
+        tray.setHighlightMode('always');
+        setTimeout(() => {
+          if (tray && typeof tray.setHighlightMode === 'function') {
+            try { tray.setHighlightMode('selection'); } catch {}
+          }
+        }, 2000);
+      } catch {}
     }
   });
 
-  // IPC: save bubble bounds from bubble renderer
-  ipcMain.on('save-bubble-bounds', (_event, bounds) => {
-    saveBubbleBounds(bounds);
-  });
+  app.whenReady().then(() => {
+    try {
+      Menu.setApplicationMenu(null);
 
-  // IPC: bubble clicked (restore popup)
-  ipcMain.on('bubble-clicked', () => {
-    restoreFromBubble();
-  });
+      createTray();
+      createSplashWindow();
+      createMainWindow();
 
-  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
-    callback({
-      responseHeaders: {
-        ...details.responseHeaders,
-        'Content-Security-Policy': [
-          "default-src 'self' https:; script-src 'self' https: 'unsafe-inline' 'unsafe-eval'; style-src 'self' https: 'unsafe-inline'; img-src 'self' https: data: blob:; connect-src 'self' https: wss:; font-src 'self' https: data:; frame-src 'self' https:;",
-        ],
-      },
-    });
+      const registered = globalShortcut.register('CommandOrControl+Space', openOrFocusPopup);
+      if (!registered) {
+        logError('Global shortcut', 'Failed to register CommandOrControl+Space');
+      }
+
+      ipcMain.on('show-popup', () => {
+        openOrFocusPopup();
+      });
+
+      ipcMain.on('minimize-popup', () => {
+        minimizePopupToBubble();
+      });
+
+      ipcMain.on('send-order-count', (_event, count) => {
+        pendingOrderCount = count;
+        if (bubbleWindow && !bubbleWindow.isDestroyed()) {
+          bubbleWindow.webContents.send('order-count-changed', count);
+        }
+      });
+
+      ipcMain.on('save-bubble-bounds', (_event, bounds) => {
+        saveBubbleBounds(bounds);
+      });
+
+      ipcMain.on('bubble-clicked', () => {
+        restoreFromBubble();
+      });
+
+      session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+        callback({
+          responseHeaders: {
+            ...details.responseHeaders,
+            'Content-Security-Policy': [
+              "default-src 'self' https:; script-src 'self' https: 'unsafe-inline' 'unsafe-eval'; style-src 'self' https: 'unsafe-inline'; img-src 'self' https: data: blob:; connect-src 'self' https: wss:; font-src 'self' https: data:; frame-src 'self' https:;",
+            ],
+          },
+        });
+      });
+    } catch (err) {
+      logError('app.whenReady startup failed', err);
+    }
   });
-});
+}
 
 app.on('session-created', (ses) => {
   ses.setPermissionRequestHandler((_webContents, permission, callback) => {
@@ -452,10 +541,9 @@ app.on('will-quit', () => {
 });
 
 app.on('activate', () => {
-  if (mainWindow === null) {
+  if (mainWindow === null || mainWindow.isDestroyed()) {
     createMainWindow();
   } else {
-    mainWindow.show();
-    mainWindow.focus();
+    ensureWindowVisible(mainWindow);
   }
 });

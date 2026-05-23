@@ -38,7 +38,9 @@ function PopupApp() {
   const ordersLoadingRef = useRef(false)
   const isMountedRef = useRef(true)
   const firstOrdersFetchDone = useRef(false)
-  const lastPlayedOrderRef = useRef(null)
+  const subscriptionActiveRef = useRef(false)
+  const needsReconnectRefetch = useRef(false)
+  const reconnectTimerRef = useRef(null)
 
   const isLoggedIn = !!session
   const userFullName = profile?.full_name || profile?.email || session?.user?.email || 'User'
@@ -98,8 +100,16 @@ function PopupApp() {
       }
 
       if (isMountedRef.current) {
-        setOrders(liveData)
-        setPastOrders(pastData)
+        setOrders(prev => {
+          const merged = new Map(prev.map(o => [o.id, o]))
+          liveData.forEach(o => merged.set(o.id, o))
+          return Array.from(merged.values()).sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+        })
+        setPastOrders(prev => {
+          const merged = new Map(prev.map(o => [o.id, o]))
+          pastData.forEach(o => merged.set(o.id, o))
+          return Array.from(merged.values()).sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+        })
         firstOrdersFetchDone.current = true
       }
     } catch (err) {
@@ -257,15 +267,37 @@ function PopupApp() {
           setPastOrders(prev => prev.filter(o => o.id !== payload.old.id))
         }
       )
-      .subscribe()
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          if (needsReconnectRefetch.current) {
+            needsReconnectRefetch.current = false
+            loadOrders()
+          }
+          subscriptionActiveRef.current = true
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          if (subscriptionActiveRef.current) {
+            needsReconnectRefetch.current = true
+            if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current)
+            reconnectTimerRef.current = setTimeout(() => {
+              if (isMountedRef.current && !subscriptionActiveRef.current) {
+                loadOrders()
+              }
+            }, 10000)
+          }
+          subscriptionActiveRef.current = false
+        }
+      })
 
     return () => {
       document.removeEventListener('click', handleGesture)
       document.removeEventListener('keydown', handleGesture)
+      if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current)
       if (audioCtxRef.current) { try { audioCtxRef.current.close() } catch {} }
+      needsReconnectRefetch.current = false
+      subscriptionActiveRef.current = false
       supabase.removeChannel(channel)
     }
-  }, [isLoggedIn, restaurantId])
+  }, [isLoggedIn, restaurantId, loadOrders])
 
   const handleAccept = async (orderId) => {
     let movedOrder = null
@@ -545,7 +577,7 @@ function PopupApp() {
               <>
                 <div className="popup-orders-count">{orders.length} order{orders.length !== 1 ? 's' : ''} waiting</div>
                 <div className="popup-orders-list">
-                  {orders.map(order => {
+                  {orders.filter(o => o.status === 'pending').map(order => {
                     const safeOrder = order || {}
                     const tableNum = safeOrder.restaurant_tables?.table_number
                     const items = Array.isArray(safeOrder.items) ? safeOrder.items : []
