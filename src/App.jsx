@@ -342,7 +342,16 @@ function App() {
     }
   }, [isLoggedIn, restaurantId, loadOrders])
 
-  // [Polling disabled - auto orders refresh removed]
+  // Polling fallback — runs loadOrders every 30s if realtime subscription is inactive
+  useEffect(() => {
+    if (!isLoggedIn || !restaurantId) return
+
+    const interval = setInterval(() => {
+      loadOrders()
+    }, 30000)
+
+    return () => clearInterval(interval)
+  }, [isLoggedIn, restaurantId, loadOrders])
 
   useEffect(() => {
     if (!isLoggedIn || !restaurantId) return
@@ -678,11 +687,21 @@ function App() {
     }
 
     try {
+      console.log('[Orders] handleAccept - updating status to accepted:', {
+        id: orderId,
+        order_code: movedOrder?.order_code,
+      })
       const { error } = await supabase.from('live_orders').update({ status: 'accepted' }).eq('id', orderId)
       if (error) throw error
+      console.log('[Orders] handleAccept - success:', { id: orderId, order_code: movedOrder?.order_code })
       showToast('Order accepted')
     } catch (err) {
-      console.error('Error in handleAccept:', err)
+      console.error('[Orders] handleAccept error:', {
+        id: orderId,
+        message: err.message,
+        details: err.details,
+        code: err.code,
+      })
       if (movedOrder) {
         setOrders(prev => [movedOrder, ...prev])
         setPastOrders(prev => prev.filter(o => o.id !== orderId))
@@ -695,11 +714,13 @@ function App() {
     const prevOrders = [...pastOrders]
     setPastOrders(prev => prev.filter(o => o.id !== orderId))
     try {
+      console.log('[Orders] handleConfirm:', { id: orderId })
       const { error } = await supabase.from('live_orders').update({ status: 'confirmed' }).eq('id', orderId)
       if (error) throw error
+      console.log('[Orders] handleConfirm - success:', { id: orderId })
       showToast('Order confirmed')
     } catch (err) {
-      console.error('Error confirming order:', err)
+      console.error('[Orders] handleConfirm error:', { id: orderId, message: err.message, code: err.code })
       setPastOrders(prevOrders)
       showToast('Failed to confirm order', 'error')
     }
@@ -709,11 +730,13 @@ function App() {
     const prevOrders = [...pastOrders]
     setPastOrders(prev => prev.filter(o => o.id !== orderId))
     try {
+      console.log('[Orders] handleComplete:', { id: orderId })
       const { error } = await supabase.from('live_orders').update({ status: 'completed' }).eq('id', orderId)
       if (error) throw error
+      console.log('[Orders] handleComplete - success:', { id: orderId })
       showToast('Order completed')
     } catch (err) {
-      console.error('Error completing order:', err)
+      console.error('[Orders] handleComplete error:', { id: orderId, message: err.message, code: err.code })
       setPastOrders(prevOrders)
       showToast('Failed to complete order', 'error')
     }
@@ -724,12 +747,15 @@ function App() {
     if (!confirmDelete) return
 
     try {
+      console.log('[Orders] handleDecline:', { id: orderId, order_code: orderCode })
       const { error } = await supabase.from('live_orders').delete().eq('id', orderId)
 
       if (error) throw error
       setOrders(prev => prev.filter(o => o.id !== orderId))
+      console.log('[Orders] handleDecline - success:', { id: orderId, order_code: orderCode })
       showToast('Order declined')
     } catch (err) {
+      console.error('[Orders] handleDecline error:', { id: orderId, message: err.message, code: err.code })
       showToast('Failed to decline order', 'error')
     }
   }

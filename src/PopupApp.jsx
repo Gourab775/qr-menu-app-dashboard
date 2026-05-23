@@ -156,11 +156,13 @@ function PopupApp() {
     if (movedOrder) setPastOrders(prev => [movedOrder, ...prev])
 
     try {
+      console.log('[Popup] handleAccept - updating status to accepted:', { id: orderId, order_code: movedOrder?.order_code })
       const { error } = await supabase.from('live_orders').update({ status: 'accepted' }).eq('id', orderId)
       if (error) throw error
+      console.log('[Popup] handleAccept - success:', { id: orderId, order_code: movedOrder?.order_code })
       showToast('Order accepted')
     } catch (err) {
-      console.error('[Popup] Accept error:', err)
+      console.error('[Popup] handleAccept error:', { id: orderId, message: err.message, code: err.code })
       if (movedOrder) {
         setOrders(prev => [movedOrder, ...prev])
         setPastOrders(prev => prev.filter(o => o.id !== orderId))
@@ -173,11 +175,14 @@ function PopupApp() {
     const confirmDelete = window.confirm(`Decline order #${orderCode || orderId.slice(0, 8)}?\n\nThis cannot be undone.`)
     if (!confirmDelete) return
     try {
+      console.log('[Popup] handleDecline:', { id: orderId, order_code: orderCode })
       const { error } = await supabase.from('live_orders').delete().eq('id', orderId)
       if (error) throw error
       setOrders(prev => prev.filter(o => o.id !== orderId))
+      console.log('[Popup] handleDecline - success:', { id: orderId, order_code: orderCode })
       showToast('Order declined')
-    } catch {
+    } catch (err) {
+      console.error('[Popup] handleDecline error:', { id: orderId, message: err.message, code: err.code })
       showToast('Failed to decline order', 'error')
     }
   }
