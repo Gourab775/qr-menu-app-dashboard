@@ -141,16 +141,18 @@ function PopupApp() {
 
     const fetchPending = async () => {
       try {
+        console.log('[Popup Waiter] Fetching pending calls for restaurant:', restaurantId)
         const { data, error } = await supabase
           .from('waiter_calls')
           .select('*')
           .eq('restaurant_id', restaurantId)
           .eq('status', 'pending')
           .order('created_at', { ascending: false })
+        console.log('[Popup Waiter] Query response:', { count: data?.length, error: error?.message || null, code: error?.code || null })
         if (error) throw error
         if (data) setWaiterCalls(data)
       } catch (err) {
-        console.error('[Popup] Waiter fetch error:', err)
+        console.error('[Popup Waiter] Fetch error:', err.message || err)
         showToast('Failed to load waiter requests', 'error')
       }
     }

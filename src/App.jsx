@@ -90,6 +90,7 @@ function App() {
       try {
         const baseSelect = 'id, restaurant_id, total_price, status, items, created_at, order_code, table_id, note, restaurant_tables(table_number)'
 
+        console.log('[Orders] Querying live_orders:', { restaurantId, pendingStatus: 'pending', acceptedStatus: 'accepted', select: baseSelect })
         const [liveResult, pastResult] = await Promise.all([
           fetchWithTimeout(
             supabase.from('live_orders').select(baseSelect).eq('restaurant_id', restaurantId).eq('status', 'pending').order('created_at', { ascending: false }).limit(200),
@@ -100,6 +101,7 @@ function App() {
             API_TIMEOUT
           )
         ])
+        console.log('[Orders] Query results:', { pendingCount: liveResult.data?.length || 0, pendingError: liveResult.error?.message || null, acceptedCount: pastResult.data?.length || 0, acceptedError: pastResult.error?.message || null })
 
         if (signal?.aborted) return { aborted: true }
 
@@ -581,16 +583,29 @@ function App() {
     const fetchPending = async () => {
       setWaiterCallsLoading(true)
       try {
+        console.log('[Waiter] Fetching pending calls for restaurant:', restaurantId)
         const { data, error } = await supabase
           .from('waiter_calls')
-          .select('*, restaurant_tables(table_number)')
+          .select('*')
           .eq('restaurant_id', restaurantId)
           .eq('status', 'pending')
           .order('created_at', { ascending: false })
+        console.log('[Waiter] Query response:', { count: data?.length, error: error?.message || null, code: error?.code || null })
         if (error) throw error
-        if (data) setWaiterCalls(data)
+        if (data) {
+          const tableIds = [...new Set(data.filter(c => c.table_id).map(c => c.table_id))]
+          if (tableIds.length > 0) {
+            const { data: tables } = await supabase.from('restaurant_tables').select('id, table_number').in('id', tableIds)
+            if (tables) {
+              const tMap = {}
+              tables.forEach(t => { tMap[t.id] = t.table_number })
+              data.forEach(c => { if (c.table_id && tMap[c.table_id]) c.restaurant_tables = { table_number: tMap[c.table_id] } })
+            }
+          }
+          setWaiterCalls(data)
+        }
       } catch (err) {
-        console.error('[Waiter] Fetch error:', err)
+        console.error('[Waiter] Fetch error:', err.message || err)
         showToast('Failed to load waiter requests', 'error')
       } finally {
         setWaiterCallsLoading(false)
