@@ -580,14 +580,21 @@ function App() {
 
     const fetchPending = async () => {
       setWaiterCallsLoading(true)
-      const { data } = await supabase
-        .from('waiter_calls')
-        .select('*, restaurant_tables(table_number)')
-        .eq('restaurant_id', restaurantId)
-        .eq('status', 'pending')
-        .order('created_at', { ascending: false })
-      if (data) setWaiterCalls(data)
-      setWaiterCallsLoading(false)
+      try {
+        const { data, error } = await supabase
+          .from('waiter_calls')
+          .select('*, restaurant_tables(table_number)')
+          .eq('restaurant_id', restaurantId)
+          .eq('status', 'pending')
+          .order('created_at', { ascending: false })
+        if (error) throw error
+        if (data) setWaiterCalls(data)
+      } catch (err) {
+        console.error('[Waiter] Fetch error:', err)
+        showToast('Failed to load waiter requests', 'error')
+      } finally {
+        setWaiterCallsLoading(false)
+      }
     }
     fetchPending()
 
@@ -626,7 +633,12 @@ function App() {
           setWaiterCalls(prev => prev.filter(c => c.id !== payload.old.id))
         }
       )
-      .subscribe()
+      .subscribe((status) => {
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          console.warn('[Waiter] Subscription issue, re-fetching:', status)
+          fetchPending()
+        }
+      })
 
     return () => {
       supabase.removeChannel(channel)
@@ -821,9 +833,11 @@ function App() {
   }
 
   const handleResolveWaiter = async (callId) => {
+    let removedCall = null
     setWaiterCalls(prev => {
       const call = prev.find(c => c.id === callId)
       if (!call) return prev
+      removedCall = call
       return prev.filter(c => c.id !== callId)
     })
     try {
@@ -832,6 +846,12 @@ function App() {
       showToast('Waiter request resolved')
     } catch (err) {
       console.error('[Waiter] handleResolveWaiter error:', err)
+      if (removedCall) {
+        setWaiterCalls(prev => {
+          if (prev.some(c => c.id === removedCall.id)) return prev
+          return [removedCall, ...prev]
+        })
+      }
       showToast('Failed to resolve waiter request', 'error')
     }
   }
