@@ -140,20 +140,19 @@ function PopupApp() {
     if (!isLoggedIn || !restaurantId) return
 
     let isSubscribed = true
-    let pollInterval = null
 
-    console.log('[Popup Waiter] Effect running with filters:', { restaurant_id: restaurantId, status: 'pending' })
+    console.log('[Popup Waiter] ⚡ Effect running with filters:', { restaurant_id: restaurantId, status: 'pending' })
 
     const fetchPending = async () => {
       try {
-        console.log('[Popup Waiter] Fetching pending calls for restaurant:', restaurantId)
+        console.log('[Popup Waiter] 🔍 Fetching pending calls for restaurant:', restaurantId)
         const { data, error } = await supabase
           .from('waiter_calls')
           .select('id, restaurant_id, table_id, order_code, session_order_id, status, created_at')
           .eq('restaurant_id', restaurantId)
           .eq('status', 'pending')
           .order('created_at', { ascending: false })
-        console.log('[Popup Waiter] Fetch result:', {
+        console.log('[Popup Waiter] 📦 Fetch result:', {
           count: data?.length,
           error: error?.message || null,
           code: error?.code || null,
@@ -163,99 +162,109 @@ function PopupApp() {
         if (data) {
           if (isSubscribed) {
             setWaiterCalls(data)
-            console.log('[Popup Waiter] State set with', data.length, 'pending calls')
+            console.log('[Popup Waiter] ✅ State set with', data.length, 'pending calls')
           }
         }
       } catch (err) {
-        console.error('[Popup Waiter] Fetch error:', err.message || err)
+        console.error('[Popup Waiter] ❌ Fetch error:', err.message || err)
         showToast('Failed to load waiter requests', 'error')
       }
     }
 
     fetchPending()
 
-    // Periodic polling fallback for when Realtime is not enabled for waiter_calls table
-    pollInterval = setInterval(() => {
-      console.log('[Popup Waiter] Polling fallback...')
-      fetchPending()
-    }, 10000)
-
-    const normalizeRid = (val) => String(val).toLowerCase().trim()
-
     const channel = supabase
       .channel('waiter-calls')
       .on('postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'waiter_calls' },
-        (payload) => {
-          const incomingRid = normalizeRid(payload.new.restaurant_id)
-          const currentRid = normalizeRid(restaurantId)
-          console.log('[Popup Waiter] INSERT event:', {
+        { event: 'INSERT', schema: 'public', table: 'waiter_calls', filter: `restaurant_id=eq.${restaurantId}` },
+        async (payload) => {
+          console.log('[Popup Waiter] 📩 INSERT event RAW payload:', JSON.stringify(payload))
+          console.log('[Popup Waiter] 📩 INSERT event details:', {
             id: payload.new.id,
-            restaurant_id: incomingRid,
-            expected_rid: currentRid,
+            restaurant_id: payload.new.restaurant_id,
+            expected_restaurant_id: restaurantId,
             status: payload.new.status,
-            match: incomingRid === currentRid
+            table_id: payload.new.table_id,
+            order_code: payload.new.order_code,
+            session_order_id: payload.new.session_order_id,
+            created_at: payload.new.created_at,
+            isPending: payload.new.status === 'pending'
           })
-          if (incomingRid !== currentRid) return
           if (payload.new.status === 'pending') {
             setWaiterCalls(prev => {
-              if (prev.some(c => c.id === payload.new.id)) return prev
-              console.log('[Popup Waiter] Added call via INSERT event:', payload.new.id)
+              if (prev.some(c => c.id === payload.new.id)) {
+                console.log('[Popup Waiter] ⏭️ Duplicate INSERT ignored:', payload.new.id)
+                return prev
+              }
+              console.log('[Popup Waiter] ➕ Added call via INSERT event:', payload.new.id)
               return [payload.new, ...prev]
             })
+          } else {
+            console.log('[Popup Waiter] ⏭️ INSERT ignored (status not pending):', payload.new.status)
           }
         }
       )
       .on('postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'waiter_calls' },
+        { event: 'UPDATE', schema: 'public', table: 'waiter_calls', filter: `restaurant_id=eq.${restaurantId}` },
         (payload) => {
-          const incomingRid = normalizeRid(payload.new.restaurant_id)
-          const currentRid = normalizeRid(restaurantId)
-          console.log('[Popup Waiter] UPDATE event:', {
+          console.log('[Popup Waiter] 📩 UPDATE event RAW payload:', JSON.stringify(payload))
+          console.log('[Popup Waiter] 📩 UPDATE event details:', {
             id: payload.new.id,
-            status: payload.new.status,
-            restaurant_id: incomingRid,
-            match: incomingRid === currentRid
+            old_status: payload.old?.status,
+            new_status: payload.new.status,
+            restaurant_id: payload.new.restaurant_id
           })
-          if (incomingRid !== currentRid) return
           if (payload.new.status !== 'pending') {
             setWaiterCalls(prev => {
               const filtered = prev.filter(c => c.id !== payload.new.id)
-              if (filtered.length !== prev.length) console.log('[Popup Waiter] Removed via UPDATE (status changed):', payload.new.id)
+              if (filtered.length !== prev.length) {
+                console.log('[Popup Waiter] ➖ Removed via UPDATE (status changed to', payload.new.status, '):', payload.new.id)
+              } else {
+                console.log('[Popup Waiter] ⏭️ UPDATE ignored (not in current list):', payload.new.id)
+              }
               return filtered
             })
           } else {
             setWaiterCalls(prev => {
-              if (prev.some(c => c.id === payload.new.id)) return prev
+              if (prev.some(c => c.id === payload.new.id)) {
+                console.log('[Popup Waiter] ⏭️ UPDATE ignored (already in list):', payload.new.id)
+                return prev
+              }
+              console.log('[Popup Waiter] ➕ Added back via UPDATE (status restored to pending):', payload.new.id)
               return [payload.new, ...prev]
             })
           }
         }
       )
       .on('postgres_changes',
-        { event: 'DELETE', schema: 'public', table: 'waiter_calls' },
+        { event: 'DELETE', schema: 'public', table: 'waiter_calls', filter: `restaurant_id=eq.${restaurantId}` },
         (payload) => {
-          console.log('[Popup Waiter] DELETE event:', { id: payload.old.id })
+          console.log('[Popup Waiter] 📩 DELETE event RAW payload:', JSON.stringify(payload))
+          console.log('[Popup Waiter] 📩 DELETE event details:', { id: payload.old.id, restaurant_id: payload.old.restaurant_id })
           setWaiterCalls(prev => {
             const filtered = prev.filter(c => c.id !== payload.old.id)
-            if (filtered.length !== prev.length) console.log('[Popup Waiter] Removed via DELETE event:', payload.old.id)
+            if (filtered.length !== prev.length) {
+              console.log('[Popup Waiter] ➖ Removed via DELETE event:', payload.old.id)
+            } else {
+              console.log('[Popup Waiter] ⏭️ DELETE ignored (not in current list):', payload.old.id)
+            }
             return filtered
           })
         }
       )
       .subscribe((status) => {
-        console.log('[Popup Waiter] Subscription status:', status)
+        console.log('[Popup Waiter] 📡 Subscription status:', status)
         if (status === 'SUBSCRIBED') {
-          console.log('[Popup Waiter] Successfully subscribed to waiter_calls changes')
+          console.log('[Popup Waiter] ✅ Successfully subscribed to waiter_calls changes')
         }
         if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-          console.warn('[Popup Waiter] Subscription issue, will re-fetch on next poll interval:', status)
+          console.warn('[Popup Waiter] ⚠️ Subscription issue - waiter calls will not update in realtime:', status)
         }
       })
 
     return () => {
       isSubscribed = false
-      if (pollInterval) clearInterval(pollInterval)
+      console.log('[Popup Waiter] 🧹 Cleaning up waiter-calls channel')
       supabase.removeChannel(channel)
     }
   }, [isLoggedIn, restaurantId])
