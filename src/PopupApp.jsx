@@ -15,6 +15,7 @@ function PopupApp() {
   const { session, profile, loading: authLoading, initialized, restaurantId } = useAuth()
   const [orders, setOrders] = useState(() => orderStore.getPending())
   const [pastOrders, setPastOrders] = useState(() => orderStore.getPast())
+  const [waiterCalls, setWaiterCalls] = useState([])
   const [activeView, setActiveView] = useState('live')
   const [menuOpen, setMenuOpen] = useState(false)
   const [toast, setToast] = useState(null)
@@ -136,6 +137,61 @@ function PopupApp() {
   }, [isLoggedIn, restaurantId, preferences.soundEnabled])
 
   useEffect(() => {
+    if (!isLoggedIn || !restaurantId) return
+
+    const fetchPending = async () => {
+      const { data } = await supabase
+        .from('waiter_calls')
+        .select('*')
+        .eq('restaurant_id', restaurantId)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false })
+      if (data) setWaiterCalls(data)
+    }
+    fetchPending()
+
+    const channel = supabase
+      .channel('waiter-calls')
+      .on('postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'waiter_calls' },
+        (payload) => {
+          if (payload.new.restaurant_id !== restaurantId) return
+          if (payload.new.status === 'pending') {
+            setWaiterCalls(prev => {
+              if (prev.some(c => c.id === payload.new.id)) return prev
+              return [payload.new, ...prev]
+            })
+          }
+        }
+      )
+      .on('postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'waiter_calls' },
+        (payload) => {
+          if (payload.new.restaurant_id !== restaurantId) return
+          if (payload.new.status !== 'pending') {
+            setWaiterCalls(prev => prev.filter(c => c.id !== payload.new.id))
+          } else {
+            setWaiterCalls(prev => {
+              if (prev.some(c => c.id === payload.new.id)) return prev
+              return [payload.new, ...prev]
+            })
+          }
+        }
+      )
+      .on('postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'waiter_calls' },
+        (payload) => {
+          setWaiterCalls(prev => prev.filter(c => c.id !== payload.old.id))
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [isLoggedIn, restaurantId])
+
+  useEffect(() => {
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') {
         setOrders(orderStore.getPending())
@@ -184,6 +240,18 @@ function PopupApp() {
     } catch (err) {
       console.error('[Popup] handleDecline error:', { id: orderId, message: err.message, code: err.code })
       showToast('Failed to decline order', 'error')
+    }
+  }
+
+  const handleResolveWaiter = async (callId) => {
+    setWaiterCalls(prev => prev.filter(c => c.id !== callId))
+    try {
+      const { error } = await supabase.from('waiter_calls').update({ status: 'resolved' }).eq('id', callId)
+      if (error) throw error
+      showToast('Waiter request resolved')
+    } catch (err) {
+      console.error('[Popup] handleResolveWaiter error:', err)
+      showToast('Failed to resolve waiter request', 'error')
     }
   }
 
@@ -473,7 +541,41 @@ function PopupApp() {
             )}
           </div>
         ) : activeView === 'live' && activeSubTab === 'waiter-call' ? (
-          <div className="popup-orders-area" />
+          <div className="popup-orders-area">
+            {waiterCalls.length === 0 ? (
+              <div className="popup-empty">
+                <div className="popup-empty-icon">{'\uD83D\uDD0D'}</div>
+                <h3>No waiter calls</h3>
+                <p>Customer requests for assistance will appear here</p>
+              </div>
+            ) : (
+              <>
+                <div className="popup-orders-count">{waiterCalls.length} waiter call{waiterCalls.length !== 1 ? 's' : ''}</div>
+                <div className="popup-orders-list">
+                  {waiterCalls.map(call => {
+                    const tableNum = call.table_number || call.table_id?.slice(0, 8) || '\u2014'
+                    const orderCode = call.order_code || null
+                    return (
+                      <div key={call.id} className="popup-order-card">
+                        <div className="popup-card-header">
+                          <div className="popup-card-header-left">
+                            <span className="popup-table-badge" style={{ fontSize: 13, fontWeight: 700, color: '#fbbf24' }}>Table {tableNum}</span>
+                            {orderCode && <span className="popup-order-id" style={{ fontSize: 11, color: '#a1a1aa' }}>Order #{orderCode}</span>}
+                          </div>
+                          <span className="popup-order-date">
+                            {call.created_at ? formatOrderDateTime(call.created_at) : ''}
+                          </span>
+                        </div>
+                        <div className="popup-card-footer" style={{ borderTop: '1px solid rgba(255,255,255,0.04)', paddingTop: 8 }}>
+                          <button className="popup-accept-btn" onClick={() => handleResolveWaiter(call.id)}>Resolve</button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </>
+            )}
+          </div>
         ) : (
           <div className="popup-orders-area">
             {pastOrders.length === 0 ? (
