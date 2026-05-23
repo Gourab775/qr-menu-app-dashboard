@@ -246,7 +246,7 @@ function PopupApp() {
   const handleResolveWaiter = async (callId) => {
     setWaiterCalls(prev => prev.filter(c => c.id !== callId))
     try {
-      const { error } = await supabase.from('waiter_calls').update({ status: 'resolved' }).eq('id', callId)
+      const { error } = await supabase.from('waiter_calls').delete().eq('id', callId)
       if (error) throw error
       showToast('Waiter request resolved')
     } catch (err) {

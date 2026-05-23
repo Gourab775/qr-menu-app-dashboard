@@ -28,6 +28,8 @@ function App() {
   const [restaurantName, setRestaurantName] = useState('')
   const [orders, setOrders] = useState([])
   const [pastOrders, setPastOrders] = useState([])
+  const [waiterCalls, setWaiterCalls] = useState([])
+  const [waiterCallsLoading, setWaiterCallsLoading] = useState(false)
   const [menuItems, setMenuItems] = useState([])
   const [categories, setCategories] = useState([])
   const [loading, setLoading] = useState(false)
@@ -573,6 +575,64 @@ function App() {
     orderStore.publish(orders, pastOrders)
   }, [orders, pastOrders])
 
+  useEffect(() => {
+    if (!isLoggedIn || !restaurantId) return
+
+    const fetchPending = async () => {
+      setWaiterCallsLoading(true)
+      const { data } = await supabase
+        .from('waiter_calls')
+        .select('*, restaurant_tables(table_number)')
+        .eq('restaurant_id', restaurantId)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false })
+      if (data) setWaiterCalls(data)
+      setWaiterCallsLoading(false)
+    }
+    fetchPending()
+
+    const channel = supabase
+      .channel('waiter-calls-dashboard')
+      .on('postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'waiter_calls' },
+        (payload) => {
+          if (payload.new.restaurant_id !== restaurantId) return
+          if (payload.new.status === 'pending') {
+            setWaiterCalls(prev => {
+              if (prev.some(c => c.id === payload.new.id)) return prev
+              const enriched = { ...payload.new, restaurant_tables: null }
+              return [enriched, ...prev]
+            })
+          }
+        }
+      )
+      .on('postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'waiter_calls' },
+        (payload) => {
+          if (payload.new.restaurant_id !== restaurantId) return
+          if (payload.new.status !== 'pending') {
+            setWaiterCalls(prev => prev.filter(c => c.id !== payload.new.id))
+          } else {
+            setWaiterCalls(prev => {
+              if (prev.some(c => c.id === payload.new.id)) return prev
+              return [{ ...payload.new, restaurant_tables: null }, ...prev]
+            })
+          }
+        }
+      )
+      .on('postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'waiter_calls' },
+        (payload) => {
+          setWaiterCalls(prev => prev.filter(c => c.id !== payload.old.id))
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [isLoggedIn, restaurantId])
+
   const openOrdersPopup = useCallback(() => {
     if (window.electronAPI?.showPopup) {
       window.electronAPI.showPopup()
@@ -760,6 +820,22 @@ function App() {
     }
   }
 
+  const handleResolveWaiter = async (callId) => {
+    setWaiterCalls(prev => {
+      const call = prev.find(c => c.id === callId)
+      if (!call) return prev
+      return prev.filter(c => c.id !== callId)
+    })
+    try {
+      const { error } = await supabase.from('waiter_calls').delete().eq('id', callId)
+      if (error) throw error
+      showToast('Waiter request resolved')
+    } catch (err) {
+      console.error('[Waiter] handleResolveWaiter error:', err)
+      showToast('Failed to resolve waiter request', 'error')
+    }
+  }
+
   const handleAddItem = async (itemData) => {
     try {
       const { data, error } = await supabase
@@ -803,8 +879,21 @@ function App() {
   {activeTab === 'tables' && 'Tables'}
   {activeTab === 'settings' && 'Settings'}
   {activeTab === 'live-orders' && 'Live Orders'}
+  {activeTab === 'waiter-call' && 'Waiter Call'}
   {activeTab === 'past-orders' && 'Past Orders'}
 </h2>
+        <div className="header-notifications">
+          {waiterCalls.length > 0 && (
+            <button
+              className="header-waiter-bell"
+              onClick={() => setActiveTab('waiter-call')}
+              title={`${waiterCalls.length} waiter request${waiterCalls.length !== 1 ? 's' : ''}`}
+            >
+              <span className="bell-icon">🔔</span>
+              <span className="bell-badge">{waiterCalls.length}</span>
+            </button>
+          )}
+        </div>
         <div className="profile-wrapper" ref={profileRef}>
           <div className="profile-icon" onClick={() => setShowProfile(!showProfile)} title={userFullName}>
             {userFullName ? userFullName.charAt(0).toUpperCase() : '?'}
@@ -962,10 +1051,64 @@ function App() {
 
         {activeTab === 'live-orders' && null}
 
+        {activeTab === 'waiter-call' && (
+          <div className="waiter-call-page">
+            <div className="waiter-call-header">
+              <div className="waiter-call-stats">
+                <span className="stat-label">Active Requests</span>
+                <span className="stat-value">{waiterCalls.length}</span>
+              </div>
+            </div>
+
+            {waiterCallsLoading ? (
+              <div className="loading-state">
+                <div className="loading-spinner"></div>
+                <p>Loading waiter requests...</p>
+              </div>
+            ) : waiterCalls.length === 0 ? (
+              <div className="empty-state">
+                <div className="empty-icon">🔔</div>
+                <h3>No waiter calls</h3>
+                <p>Customer requests for assistance will appear here in realtime</p>
+              </div>
+            ) : (
+              <div className="waiter-call-list">
+                {waiterCalls.map(call => {
+                  const tableNum = call.table_number || (call.restaurant_tables?.table_number) || call.table_id?.slice(0, 8) || '—'
+                  const note = call.note || null
+                  return (
+                    <div key={call.id} className="waiter-call-card">
+                      <div className="waiter-call-card-top">
+                        <div className="waiter-call-card-left">
+                          <span className="waiter-call-table-icon">🛎️</span>
+                          <div className="waiter-call-card-info">
+                            <span className="waiter-call-table-number">Table {tableNum}</span>
+                            {note && <span className="waiter-call-note">{note}</span>}
+                          </div>
+                        </div>
+                        <span className="waiter-call-time">{call.created_at ? formatOrderDateTime(call.created_at) : ''}</span>
+                      </div>
+                      <div className="waiter-call-card-actions">
+                        <button
+                          className="waiter-call-resolve-btn"
+                          onClick={() => handleResolveWaiter(call.id)}
+                          disabled={call._resolving}
+                        >
+                          {call._resolving ? 'Resolving...' : '✓ Confirm'}
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
         {activeTab === 'past-orders' && <PastOrdersPage pastOrders={pastOrders} loading={loading} onToast={showToast} />}
       </main>
 
-      <Sidebar isOpen={sidebarOpen} onClose={closeSidebar} activeTab={activeTab} setActiveTab={setActiveTab} onOpenOrders={openOrdersPopup} />
+      <Sidebar isOpen={sidebarOpen} onClose={closeSidebar} activeTab={activeTab} setActiveTab={setActiveTab} onOpenOrders={openOrdersPopup} waiterCalls={waiterCalls} />
 
       {showAddModal && (
         <AddItemModal
@@ -979,7 +1122,7 @@ function App() {
   )
 }
 
-function Sidebar({ isOpen, onClose, activeTab, setActiveTab, onOpenOrders }) {
+function Sidebar({ isOpen, onClose, activeTab, setActiveTab, onOpenOrders, waiterCalls }) {
   return (
     <>
       {isOpen && <div className="overlay" onClick={onClose} />}
@@ -1018,6 +1161,17 @@ function Sidebar({ isOpen, onClose, activeTab, setActiveTab, onOpenOrders }) {
             onClick={() => { onOpenOrders?.(); onClose(); }}
           >
             🔴 Live Orders
+          </button>
+          <button
+            className={`nav-item ${activeTab === 'waiter-call' ? 'active' : ''}`}
+            onClick={() => { setActiveTab('waiter-call'); onClose(); }}
+          >
+            <span className="nav-item-content">
+              <span>🛎️ Waiter Call</span>
+              {waiterCalls.length > 0 && (
+                <span className="nav-badge">{waiterCalls.length}</span>
+              )}
+            </span>
           </button>
           <button
             className={`nav-item ${activeTab === 'past-orders' ? 'active' : ''}`}
