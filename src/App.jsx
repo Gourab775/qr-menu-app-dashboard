@@ -819,6 +819,50 @@ function App() {
     }
   }, [isLoggedIn, restaurantId])
 
+  // Waiter calls — polling fallback (every 30s) + tab-activation refetch
+  useEffect(() => {
+    if (!isLoggedIn || !restaurantId) return
+
+    const doFetch = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('waiter_calls')
+          .select('id, restaurant_id, table_id, order_code, session_order_id, status, created_at')
+          .eq('restaurant_id', restaurantId)
+          .eq('status', 'pending')
+          .order('created_at', { ascending: false })
+
+        if (error) {
+          console.error('[Waiter] Poll fetch error:', error.message)
+          return
+        }
+        if (!data) return
+
+        const tableIds = [...new Set(data.filter(c => c.table_id).map(c => c.table_id))]
+        if (tableIds.length > 0) {
+          const { data: tables } = await supabase.from('restaurant_tables').select('id, table_number').in('id', tableIds)
+          if (tables) {
+            const tMap = {}
+            tables.forEach(t => { tMap[t.id] = t.table_number })
+            data.forEach(c => { if (c.table_id && tMap[c.table_id]) c.restaurant_tables = { table_number: tMap[c.table_id] } })
+          }
+        }
+
+        setWaiterCalls(data)
+        console.log('[Waiter] Poll fetch complete:', data.length, 'pending calls')
+      } catch (err) {
+        console.error('[Waiter] Poll fetch exception:', err)
+      }
+    }
+
+    // Fetch immediately when the effect runs (covers tab-activation)
+    doFetch()
+
+    // Then poll every 30s
+    const interval = setInterval(doFetch, 30000)
+    return () => clearInterval(interval)
+  }, [isLoggedIn, restaurantId, activeTab])
+
   const openOrdersPopup = useCallback(() => {
     if (window.electronAPI?.showPopup) {
       window.electronAPI.showPopup()

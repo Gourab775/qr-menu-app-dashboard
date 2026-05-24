@@ -352,6 +352,40 @@ function PopupApp() {
     }
   }, [isLoggedIn, restaurantId])
 
+  // Waiter calls — polling fallback (every 30s) + subtab-activation refetch
+  useEffect(() => {
+    if (!isLoggedIn || !restaurantId) return
+
+    const doFetch = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('waiter_calls')
+          .select('id, restaurant_id, table_id, order_code, session_order_id, status, created_at')
+          .eq('restaurant_id', restaurantId)
+          .eq('status', 'pending')
+          .order('created_at', { ascending: false })
+
+        if (error) {
+          console.error('[Popup Waiter] Poll fetch error:', error.message)
+          return
+        }
+        if (data) {
+          setWaiterCalls(data)
+          console.log('[Popup Waiter] Poll fetch complete:', data.length, 'pending calls')
+        }
+      } catch (err) {
+        console.error('[Popup Waiter] Poll fetch exception:', err)
+      }
+    }
+
+    if (activeSubTab === 'waiter-call') {
+      doFetch()
+    }
+
+    const interval = setInterval(doFetch, 30000)
+    return () => clearInterval(interval)
+  }, [isLoggedIn, restaurantId, activeSubTab])
+
   useEffect(() => {
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') {
