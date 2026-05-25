@@ -42,8 +42,19 @@ input, button, select, textarea {
   --glow-orange: rgba(249, 115, 22, 0.4);
 }
 
+html.light-theme {
+  --bg: #f8f8fa;
+  --card: #ffffff;
+  --card-glass: rgba(255, 255, 255, 0.95);
+  --border: #e4e4e7;
+  --text: #18181b;
+  --text-muted: #71717a;
+  --glass-bg: rgba(255, 255, 255, 0.9);
+  --glass-border: #e4e4e7;
+}
+
 body {
-  background: #000;
+  background: var(--bg);
   color: var(--text);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   line-height: 1.5;
@@ -51,7 +62,7 @@ body {
 
 .app {
   min-height: 100vh;
-  background: #000;
+  background: var(--bg);
 }
 
 /* Header */
@@ -64,7 +75,7 @@ body {
   justify-content: space-between;
   align-items: center;
   padding: 8px 16px;
-  background: #000;
+  background: var(--bg);
   border-bottom: none;
   z-index: 100;
   height: 48px;
@@ -316,7 +327,7 @@ body {
   width: 100%;
   max-width: 100%;
   padding: 0 16px;
-  background: #000;
+  background: var(--bg);
   min-height: calc(100vh - 60px);
 }
 
@@ -328,7 +339,7 @@ body {
 
 .orders-section .order-card-new {
   border: none;
-  background: #0d0d0d;
+  background: var(--card);
   box-shadow: none;
 }
 
@@ -504,18 +515,18 @@ body {
 
 /* POS Order Card */
 .pos-order-card {
-  background: #111113;
+  background: var(--card);
   border-radius: 12px;
   padding: 14px 16px;
   display: flex;
   flex-direction: column;
   gap: 0;
-  border: 1px solid #1e1e20;
+  border: 1px solid var(--border);
   transition: border-color 0.2s;
 }
 
 .pos-order-card:hover {
-  border-color: #2a2a2d;
+  border-color: var(--border);
 }
 
 .pos-card-header {
@@ -541,19 +552,19 @@ body {
 .pos-order-id {
   font-size: 15px;
   font-weight: 700;
-  color: #fff;
+  color: var(--text);
   letter-spacing: 0.3px;
 }
 
 .pos-table-badge {
   font-size: 12px;
   font-weight: 500;
-  color: #60a5fa;
+  color: var(--blue);
 }
 
 .pos-order-date {
   font-size: 11px;
-  color: #71717a;
+  color: var(--text-muted);
   font-weight: 400;
   line-height: 1.3;
   text-align: right;
@@ -565,8 +576,8 @@ body {
   flex-direction: column;
   gap: 0;
   padding: 10px 0;
-  border-top: 1px solid #1e1e20;
-  border-bottom: 1px solid #1e1e20;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
 }
 
 .pos-item {
@@ -591,19 +602,19 @@ body {
 }
 
 .pos-item + .pos-item {
-  border-top: 1px solid #18181b;
+  border-top: 1px solid var(--border);
 }
 
 .pos-item-name {
   font-size: 13px;
   font-weight: 500;
-  color: #d4d4d8;
+  color: var(--text);
 }
 
 .pos-item-qty {
   font-size: 12px;
   font-weight: 600;
-  color: #52525b;
+  color: var(--text-muted);
   text-align: center;
   min-width: 28px;
 }
@@ -611,7 +622,7 @@ body {
 .pos-item-price {
   font-size: 13px;
   font-weight: 600;
-  color: #a1a1aa;
+  color: var(--text-muted);
   text-align: right;
   min-width: 60px;
 }
@@ -622,8 +633,8 @@ body {
   align-items: flex-start;
   padding: 10px 0;
   font-size: 12px;
-  color: #d4d4d8;
-  border-bottom: 1px solid #1e1e20;
+  color: var(--text);
+  border-bottom: 1px solid var(--border);
 }
 
 .pos-note-label {
@@ -637,13 +648,13 @@ body {
   justify-content: space-between;
   align-items: center;
   padding: 10px 0;
-  border-bottom: 1px solid #1e1e20;
+  border-bottom: 1px solid var(--border);
 }
 
 .pos-total-label {
   font-size: 13px;
   font-weight: 600;
-  color: #71717a;
+  color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -651,7 +662,7 @@ body {
 .pos-total-amount {
   font-size: 18px;
   font-weight: 700;
-  color: #22c55e;
+  color: var(--green);
 }
 
 .pos-card-footer {
@@ -664,8 +675,8 @@ body {
 
 .pos-decline-btn {
   background: none;
-  border: 1px solid #27272a;
-  color: #a1a1aa;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
@@ -676,13 +687,13 @@ body {
 }
 
 .pos-decline-btn:hover {
-  color: #ef4444;
-  border-color: #ef4444;
+  color: var(--red);
+  border-color: var(--red);
   background: rgba(239, 68, 68, 0.06);
 }
 
 .pos-accept-btn {
-  background: #22c55e;
+  background: var(--green);
   color: #000;
   border: none;
   border-radius: 8px;
@@ -701,7 +712,7 @@ body {
 .pos-accepted-label {
   font-size: 12px;
   font-weight: 600;
-  color: #22c55e;
+  color: var(--green);
   padding: 8px 0;
   display: flex;
   align-items: center;
@@ -849,7 +860,7 @@ body {
 .item-name-text {
   font-size: 13px;
   font-weight: 600;
-  color: #e4e4e7;
+  color: var(--text);
 }
 
 .item-qty-tag {
@@ -1528,9 +1539,9 @@ body {
 .orders-count-bar {
   font-size: 13px;
   font-weight: 600;
-  color: #a1a1aa;
+  color: var(--text-muted);
   padding: 8px 0 12px;
-  border-bottom: 1px solid rgba(255,255,255,0.04);
+  border-bottom: 1px solid var(--border);
   margin-bottom: 12px;
 }
 
@@ -1785,8 +1796,8 @@ body {
 }
 
 .form-group select option {
-  background-color: #0f172a;
-  color: white;
+  background-color: var(--card);
+  color: var(--text);
   padding: 12px;
 }
 
@@ -1876,7 +1887,7 @@ body {
   transition: background 0.2s;
 }
 
-.cancel-btn:hover { background: #3a3a4a; }
+.cancel-btn:hover { background: var(--border); }
 
 .save-btn {
   flex: 1;
@@ -2210,7 +2221,7 @@ body {
   transition: all 0.2s;
 }
 
-.confirm-cancel-btn:hover:not(:disabled) { background: #3a3a4a; }
+.confirm-cancel-btn:hover:not(:disabled) { background: var(--border); }
 
 .confirm-delete-btn {
   flex: 1;
@@ -2312,7 +2323,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #000;
+  background: var(--bg);
   padding: 20px;
 }
 
@@ -2572,7 +2583,7 @@ body {
 
 .waiter-call-time {
   font-size: 11px;
-  color: #71717a;
+  color: var(--text-muted);
   white-space: nowrap;
 }
 

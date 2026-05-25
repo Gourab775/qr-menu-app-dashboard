@@ -59,6 +59,15 @@ function App() {
     }
   })
 
+  useEffect(() => {
+    const root = document.documentElement
+    if (preferences.theme === 'light') {
+      root.classList.add('light-theme')
+    } else {
+      root.classList.remove('light-theme')
+    }
+  }, [preferences.theme])
+
   const profileRef = useRef(null)
   const abortControllerRef = useRef(null)
   const ordersLoadingRef = useRef(false)

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase, RESTAURANT_ID } from '../lib/supabase'
 import { fetchWithTimeout } from '../lib/apiUtils'
 import { useAuth } from '../contexts/AuthContext'
-import { IconPackage, IconBarChart, IconSettings, IconBell, IconLock, IconUtensils, IconFolder, IconCheck, IconX, IconTimer, IconPhone, IconMail, IconStore, IconCopy, IconLogOut, IconEye, IconEyeOff, IconStar, IconHelpCircle, IconFileText, IconTrash2, IconPalette, IconInfo, IconImage } from '../components/Icons'
+import { IconPackage, IconBarChart, IconSettings, IconBell, IconLock, IconUtensils, IconFolder, IconCheck, IconX, IconPhone, IconMail, IconStore, IconCopy, IconLogOut, IconEye, IconEyeOff, IconStar, IconHelpCircle, IconFileText, IconTrash2, IconPalette, IconInfo, IconImage } from '../components/Icons'
 
 const API_TIMEOUT = 15000
 
@@ -65,11 +65,6 @@ const HELP_TOPICS = [
     'Click Decline button on pending orders',
     'Declined orders are permanently removed',
     'This action cannot be undone'
-  ]},
-  { id: 'timeout', icon: <IconTimer size={20} />, label: 'Auto-Decline Timeout', keywords: ['timeout', 'auto', 'decline', 'pending'], answers: [
-    'Set timeout in Settings > Auto-Decline',
-    'Pending orders auto-decline after set time',
-    'Options: 5, 10, 15, 20, or 30 minutes'
   ]}
 ]
 
@@ -165,16 +160,6 @@ const HELP_RESPONSES = {
       { q: 'Why would I decline?', a: 'Common reasons: item unavailable, customer requested cancellation.' }
     ]
   },
-  timeout: {
-    title: 'Auto-Decline Timeout',
-    description: 'Automatic order timeout settings',
-    answers: [
-      { q: 'What is auto-decline?', a: 'Orders pending beyond set time are automatically declined.' },
-      { q: 'Set timeout duration?', a: 'Go to Settings > Auto-Decline and choose 5/10/15/20/30 minutes.' },
-      { q: 'Disable auto-decline?', a: 'Set timeout to maximum (30 min) or contact support to disable.' },
-      { q: 'Why use auto-decline?', a: 'Prevents stale orders from cluttering your dashboard and ensures fresh orders.' }
-    ]
-  }
 }
 
 const PRIVACY_POLICY = `Data Collection
@@ -756,27 +741,8 @@ const handlePasswordChange = async (e) => {
               <button className="modal-close" onClick={closeModal}>×</button>
             </div>
             <div className="theme-options">
-              <button className="theme-option active"><div className="theme-preview dark"></div><div className="theme-info"><span className="theme-name">Default Dark</span><span className="theme-desc">Dark mode (current)</span></div></button>
-              <button className="theme-option disabled" disabled><div className="theme-preview light"></div><div className="theme-info"><span className="theme-name">Light Mode</span><span className="theme-desc">Coming soon</span></div></button>
-              <button className="theme-option disabled" disabled><div className="theme-preview system"></div><div className="theme-info"><span className="theme-name">System</span><span className="theme-desc">Coming soon</span></div></button>
-            </div>
-          </div>
-        </div>
-      )
-    }
-    if (showModal === 'autodecline') {
-      return (
-        <div className="modal-overlay" onClick={closeModal}>
-          <div className="settings-modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>Auto-Decline Timeout</h3>
-              <button className="modal-close" onClick={closeModal}>×</button>
-            </div>
-            <div className="timeout-options">
-              <p className="timeout-desc">Automatically decline orders that remain pending for:</p>
-              {[5, 10, 15, 20, 30].map(mins => (
-                <button key={mins} className={`timeout-btn ${preferences.autoDeclineTimeout === mins ? 'active' : ''}`} onClick={() => updatePreference('autoDeclineTimeout', mins)}>{mins} min</button>
-              ))}
+              <button className={`theme-option ${preferences.theme === 'dark' ? 'active' : ''}`} onClick={() => updatePreference('theme', 'dark')}><div className="theme-preview dark"></div><div className="theme-info"><span className="theme-name">Dark</span><span className="theme-desc">Dark background, light text</span></div></button>
+              <button className={`theme-option ${preferences.theme === 'light' ? 'active' : ''}`} onClick={() => updatePreference('theme', 'light')}><div className="theme-preview light"></div><div className="theme-info"><span className="theme-name">Light</span><span className="theme-desc">Light background, dark text</span></div></button>
             </div>
           </div>
         </div>
@@ -1005,8 +971,7 @@ const handlePasswordChange = async (e) => {
       title: 'Preferences',
       items: [
         { icon: <IconBell size={20} />, label: 'Notifications', description: 'Sound & alerts', onClick: () => openModal('notifications'), badge: preferences.soundEnabled ? 'On' : 'Off' },
-        { icon: <IconPalette size={20} />, label: 'Theme', description: preferences.theme === 'default' ? 'Default Dark' : preferences.theme, onClick: () => openModal('theme') },
-        { icon: <IconTimer size={20} />, label: 'Auto-Decline', description: 'Disabled', badge: 'Off' }
+        { icon: <IconPalette size={20} />, label: 'Theme', description: preferences.theme === 'light' ? 'Light' : 'Dark', onClick: () => openModal('theme') }
       ]
     },
     {

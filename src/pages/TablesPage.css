@@ -135,7 +135,7 @@
 }
 
 .tables-add-cancel:hover {
-  background: #3a3a3e;
+  background: var(--border);
 }
 
 /* ── Error ── */
@@ -460,7 +460,7 @@
 }
 
 .tables-modal-cancel:hover {
-  background: #3a3a3e;
+  background: var(--border);
 }
 
 /* ── QR View Modal ── */
@@ -548,11 +548,11 @@
 }
 
 .tables-qr-modal .qr-modal-btn.secondary:hover {
-  background: #3a3a3e;
+  background: var(--border);
 }
 
 .tables-qr-modal .qr-modal-btn.customize {
-  background: #f59e0b;
+  background: var(--orange);
   color: #fff;
 }
 
@@ -605,7 +605,7 @@
 
 .tables-customize-modal .customize-preview .preview-wrap {
   padding: 8px;
-  background: #fff;
+  background: var(--card);
   border-radius: 8px;
   border: 1px solid var(--border);
 }
@@ -733,7 +733,7 @@
 }
 
 .tables-customize-modal .customize-actions .close-btn:hover {
-  background: #3a3a3e;
+  background: var(--border);
 }
 
 /* ── Responsive ── */

@@ -24,11 +24,15 @@
 .po-count {
   font-size: 13px;
   font-weight: 600;
-  color: #71717a;
+  color: var(--text-muted);
   background: rgba(255,255,255,0.04);
   padding: 6px 14px;
   border-radius: 20px;
   border: 1px solid rgba(255,255,255,0.06);
+}
+html.light-theme .po-count {
+  background: rgba(0,0,0,0.04);
+  border-color: var(--border);
 }
 
 .po-filters {
@@ -44,20 +48,20 @@
   max-width: 320px;
   padding: 10px 14px;
   font-size: 14px;
-  background: #09090b;
-  border: 1px solid #27272a;
+  background: var(--bg);
+  border: 1px solid var(--border);
   border-radius: 10px;
-  color: #f4f4f5;
+  color: var(--text);
   outline: none;
   transition: border-color 0.15s;
 }
 
 .po-search:focus {
-  border-color: #6366f1;
+  border-color: var(--primary);
 }
 
 .po-search::placeholder {
-  color: #52525b;
+  color: var(--text-muted);
 }
 
 .po-date-filter {
@@ -69,10 +73,10 @@
 .po-date-input {
   padding: 9px 12px;
   font-size: 13px;
-  background: #09090b;
-  border: 1px solid #27272a;
+  background: var(--bg);
+  border: 1px solid var(--border);
   border-radius: 10px;
-  color: #f4f4f5;
+  color: var(--text);
   outline: none;
   font-family: inherit;
   cursor: pointer;
@@ -80,7 +84,7 @@
 }
 
 .po-date-input:focus {
-  border-color: #6366f1;
+  border-color: var(--primary);
 }
 
 .po-date-input::-webkit-calendar-picker-indicator {
@@ -88,21 +92,31 @@
   cursor: pointer;
 }
 
+html.light-theme .po-date-input::-webkit-calendar-picker-indicator {
+  filter: invert(0.8);
+}
+
 .po-date-clear {
   padding: 4px 8px;
   font-size: 13px;
   background: rgba(255,255,255,0.04);
-  border: 1px solid #27272a;
+  border: 1px solid var(--border);
   border-radius: 8px;
-  color: #a1a1aa;
+  color: var(--text-muted);
   cursor: pointer;
   line-height: 1;
 }
 
 .po-date-clear:hover {
-  color: #f4f4f5;
+  color: var(--text);
   background: rgba(255,255,255,0.08);
-  border-color: #3f3f46;
+  border-color: var(--border);
+}
+html.light-theme .po-date-clear {
+  background: rgba(0,0,0,0.04);
+}
+html.light-theme .po-date-clear:hover {
+  background: rgba(0,0,0,0.08);
 }
 
 .po-time-filters {
@@ -113,12 +127,16 @@
   border-radius: 10px;
   border: 1px solid rgba(255,255,255,0.06);
 }
+html.light-theme .po-time-filters {
+  background: rgba(0,0,0,0.03);
+  border-color: var(--border);
+}
 
 .po-time-btn {
   padding: 7px 16px;
   background: none;
   border: none;
-  color: #71717a;
+  color: var(--text-muted);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -127,12 +145,15 @@
 }
 
 .po-time-btn:hover {
-  color: #d4d4d8;
+  color: var(--text);
   background: rgba(255,255,255,0.04);
+}
+html.light-theme .po-time-btn:hover {
+  background: rgba(0,0,0,0.04);
 }
 
 .po-time-btn.active {
-  background: #6366f1;
+  background: var(--primary);
   color: #fff;
 }
 
@@ -143,15 +164,15 @@
 }
 
 .po-card {
-  background: #18181b;
-  border: 1px solid #27272a;
+  background: var(--card);
+  border: 1px solid var(--border);
   border-radius: 12px;
   overflow: hidden;
   transition: border-color 0.15s;
 }
 
 .po-card:hover {
-  border-color: #3f3f46;
+  border-color: var(--border);
 }
 
 .po-card-main {
@@ -172,7 +193,7 @@
 .po-order-code {
   font-size: 15px;
   font-weight: 700;
-  color: #f4f4f5;
+  color: var(--text);
   letter-spacing: 0.3px;
   white-space: nowrap;
 }
@@ -180,7 +201,7 @@
 .po-table-tag {
   font-size: 12px;
   font-weight: 500;
-  color: #60a5fa;
+  color: var(--blue);
   background: rgba(59, 130, 246, 0.1);
   padding: 3px 10px;
   border-radius: 6px;
@@ -194,7 +215,7 @@
 
 .po-datetime {
   font-size: 13px;
-  color: #71717a;
+  color: var(--text-muted);
   white-space: nowrap;
 }
 
@@ -208,14 +229,14 @@
 
 .po-items-count {
   font-size: 13px;
-  color: #a1a1aa;
+  color: var(--text-muted);
   white-space: nowrap;
 }
 
 .po-total {
   font-size: 16px;
   font-weight: 700;
-  color: #22c55e;
+  color: var(--green);
   white-space: nowrap;
   min-width: 60px;
   text-align: right;
@@ -233,9 +254,9 @@
   padding: 7px 16px;
   font-size: 13px;
   font-weight: 600;
-  color: #a1a1aa;
+  color: var(--text-muted);
   background: rgba(255,255,255,0.04);
-  border: 1px solid #27272a;
+  border: 1px solid var(--border);
   border-radius: 8px;
   cursor: pointer;
   white-space: nowrap;
@@ -243,15 +264,24 @@
 }
 
 .po-details-btn:hover {
-  color: #f4f4f5;
+  color: var(--text);
   background: rgba(255,255,255,0.08);
-  border-color: #3f3f46;
+  border-color: var(--border);
+}
+html.light-theme .po-details-btn {
+  background: rgba(0,0,0,0.04);
+}
+html.light-theme .po-details-btn:hover {
+  background: rgba(0,0,0,0.08);
 }
 
 .po-card-details {
-  border-top: 1px solid #27272a;
+  border-top: 1px solid var(--border);
   padding: 14px 20px;
   background: rgba(0,0,0,0.15);
+}
+html.light-theme .po-card-details {
+  background: rgba(0,0,0,0.02);
 }
 
 .po-details-items {
@@ -271,13 +301,13 @@
 .po-detail-name {
   font-size: 13px;
   font-weight: 500;
-  color: #d4d4d8;
+  color: var(--text);
 }
 
 .po-detail-qty {
   font-size: 12px;
   font-weight: 600;
-  color: #52525b;
+  color: var(--text-muted);
   text-align: center;
   min-width: 28px;
 }
@@ -285,7 +315,7 @@
 .po-detail-price {
   font-size: 13px;
   font-weight: 600;
-  color: #a1a1aa;
+  color: var(--text-muted);
   text-align: right;
   min-width: 60px;
 }
@@ -295,9 +325,9 @@
   gap: 8px;
   padding: 8px 0 0;
   margin-top: 8px;
-  border-top: 1px solid #27272a;
+  border-top: 1px solid var(--border);
   font-size: 12px;
-  color: #d4d4d8;
+  color: var(--text);
 }
 
 .po-note-label {
@@ -307,7 +337,7 @@
 }
 
 .po-note-text {
-  color: #a1a1aa;
+  color: var(--text-muted);
 }
 
 .po-loading {
@@ -318,7 +348,7 @@
 
 .po-skeleton {
   height: 56px;
-  background: linear-gradient(90deg, #18181b 25%, #27272a 50%, #18181b 75%);
+  background: linear-gradient(90deg, var(--card) 25%, var(--border) 50%, var(--card) 75%);
   background-size: 400% 100%;
   animation: poShimmer 1.5s infinite;
   border-radius: 12px;
@@ -340,19 +370,19 @@
 
 .po-empty-icon {
   margin-bottom: 16px;
-  color: #555;
+  color: var(--text-muted);
 }
 
 .po-empty-text {
   font-size: 16px;
   font-weight: 600;
-  color: #a1a1aa;
+  color: var(--text-muted);
   margin: 0 0 6px;
 }
 
 .po-empty-hint {
   font-size: 13px;
-  color: #52525b;
+  color: var(--text-muted);
   margin: 0;
 }
 

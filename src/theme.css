@@ -51,7 +51,7 @@
    ========================================= */
 body {
   font-family: 'Outfit', system-ui, -apple-system, sans-serif !important;
-  background-color: #000 !important;
+  background-color: var(--bg) !important;
   color: var(--text) !important;
   -webkit-font-smoothing: antialiased;
   letter-spacing: -0.01em;
@@ -63,7 +63,7 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: #000;
+  background: var(--bg);
 }
 
 ::-webkit-scrollbar-thumb {
@@ -95,7 +95,7 @@ button, input, select, textarea {
 }
 
 .header {
-  background: #000 !important;
+  background: var(--bg) !important;
   border-bottom: none !important;
   padding: 10px 20px !important;
   transition: all var(--trans-smooth);
@@ -422,6 +422,46 @@ tr:last-child td {
 .time-badge, .item-qty {
   border-radius: var(--radius-sm) !important;
   font-weight: 600 !important;
+}
+
+/* =========================================
+   LIGHT THEME
+   ========================================= */
+html.light-theme {
+  --bg: #f8f8fa;
+  --card: #ffffff;
+  --card-glass: rgba(255, 255, 255, 0.95);
+  --border: #e4e4e7;
+  --text: #18181b;
+  --text-muted: #71717a;
+  --shadow-sm: 0 2px 8px rgba(0,0,0,0.08);
+  --shadow-md: 0 8px 24px rgba(0,0,0,0.1);
+  --shadow-lg: 0 16px 40px rgba(0,0,0,0.12);
+  --primary-glow: rgba(99, 102, 241, 0.15);
+}
+
+html.light-theme .sidebar {
+  border-right-color: var(--border) !important;
+}
+
+html.light-theme input[type="text"],
+html.light-theme input[type="number"],
+html.light-theme input[type="password"],
+html.light-theme textarea,
+html.light-theme select {
+  color: var(--text) !important;
+}
+
+html.light-theme .cancel-btn:hover {
+  background: #e4e4e7;
+}
+
+html.light-theme .settings-item:hover {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+html.light-theme .settings-item-icon {
+  background: rgba(0, 0, 0, 0.05);
 }
 
 /* Primary Button Helper */
