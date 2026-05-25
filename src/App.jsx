@@ -346,17 +346,6 @@ function App() {
     }
   }, [isLoggedIn, restaurantId, loadOrders])
 
-  // Polling fallback — runs loadOrders every 30s if realtime subscription is inactive
-  useEffect(() => {
-    if (!isLoggedIn || !restaurantId) return
-
-    const interval = setInterval(() => {
-      loadOrders()
-    }, 30000)
-
-    return () => clearInterval(interval)
-  }, [isLoggedIn, restaurantId, loadOrders])
-
   useEffect(() => {
     if (!isLoggedIn || !restaurantId) return
 
@@ -577,207 +566,58 @@ function App() {
     orderStore.publish(orders, pastOrders)
   }, [orders, pastOrders])
 
-  // ============================================================
-  // WAITER CALLS — one effect: fetch pending + realtime subscription
-  // ============================================================
+  // WAITER CALLS — fetch + realtime only, no polling
   useEffect(() => {
-    // Normalize restaurantId to ensure string comparison works
-    const currentRestaurantId = restaurantId ? String(restaurantId).trim() : null
-    if (!isLoggedIn || !currentRestaurantId) {
-      console.log('[Dashboard Waiter] Skipped — isLoggedIn:', isLoggedIn, 'restaurantId:', restaurantId)
-      return
-    }
+    if (!isLoggedIn || !restaurantId) return
 
-    console.log('[Dashboard Waiter] Starting fetch + realtime for restaurant:', currentRestaurantId)
+    console.log('[Dashboard Waiter]', { isLoggedIn, restaurantId })
 
     let isSubscribed = true
-    let channel = null
-    let reconnectTimer = null
-
-    // ---- 1. Immediate fetch of pending calls ----
-    const fetchPending = async () => {
-      setWaiterCallsLoading(true)
-      try {
-        console.log('[Dashboard Waiter] Fetching pending calls for restaurant:', currentRestaurantId)
-
-        // Try Supabase FK join first, fall back to manual enrichment if no FK
-        let pendingCalls = []
-        let fetchError = null
-
-        try {
-          const { data, error } = await supabase
-            .from('waiter_calls')
-            .select(`
-              id,
-              restaurant_id,
-              table_id,
-              order_code,
-              session_order_id,
-              status,
-              created_at,
-              tables:restaurant_tables (
-                id,
-                table_number
-              )
-            `)
-            .eq('restaurant_id', currentRestaurantId)
-            .eq('status', 'pending')
-            .order('created_at', { ascending: false })
-
-          console.log('[Dashboard Waiter] Raw DB response:', data)
-          console.log('[Dashboard Waiter] Error:', error)
-
-          if (error) {
-            fetchError = error
-            console.error('[Dashboard Waiter] Initial fetch error:', error.message, error.code, error.details)
-          } else {
-            pendingCalls = (data || []).map(c => {
-              // Normalize joined tables data into restaurant_tables shape
-              const tableData = c.tables || null
-              const enriched = { ...c }
-              delete enriched.tables
-              enriched.restaurant_tables = tableData ? { table_number: tableData.table_number } : null
-              return enriched
-            })
-          }
-        } catch (err) {
-          fetchError = err
-          console.warn('[Dashboard Waiter] Join query failed, falling back to manual enrichment:', err.message)
-        }
-
-        if (fetchError) {
-          // Manual enrichment fallback
-          console.log('[Dashboard Waiter] Using manual enrichment fallback')
-          const { data, error } = await supabase
-            .from('waiter_calls')
-            .select('id, restaurant_id, table_id, order_code, session_order_id, status, created_at')
-            .eq('restaurant_id', currentRestaurantId)
-            .eq('status', 'pending')
-            .order('created_at', { ascending: false })
-
-          if (error) {
-            console.error('[Dashboard Waiter] Fallback fetch error:', error.message)
-            return
-          }
-
-          pendingCalls = data || []
-          const tableIds = [...new Set(pendingCalls.filter(c => c.table_id).map(c => c.table_id))]
-          if (tableIds.length > 0) {
-            const { data: tables } = await supabase.from('restaurant_tables').select('id, table_number').in('id', tableIds)
-            if (tables) {
-              const tMap = {}
-              tables.forEach(t => { tMap[t.id] = t.table_number })
-              pendingCalls.forEach(c => { if (c.table_id && tMap[c.table_id]) c.restaurant_tables = { table_number: tMap[c.table_id] } })
-            }
-          }
-        }
-
-        console.log('[Dashboard Waiter] Pending calls after enrichment:', pendingCalls)
-
-        if (isSubscribed) {
-          setWaiterCalls(pendingCalls)
-          console.log('[Dashboard Waiter] Initial fetch: state set with', pendingCalls.length, 'calls')
-        }
-      } catch (err) {
-        console.error('[Dashboard Waiter] Initial fetch exception:', err)
-      } finally {
-        if (isSubscribed) setWaiterCallsLoading(false)
-      }
-    }
-
-    // ---- 2. Realtime subscription for instant updates ----
-    const setupRealtime = () => {
-      if (channel) {
-        supabase.removeChannel(channel)
-        channel = null
-      }
-
-      const handleRealtime = async (payload) => {
-        console.log('[Dashboard Waiter] Realtime event:', payload.eventType, 'payload:', payload)
-
-        if (payload.eventType === 'INSERT') {
-          if (payload.new.restaurant_id !== currentRestaurantId) {
-            console.log('[Dashboard Waiter] Realtime INSERT skipped — restaurant_id mismatch:', payload.new.restaurant_id, '!=', currentRestaurantId)
-            return
-          }
-          console.log('[Dashboard Waiter] Realtime INSERT:', payload.new.id, 'table_id:', payload.new.table_id, 'status:', payload.new.status)
-          if (payload.new.status !== 'pending') {
-            console.log('[Dashboard Waiter] Realtime INSERT skipped — status not pending:', payload.new.status)
-            return
-          }
-
-          let enriched = { ...payload.new, restaurant_tables: null }
-          if (payload.new.table_id) {
-            const { data: table } = await supabase
-              .from('restaurant_tables')
-              .select('table_number')
-              .eq('id', payload.new.table_id)
-              .maybeSingle()
-            if (table) enriched.restaurant_tables = { table_number: table.table_number }
-          }
-          setWaiterCalls(prev => {
-            if (prev.some(c => c.id === enriched.id)) return prev
-            return [enriched, ...prev]
-          })
-        } else if (payload.eventType === 'UPDATE') {
-          if (payload.new.restaurant_id !== currentRestaurantId) return
-          console.log('[Dashboard Waiter] Realtime UPDATE:', payload.new.id, 'status:', payload.new.status, '(was:', payload.old?.status, ')')
-          if (payload.new.status !== 'pending') {
-            setWaiterCalls(prev => prev.filter(c => c.id !== payload.new.id))
-          } else {
+    const channel = supabase
+      .channel('waiter-calls-live')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'waiter_calls',
+          filter: `restaurant_id=eq.${restaurantId}`
+        },
+        (payload) => {
+          console.log('[Dashboard Waiter] Realtime:', payload)
+          if (payload.eventType === 'INSERT' && payload.new.status === 'pending') {
             setWaiterCalls(prev => {
-              if (prev.some(c => c.id === payload.new.id)) return prev
-              return [{ ...payload.new, restaurant_tables: null }, ...prev]
+              if (prev.some(x => x.id === payload.new.id)) return prev
+              return [payload.new, ...prev]
             })
+          } else if (payload.eventType === 'UPDATE' && payload.new.status !== 'pending') {
+            setWaiterCalls(prev => prev.filter(x => x.id !== payload.new.id))
+          } else if (payload.eventType === 'DELETE') {
+            setWaiterCalls(prev => prev.filter(x => x.id !== payload.old.id))
           }
-        } else if (payload.eventType === 'DELETE') {
-          if (payload.old.restaurant_id !== currentRestaurantId) return
-          console.log('[Dashboard Waiter] Realtime DELETE:', payload.old.id)
-          setWaiterCalls(prev => prev.filter(c => c.id !== payload.old.id))
         }
-      }
+      )
+      .subscribe()
 
-      channel = supabase
-        .channel('waiter-calls-live')
-        .on(
-          'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: 'waiter_calls'
-          },
-          handleRealtime
-        )
-        .subscribe((status, err) => {
-          console.log('[Dashboard Waiter] Realtime subscription status:', status, err || '')
-          if (status === 'SUBSCRIBED') {
-            console.log('[Dashboard Waiter] Realtime subscription: SUBSCRIBED successfully')
-          }
-          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-            console.warn('[Dashboard Waiter] Realtime subscription issue:', status, err || '')
-            if (isSubscribed) {
-              reconnectTimer = setTimeout(() => {
-                if (isSubscribed) {
-                  console.log('[Dashboard Waiter] Reconnecting...')
-                  fetchPending()
-                  setupRealtime()
-                }
-              }, 3000)
-            }
-          }
-        })
+    const fetchWaiterCalls = async () => {
+      setWaiterCallsLoading(true)
+      const { data, error } = await supabase
+        .from('waiter_calls')
+        .select('*, restaurant_tables(*)')
+        .eq('restaurant_id', restaurantId)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: true })
+
+      console.log('[Dashboard Waiter] DB:', data)
+      if (!error && isSubscribed) setWaiterCalls(data || [])
+      if (isSubscribed) setWaiterCallsLoading(false)
     }
 
-    fetchPending()
-    setupRealtime()
+    fetchWaiterCalls()
 
     return () => {
       isSubscribed = false
-      if (reconnectTimer) clearTimeout(reconnectTimer)
-      if (channel) {
-        supabase.removeChannel(channel)
-        channel = null
-      }
+      supabase.removeChannel(channel)
     }
   }, [isLoggedIn, restaurantId])
 
