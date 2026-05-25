@@ -576,7 +576,7 @@ function App() {
           if (payload.eventType === 'INSERT') {
             supabase
               .from('restaurant_tables')
-              .select('id, table_number, name')
+              .select('id, table_number')
               .eq('id', payload.new.table_id)
               .maybeSingle()
               .then(({ data: table }) => {
@@ -601,8 +601,7 @@ function App() {
           *,
           restaurant_tables!table_id(
             id,
-            table_number,
-            name
+            table_number
           )
         `)
         .eq('restaurant_id', restaurantId)
@@ -617,21 +616,36 @@ function App() {
           .select("*")
           .eq("restaurant_id", restaurantId)
 
-        const ids = calls?.map(x => x.table_id) || []
+        if (!calls?.length) {
+          if (isSubscribed) setWaiterCalls([])
+          if (isSubscribed) setWaiterCallsLoading(false)
+          return
+        }
+
+        const ids = calls
+          .map(x => x.table_id)
+          .filter(Boolean)
+
+        if (!ids.length) {
+          if (isSubscribed) setWaiterCalls(calls)
+          if (isSubscribed) setWaiterCallsLoading(false)
+          return
+        }
 
         const { data: tables } = await supabase
           .from("restaurant_tables")
-          .select("id,table_number,name")
+          .select("id,table_number")
           .in("id", ids)
 
-        const merged = (calls || []).map(call => ({
+        const merged = calls.map(call => ({
           ...call,
-          restaurant_tables: (tables || []).find(
-            t => t.id === call.table_id
-          )
+          restaurant_tables:
+            tables?.find(
+              t => t.id === call.table_id
+            ) || null
         }))
 
-        if (isSubscribed) setWaiterCalls(merged.filter(x => x.status === 'pending'))
+        if (isSubscribed) setWaiterCalls(merged)
       } else {
         if (isSubscribed) setWaiterCalls((data || []).filter(x => x.status === 'pending'))
       }
