@@ -14,6 +14,7 @@ const STATUS_CONFIG = {
 function PastOrdersPage({ pastOrders, loading, onToast, hideFilters }) {
   const [searchQuery, setSearchQuery] = useState('')
   const [timeFilter, setTimeFilter] = useState('today')
+  const [selectedDate, setSelectedDate] = useState('')
   const [expandedId, setExpandedId] = useState(null)
 
   const filteredOrders = useMemo(() => {
@@ -31,11 +32,20 @@ function PastOrdersPage({ pastOrders, loading, onToast, hideFilters }) {
         if (!code.includes(q) && !table.includes(q)) return false
       }
       const date = new Date(o.created_at)
-      if (timeFilter === 'today') return date >= todayStart
-      if (timeFilter === 'week') return date >= weekAgo
+      if (timeFilter === 'today') {
+        if (date < todayStart) return false
+      } else if (timeFilter === 'week') {
+        if (date < weekAgo) return false
+      }
+      if (selectedDate) {
+        const y = date.getFullYear()
+        const m = String(date.getMonth() + 1).padStart(2, '0')
+        const d = String(date.getDate()).padStart(2, '0')
+        if (`${y}-${m}-${d}` !== selectedDate) return false
+      }
       return true
     })
-  }, [pastOrders, timeFilter, searchQuery, hideFilters])
+  }, [pastOrders, timeFilter, searchQuery, selectedDate, hideFilters])
 
   const displayOrders = hideFilters ? pastOrders : filteredOrders
 
@@ -55,6 +65,23 @@ function PastOrdersPage({ pastOrders, loading, onToast, hideFilters }) {
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
             />
+            <div className="po-date-filter">
+              <input
+                type="date"
+                className="po-date-input"
+                value={selectedDate}
+                onChange={e => setSelectedDate(e.target.value)}
+              />
+              {selectedDate && (
+                <button
+                  className="po-date-clear"
+                  onClick={() => setSelectedDate('')}
+                  title="Clear date"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
             <div className="po-time-filters">
               {['today', 'week', 'all'].map(f => (
                 <button

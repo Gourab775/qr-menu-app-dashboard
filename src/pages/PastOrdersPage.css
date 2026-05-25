@@ -60,6 +60,51 @@
   color: #52525b;
 }
 
+.po-date-filter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.po-date-input {
+  padding: 9px 12px;
+  font-size: 13px;
+  background: #09090b;
+  border: 1px solid #27272a;
+  border-radius: 10px;
+  color: #f4f4f5;
+  outline: none;
+  font-family: inherit;
+  cursor: pointer;
+  min-width: 140px;
+}
+
+.po-date-input:focus {
+  border-color: #6366f1;
+}
+
+.po-date-input::-webkit-calendar-picker-indicator {
+  filter: invert(0.6);
+  cursor: pointer;
+}
+
+.po-date-clear {
+  padding: 4px 8px;
+  font-size: 13px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid #27272a;
+  border-radius: 8px;
+  color: #a1a1aa;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.po-date-clear:hover {
+  color: #f4f4f5;
+  background: rgba(255,255,255,0.08);
+  border-color: #3f3f46;
+}
+
 .po-time-filters {
   display: flex;
   gap: 4px;
@@ -320,6 +365,15 @@
   .po-search {
     max-width: none;
     min-width: 0;
+  }
+
+  .po-date-filter {
+    width: 100%;
+  }
+
+  .po-date-input {
+    min-width: 0;
+    width: 100%;
   }
 
   .po-time-filters {
