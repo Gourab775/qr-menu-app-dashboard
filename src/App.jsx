@@ -38,6 +38,8 @@ function App() {
   const [menuLoading, setMenuLoading] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [activeTab, setActiveTab] = useState('analytics')
+  const [hasUnseenOrders, setHasUnseenOrders] = useState(false)
+  const activeTabRef = useRef(activeTab)
   const [showProfile, setShowProfile] = useState(false)
   const [showAddModal, setShowAddModal] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -67,6 +69,11 @@ function App() {
       root.classList.remove('light-theme')
     }
   }, [preferences.theme])
+
+  useEffect(() => {
+    activeTabRef.current = activeTab
+    if (activeTab === 'live-orders') setHasUnseenOrders(false)
+  }, [activeTab])
 
   const profileRef = useRef(null)
   const abortControllerRef = useRef(null)
@@ -468,6 +475,9 @@ function App() {
                 if (preferences.soundEnabled) playSound()
                 return [resolved, ...prev].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
               })
+              if (activeTabRef.current !== 'live-orders') {
+                setHasUnseenOrders(true)
+              }
             } else if (newStatus === 'accepted') {
               setPastOrders(prev => {
                 if (prev.some(o => o.id === newOrderId)) return prev.map(o => o.id === newOrderId ? { ...o, ...resolved } : o)
@@ -890,7 +900,10 @@ function App() {
       <OfflineBanner />
 
       <header className="header">
-        <button className="menu-btn" onClick={() => setSidebarOpen(true)}>☰</button>
+        <button className="menu-btn" onClick={() => setSidebarOpen(true)}>
+          ☰
+          {hasUnseenOrders && <span className="menu-btn-badge" />}
+        </button>
 <h2 className="header-title">
   {activeTab === 'analytics' && 'Analytics'}
   {activeTab === 'menu_items' && 'Menu Items'}
@@ -1092,7 +1105,7 @@ function App() {
         {activeTab === 'past-orders' && <PastOrdersPage pastOrders={pastOrders} loading={loading} onToast={showToast} />}
       </main>
 
-      <Sidebar isOpen={sidebarOpen} onClose={closeSidebar} activeTab={activeTab} setActiveTab={setActiveTab} onOpenOrders={openOrdersPopup} waiterCalls={waiterCalls} />
+      <Sidebar isOpen={sidebarOpen} onClose={closeSidebar} activeTab={activeTab} setActiveTab={setActiveTab} onOpenOrders={openOrdersPopup} waiterCalls={waiterCalls} hasUnseenOrders={hasUnseenOrders} />
 
       {showAddModal && (
         <AddItemModal
@@ -1106,7 +1119,7 @@ function App() {
   )
 }
 
-function Sidebar({ isOpen, onClose, activeTab, setActiveTab, onOpenOrders, waiterCalls }) {
+function Sidebar({ isOpen, onClose, activeTab, setActiveTab, onOpenOrders, waiterCalls, hasUnseenOrders }) {
   return (
     <>
       {isOpen && <div className="overlay" onClick={onClose} />}
@@ -1145,6 +1158,7 @@ function Sidebar({ isOpen, onClose, activeTab, setActiveTab, onOpenOrders, waite
             onClick={() => { setActiveTab('live-orders'); onClose(); }}
           >
             <IconBell size={18} /> Live Orders
+            {hasUnseenOrders && <span className="sidebar-badge" />}
           </button>
 
           <button

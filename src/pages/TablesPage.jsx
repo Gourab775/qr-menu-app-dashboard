@@ -21,6 +21,7 @@ export default function TablesPage({ restaurantId, restaurantSlug }) {
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [editValue, setEditValue] = useState('');
+  const [editActive, setEditActive] = useState(true);
 
   const [viewingQR, setViewingQR] = useState(null);
   const [customizingQR, setCustomizingQR] = useState(null);
@@ -171,7 +172,7 @@ export default function TablesPage({ restaurantId, restaurantSlug }) {
     try {
       const { error: err } = await supabase
         .from('restaurant_tables')
-        .update({ table_number: editValue.trim() })
+        .update({ table_number: editValue.trim(), is_active: editActive })
         .eq('id', editingId);
 
       if (err) {
@@ -316,11 +317,13 @@ export default function TablesPage({ restaurantId, restaurantSlug }) {
   const openEdit = (table) => {
     setEditingId(table.id);
     setEditValue(table.table_number);
+    setEditActive(table.is_active !== false);
   };
 
   const closeEdit = () => {
     setEditingId(null);
     setEditValue('');
+    setEditActive(true);
   };
 
   const filteredTables = tables.filter((t) => {
@@ -432,7 +435,9 @@ export default function TablesPage({ restaurantId, restaurantSlug }) {
                     {table.name && <span className="table-name-text">{table.name}</span>}
                   </div>
                   <div className="table-card-badges">
-                    <span className="table-badge active">Active</span>
+                    <span className={`table-badge ${table.is_active !== false ? 'active' : 'inactive'}`}>
+                      {table.is_active !== false ? 'Active' : 'Inactive'}
+                    </span>
                     <span className={`table-badge ${table.table_token ? 'qr-ready' : 'qr-missing'}`}>
                       {table.table_token ? 'QR Ready' : 'QR Missing'}
                     </span>
@@ -468,6 +473,16 @@ export default function TablesPage({ restaurantId, restaurantSlug }) {
                 autoFocus
                 required
               />
+              <div className="tables-modal-toggle">
+                <label>Status</label>
+                <button
+                  type="button"
+                  className={`table-toggle-btn ${editActive ? 'active' : 'inactive'}`}
+                  onClick={() => setEditActive(!editActive)}
+                >
+                  {editActive ? 'Active' : 'Inactive'}
+                </button>
+              </div>
               <div className="tables-modal-actions">
                 <button type="submit" className="tables-modal-save">Save</button>
                 <button type="button" className="tables-modal-cancel" onClick={closeEdit}>Cancel</button>

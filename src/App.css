@@ -82,6 +82,7 @@ body {
 }
 
 .menu-btn {
+  position: relative;
   background: none;
   border: none;
   color: var(--text);
@@ -89,6 +90,25 @@ body {
   cursor: pointer;
   padding: 6px;
   line-height: 1;
+}
+
+.menu-btn-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 8px;
+  height: 8px;
+  background: var(--red);
+  border-radius: 50%;
+}
+
+.sidebar-badge {
+  width: 8px;
+  height: 8px;
+  background: var(--red);
+  border-radius: 50%;
+  margin-left: auto;
+  flex-shrink: 0;
 }
 
 .header-title {
@@ -1340,6 +1360,31 @@ body {
   color: var(--red);
   border-color: var(--red);
   background: rgba(239, 68, 68, 0.08);
+}
+
+.mic-disable-btn {
+  padding: 4px 8px;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.mic-disable-btn:hover {
+  color: var(--orange);
+  border-color: var(--orange);
+  background: rgba(245, 158, 11, 0.08);
+}
+
+.mic-disable-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .mic-edit-form {

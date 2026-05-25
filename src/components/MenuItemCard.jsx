@@ -30,6 +30,7 @@ export default function MenuItemCard({ item, onSave, onDelete, categories = [] }
   const [imageError, setImageError] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [disabling, setDisabling] = useState(false)
 
   const categoryName = categories.find(c => c.id === item.category_id)?.name || ''
 
@@ -62,6 +63,12 @@ export default function MenuItemCard({ item, onSave, onDelete, categories = [] }
       category_id: item.category_id || ''
     })
     setEditing(false)
+  }
+
+  const handleToggleAvailability = async () => {
+    setDisabling(true)
+    await onSave(item.id, { is_available: !item.is_available })
+    setDisabling(false)
   }
 
   if (!editing) {
@@ -100,6 +107,14 @@ export default function MenuItemCard({ item, onSave, onDelete, categories = [] }
                 <polyline points="3 6 5 6 21 6" />
                 <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
               </svg>
+            </button>
+            <button
+              className="mic-disable-btn"
+              onClick={handleToggleAvailability}
+              disabled={disabling}
+              title={item.is_available ? 'Disable item' : 'Enable item'}
+            >
+              {disabling ? '...' : (item.is_available ? 'Disable' : 'Enable')}
             </button>
           </div>
         </div>
