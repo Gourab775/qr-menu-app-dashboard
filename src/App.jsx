@@ -245,7 +245,6 @@ function App() {
     } catch (err) {
       console.error('Logout error:', err)
       window.location.hash = ''
-      window.location.reload()
     } finally {
       logoutRef.current = false
     }
@@ -410,8 +409,6 @@ function App() {
     }
 
     const subscriptionActiveRef = { current: false }
-    const needsReconnectRefetch = { current: false }
-    let reconnectTimer = null
 
     const channel = supabase
       .channel('live-orders')
@@ -532,21 +529,8 @@ function App() {
       )
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
-          if (needsReconnectRefetch.current) {
-            needsReconnectRefetch.current = false
-            loadOrders()
-          }
           subscriptionActiveRef.current = true
         } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-          if (subscriptionActiveRef.current) {
-            needsReconnectRefetch.current = true
-            if (reconnectTimer) clearTimeout(reconnectTimer)
-            reconnectTimer = setTimeout(() => {
-              if (!subscriptionActiveRef.current) {
-                loadOrders()
-              }
-            }, 10000)
-          }
           subscriptionActiveRef.current = false
         }
       })
@@ -554,13 +538,11 @@ function App() {
     return () => {
       document.removeEventListener('click', handleGesture)
       document.removeEventListener('keydown', handleGesture)
-      if (reconnectTimer) clearTimeout(reconnectTimer)
       if (audioCtxRef.current) { try { audioCtxRef.current.close() } catch { } }
-      needsReconnectRefetch.current = false
       subscriptionActiveRef.current = false
       supabase.removeChannel(channel)
     }
-  }, [isLoggedIn, restaurantId, preferences.soundEnabled, preferences.orderNotifications, preferences.notificationSound, loadOrders])
+  }, [isLoggedIn, restaurantId, preferences.soundEnabled, preferences.orderNotifications, preferences.notificationSound])
 
   useEffect(() => {
     orderStore.publish(orders, pastOrders)
@@ -570,11 +552,17 @@ function App() {
   useEffect(() => {
     if (!isLoggedIn || !restaurantId) return
 
-    console.log('[Dashboard Waiter]', { isLoggedIn, restaurantId })
+    console.log('Restaurant ID:', restaurantId)
+
+    supabase.getChannels().forEach(ch => {
+      if (ch.topic.includes('waiter-live')) {
+        supabase.removeChannel(ch)
+      }
+    })
 
     let isSubscribed = true
     const channel = supabase
-      .channel('waiter-calls-live')
+      .channel('waiter-live')
       .on(
         'postgres_changes',
         {
@@ -584,16 +572,12 @@ function App() {
           filter: `restaurant_id=eq.${restaurantId}`
         },
         (payload) => {
-          console.log('[Dashboard Waiter] Realtime:', payload)
-          if (payload.eventType === 'INSERT' && payload.new.status === 'pending') {
-            setWaiterCalls(prev => {
-              if (prev.some(x => x.id === payload.new.id)) return prev
-              return [payload.new, ...prev]
-            })
-          } else if (payload.eventType === 'UPDATE' && payload.new.status !== 'pending') {
+          console.log('[Realtime Waiter]', payload)
+          if (payload.eventType === 'INSERT') {
+            setWaiterCalls(prev => [payload.new, ...prev])
+          }
+          if (payload.eventType === 'UPDATE') {
             setWaiterCalls(prev => prev.filter(x => x.id !== payload.new.id))
-          } else if (payload.eventType === 'DELETE') {
-            setWaiterCalls(prev => prev.filter(x => x.id !== payload.old.id))
           }
         }
       )
@@ -603,13 +587,24 @@ function App() {
       setWaiterCallsLoading(true)
       const { data, error } = await supabase
         .from('waiter_calls')
-        .select('*, restaurant_tables(*)')
+        .select(`*,
+          restaurant_tables(
+            id,
+            table_number,
+            name
+          )`)
         .eq('restaurant_id', restaurantId)
-        .eq('status', 'pending')
-        .order('created_at', { ascending: true })
+        .order('created_at', { ascending: false })
 
-      console.log('[Dashboard Waiter] DB:', data)
-      if (!error && isSubscribed) setWaiterCalls(data || [])
+      console.log('[Waiter Raw]', data)
+      console.log('Statuses:', data?.map(x => x.status))
+      console.log('Restaurant IDs:', data?.map(x => x.restaurant_id))
+
+      if (!error) {
+        const pending = (data || []).filter(x => x.status === 'pending')
+        console.log('[Waiter Pending]', pending)
+        if (isSubscribed) setWaiterCalls(pending)
+      }
       if (isSubscribed) setWaiterCallsLoading(false)
     }
 
@@ -711,7 +706,7 @@ function App() {
             <h1 className="login-title">No Restaurant Found</h1>
             <p className="login-subtitle">No restaurant available for your account</p>
             <button className="login-btn" onClick={() => {
-              signOut().then(() => window.location.reload()).catch(() => window.location.reload())
+              signOut().catch(() => {})
             }}>Logout</button>
           </div>
         </div>

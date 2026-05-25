@@ -140,11 +140,17 @@ function PopupApp() {
   useEffect(() => {
     if (!isLoggedIn || !restaurantId) return
 
-    console.log('[Popup Waiter]', { isLoggedIn, restaurantId })
+    console.log('Restaurant ID:', restaurantId)
+
+    supabase.getChannels().forEach(ch => {
+      if (ch.topic.includes('waiter-live')) {
+        supabase.removeChannel(ch)
+      }
+    })
 
     let isSubscribed = true
     const channel = supabase
-      .channel('waiter-calls-live')
+      .channel('waiter-live')
       .on(
         'postgres_changes',
         {
@@ -154,16 +160,12 @@ function PopupApp() {
           filter: `restaurant_id=eq.${restaurantId}`
         },
         (payload) => {
-          console.log('[Popup Waiter] Realtime:', payload)
-          if (payload.eventType === 'INSERT' && payload.new.status === 'pending') {
-            setWaiterCalls(prev => {
-              if (prev.some(x => x.id === payload.new.id)) return prev
-              return [payload.new, ...prev]
-            })
-          } else if (payload.eventType === 'UPDATE' && payload.new.status !== 'pending') {
+          console.log('[Realtime Waiter]', payload)
+          if (payload.eventType === 'INSERT') {
+            setWaiterCalls(prev => [payload.new, ...prev])
+          }
+          if (payload.eventType === 'UPDATE') {
             setWaiterCalls(prev => prev.filter(x => x.id !== payload.new.id))
-          } else if (payload.eventType === 'DELETE') {
-            setWaiterCalls(prev => prev.filter(x => x.id !== payload.old.id))
           }
         }
       )
@@ -172,13 +174,24 @@ function PopupApp() {
     const fetchWaiterCalls = async () => {
       const { data, error } = await supabase
         .from('waiter_calls')
-        .select('*, restaurant_tables(*)')
+        .select(`*,
+          restaurant_tables(
+            id,
+            table_number,
+            name
+          )`)
         .eq('restaurant_id', restaurantId)
-        .eq('status', 'pending')
-        .order('created_at', { ascending: true })
+        .order('created_at', { ascending: false })
 
-      console.log('[Popup Waiter] DB:', data)
-      if (!error && isSubscribed) setWaiterCalls(data || [])
+      console.log('[Waiter Raw]', data)
+      console.log('Statuses:', data?.map(x => x.status))
+      console.log('Restaurant IDs:', data?.map(x => x.restaurant_id))
+
+      if (!error) {
+        const pending = (data || []).filter(x => x.status === 'pending')
+        console.log('[Waiter Pending]', pending)
+        if (isSubscribed) setWaiterCalls(pending)
+      }
     }
 
     fetchWaiterCalls()

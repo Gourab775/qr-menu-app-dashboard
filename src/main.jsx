@@ -46,7 +46,7 @@ class ErrorBoundary extends React.Component {
               {this.state.error?.message || 'An unexpected error occurred'}
             </p>
             <button
-              onClick={() => window.location.reload()}
+              onClick={() => window.location.href = '/'}
               style={{
                 padding: '12px 24px',
                 backgroundColor: '#e94560',
@@ -57,7 +57,7 @@ class ErrorBoundary extends React.Component {
                 fontSize: '16px'
               }}
             >
-              Reload Page
+              Go Home
             </button>
             {process.env.NODE_ENV === 'development' && this.state.errorInfo && (
               <details style={{ marginTop: '24px', textAlign: 'left', color: '#a0a0a0' }}>

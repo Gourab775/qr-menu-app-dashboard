@@ -390,7 +390,6 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
     if (window.confirm('This will clear all local data. Continue?')) {
       localStorage.clear()
       showToast('Local data cleared')
-      window.location.reload()
     }
   }
 
@@ -528,11 +527,6 @@ const handlePasswordChange = async (e) => {
 
       showToast('Password updated. Please login with new password.')
       closeModal()
-
-      setTimeout(() => {
-        console.log('[Password Change] Redirecting to login...')
-        window.location.reload()
-      }, 100)
       
     } catch (err) {
       console.error('[Password Change] Error:', err)
@@ -548,10 +542,8 @@ const handlePasswordChange = async (e) => {
         localStorage.removeItem('dashboard_preferences')
         localStorage.removeItem('dashboard_keepLoggedIn')
         await signOut()
-        setTimeout(() => window.location.reload(), 100)
       } catch (err) {
         console.error('Logout error:', err)
-        setTimeout(() => window.location.reload(), 100)
       }
     }
   }
