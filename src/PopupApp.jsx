@@ -162,7 +162,17 @@ function PopupApp() {
         (payload) => {
           console.log('[Realtime Waiter]', payload)
           if (payload.eventType === 'INSERT') {
-            setWaiterCalls(prev => [payload.new, ...prev])
+            supabase
+              .from('restaurant_tables')
+              .select('id, table_number, name')
+              .eq('id', payload.new.table_id)
+              .maybeSingle()
+              .then(({ data: table }) => {
+                setWaiterCalls(prev => [{
+                  ...payload.new,
+                  restaurant_tables: table || null
+                }, ...prev])
+              })
           }
           if (payload.eventType === 'UPDATE') {
             setWaiterCalls(prev => prev.filter(x => x.id !== payload.new.id))
@@ -172,25 +182,45 @@ function PopupApp() {
       .subscribe()
 
     const fetchWaiterCalls = async () => {
-      const { data, error } = await supabase
+      let { data, error } = await supabase
         .from('waiter_calls')
-        .select(`*,
-          restaurant_tables(
+        .select(`
+          *,
+          restaurant_tables!table_id(
             id,
             table_number,
             name
-          )`)
+          )
+        `)
         .eq('restaurant_id', restaurantId)
         .order('created_at', { ascending: false })
 
-      console.log('[Waiter Raw]', data)
-      console.log('Statuses:', data?.map(x => x.status))
-      console.log('Restaurant IDs:', data?.map(x => x.restaurant_id))
+      console.log('[Waiter Error]', error)
+      console.log('[Waiter Data]', data)
 
-      if (!error) {
-        const pending = (data || []).filter(x => x.status === 'pending')
-        console.log('[Waiter Pending]', pending)
-        if (isSubscribed) setWaiterCalls(pending)
+      if (error) {
+        const { data: calls } = await supabase
+          .from('waiter_calls')
+          .select("*")
+          .eq("restaurant_id", restaurantId)
+
+        const ids = calls?.map(x => x.table_id) || []
+
+        const { data: tables } = await supabase
+          .from("restaurant_tables")
+          .select("id,table_number,name")
+          .in("id", ids)
+
+        const merged = (calls || []).map(call => ({
+          ...call,
+          restaurant_tables: (tables || []).find(
+            t => t.id === call.table_id
+          )
+        }))
+
+        if (isSubscribed) setWaiterCalls(merged.filter(x => x.status === 'pending'))
+      } else {
+        if (isSubscribed) setWaiterCalls((data || []).filter(x => x.status === 'pending'))
       }
     }
 
@@ -577,7 +607,7 @@ function PopupApp() {
                 <div className="popup-orders-count">{waiterCalls.length} waiter call{waiterCalls.length !== 1 ? 's' : ''}</div>
                 <div className="popup-orders-list">
                   {waiterCalls.map(call => {
-                    const tableNum = call.table_number || call.table_id?.slice(0, 8) || '\u2014'
+                    const tableNum = call.table_number || call.restaurant_tables?.table_number || call.table_id?.slice(0, 8) || '\u2014'
                     const orderCode = call.order_code || null
                     return (
                       <div key={call.id} className="popup-order-card">
