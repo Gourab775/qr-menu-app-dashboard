@@ -444,12 +444,6 @@ export default function TablesPage({ restaurantId, restaurantSlug }) {
                   <button className="table-action qr-view" onClick={() => handleViewQR(table)}>
                     View QR
                   </button>
-                  <button className="table-action qr-customize" onClick={() => handleCustomizeQR(table)}>
-                    Customize
-                  </button>
-                  <button className="table-action qr-download" onClick={() => handleDownloadQR(table)}>
-                    Download
-                  </button>
                   <button className="table-action delete" onClick={() => deleteTable(table.id)}>
                     Delete
                   </button>
