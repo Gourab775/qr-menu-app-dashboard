@@ -1,19 +1,25 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { fetchWithTimeout } from '../lib/apiUtils';
+import './TablesPage.css';
 
 const API_TIMEOUT = 15000;
 
 export default function TablesPage({ restaurantId, restaurantSlug }) {
   const BASE_URL = `${window.location.origin.replace('5175', '5173')}/${restaurantSlug || 'default'}`;
-  const FINAL_BASE_URL = window.location.origin.includes('localhost') 
-    ? BASE_URL 
+  const FINAL_BASE_URL = window.location.origin.includes('localhost')
+    ? BASE_URL
     : `https://qr-menu-app-gamma.vercel.app/${restaurantSlug || 'default'}`;
+
   const [tables, setTables] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [search, setSearch] = useState('');
+  const [showAddForm, setShowAddForm] = useState(false);
   const [newTableNum, setNewTableNum] = useState('');
   const [adding, setAdding] = useState(false);
-  const [error, setError] = useState(null);
+  const [editingId, setEditingId] = useState(null);
+  const [editValue, setEditValue] = useState('');
 
   const mountedRef = useRef(false);
   const abortControllerRef = useRef(null);
@@ -34,10 +40,9 @@ export default function TablesPage({ restaurantId, restaurantSlug }) {
       if (signal?.aborted) return;
 
       if (err) throw err;
-      
+
       const missingTokens = (data || []).filter(t => !t.table_token);
       if (missingTokens.length > 0) {
-        console.warn(`Found ${missingTokens.length} tables without tokens. Auto-populating...`);
         for (const table of missingTokens) {
           const token = crypto.randomUUID();
           await supabase.from('restaurant_tables').update({ table_token: token }).eq('id', table.id);
@@ -89,11 +94,11 @@ export default function TablesPage({ restaurantId, restaurantSlug }) {
 
     setAdding(true);
     setError(null);
-    
+
     try {
       const newId = crypto.randomUUID();
       const token = crypto.randomUUID();
-      
+
       const payload = {
         id: newId,
         restaurant_id: restaurantId,
@@ -106,25 +111,25 @@ export default function TablesPage({ restaurantId, restaurantSlug }) {
         .insert(payload);
 
       if (err) throw err;
-      
+
       setNewTableNum('');
+      setShowAddForm(false);
       loadTables();
     } catch (err) {
       console.error('Failed to add table:', err);
       if (err.code === '23505') {
         setError(`Table number ${newTableNum} already exists.`);
       } else {
-        setError('Failed to add table. Check if table already exists.');
+        setError('Failed to add table.');
       }
     } finally {
       setAdding(false);
     }
   };
 
-
   const deleteTable = async (id) => {
     if (!window.confirm('Are you sure you want to delete this table?')) return;
-    
+
     try {
       const { error: err } = await supabase
         .from('restaurant_tables')
@@ -132,22 +137,50 @@ export default function TablesPage({ restaurantId, restaurantSlug }) {
         .eq('id', id);
 
       if (err) throw err;
-      
+
       setTables(prev => prev.filter(t => t.id !== id));
     } catch (err) {
       console.error('Failed to delete table:', err);
-      setError('Failed to delete table. It might have associated orders.');
+      setError('Failed to delete table.');
+    }
+  };
+
+  const handleEditTable = async (e) => {
+    e.preventDefault();
+    if (!editValue.trim() || !editingId) return;
+
+    try {
+      const { error: err } = await supabase
+        .from('restaurant_tables')
+        .update({ table_number: editValue.trim() })
+        .eq('id', editingId);
+
+      if (err) {
+        if (err.code === '23505') {
+          setError(`Table number ${editValue} already exists.`);
+        } else {
+          throw err;
+        }
+        return;
+      }
+
+      setEditingId(null);
+      setEditValue('');
+      loadTables();
+    } catch (err) {
+      console.error('Failed to edit table:', err);
+      setError('Failed to update table.');
     }
   };
 
   const handlePrintQR = (id, tableNum, tableToken) => {
     if (!tableToken) {
-      alert("This table is missing a security token. Please refresh the page to allow the system to generate one.");
+      alert('This table is missing a security token. Please refresh to generate one.');
       return;
     }
     const qrUrl = `${FINAL_BASE_URL}?table=${encodeURIComponent(tableToken)}`;
     const qrImageSrc = `https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=${encodeURIComponent(qrUrl)}`;
-    
+
     const printWindow = window.open('', '_blank');
     printWindow.document.write(`
       <html>
@@ -174,15 +207,26 @@ export default function TablesPage({ restaurantId, restaurantSlug }) {
     printWindow.document.close();
   };
 
+  const openEdit = (table) => {
+    setEditingId(table.id);
+    setEditValue(table.table_number);
+  };
+
+  const closeEdit = () => {
+    setEditingId(null);
+    setEditValue('');
+  };
+
+  const filteredTables = tables.filter(t =>
+    t.table_number.toLowerCase().includes(search.toLowerCase())
+  );
+
   if (loading) {
     return (
-      <div className="menu-section">
-        <div className="loading-grid">
-          {[1, 2, 3].map(i => (
-            <div key={i} className="skeleton-card">
-              <div className="skeleton-line" style={{ height: '200px' }}></div>
-              <div className="skeleton-line"></div>
-            </div>
+      <div className="tables-page">
+        <div className="tables-loading-grid">
+          {[1, 2, 3, 4, 5, 6].map(i => (
+            <div key={i} className="table-skeleton" />
           ))}
         </div>
       </div>
@@ -190,90 +234,138 @@ export default function TablesPage({ restaurantId, restaurantSlug }) {
   }
 
   return (
-    <div className="menu-section">
-      <div className="menu-header-row" style={{ marginBottom: '20px' }}>
-        <div className="menu-stats">
-          <span className="stat-label">Total Tables</span>
-          <span className="stat-value">{tables.length}</span>
+    <div className="tables-page">
+      <div className="tables-header">
+        <div className="tables-header-left">
+          <h1 className="tables-title">Tables</h1>
+          <span className="tables-count">{tables.length} total</span>
         </div>
-        <button onClick={() => loadTables()} className="refresh-btn-glass">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M23 4v6h-6M1 20v-6h6"/>
-            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
-          </svg>
-          Refresh
-        </button>
+        <div className="tables-header-right">
+          <div className="tables-search-wrap">
+            <span className="tables-search-icon">&#128269;</span>
+            <input
+              type="text"
+              className="tables-search-input"
+              placeholder="Search tables..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+          </div>
+          <button
+            className="tables-add-btn"
+            onClick={() => setShowAddForm(prev => !prev)}
+          >
+            + Add Table
+          </button>
+        </div>
       </div>
 
-      {error ? (
-        <div className="empty-state">
-          <div className="empty-icon">⚠️</div>
-          <h3>Failed to load tables</h3>
-          <p>{error}</p>
-          <button onClick={() => loadTables()} className="add-btn">
+      {showAddForm && (
+        <form className="tables-add-form" onSubmit={handleAddTable}>
+          <input
+            type="text"
+            placeholder="Table number (e.g., 1, T1)"
+            value={newTableNum}
+            onChange={e => setNewTableNum(e.target.value)}
+            autoFocus
+            required
+          />
+          <button type="submit" className="tables-add-submit" disabled={adding}>
+            {adding ? 'Adding...' : 'Add'}
+          </button>
+          <button
+            type="button"
+            className="tables-add-cancel"
+            onClick={() => {
+              setShowAddForm(false);
+              setNewTableNum('');
+            }}
+          >
+            Cancel
+          </button>
+        </form>
+      )}
+
+      {error && (
+        <div className="tables-error">
+          <span className="tables-error-msg">{error}</span>
+          <button className="tables-error-retry" onClick={() => loadTables()}>
             Retry
           </button>
         </div>
-      ) : null}
-
-      <div className="menu-controls" style={{ display: 'flex', gap: '15px', marginBottom: '30px', alignItems: 'center', flexWrap: 'wrap' }}>
-        <form onSubmit={handleAddTable} style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-          <input
-            type="text"
-            placeholder="Table No. (e.g., 1, T1)"
-            value={newTableNum}
-            onChange={(e) => setNewTableNum(e.target.value)}
-            style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--input-bg)', color: 'var(--text)' }}
-            required
-          />
-
-          <button type="submit" className="add-btn" disabled={adding}>
-            {adding ? 'Adding...' : '+ Add Table'}
-          </button>
-        </form>
-      </div>
+      )}
 
       {tables.length === 0 ? (
-        <div className="empty-state">
-          <div className="empty-icon">🪑</div>
-          <h3>No tables configured</h3>
-          <p>Add your first table to generate a QR code for ordering.</p>
+        <div className="tables-empty">
+          <div className="tables-empty-icon">&#127960;</div>
+          <h3>No tables found</h3>
+          <p>Add your first table to generate QR codes for customer ordering.</p>
+          <button
+            className="tables-empty-btn"
+            onClick={() => setShowAddForm(true)}
+          >
+            + Add Table
+          </button>
+        </div>
+      ) : filteredTables.length === 0 ? (
+        <div className="tables-empty">
+          <div className="tables-empty-icon">&#128269;</div>
+          <h3>No results</h3>
+          <p>No tables match "{search}". Try a different search term.</p>
         </div>
       ) : (
-        <div className="menu-list" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px' }}>
-          {tables.map(table => {
-            const qrUrl = `${FINAL_BASE_URL}?table=${encodeURIComponent(table.table_token)}`;
-            const qrImageSrc = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrUrl)}&margin=10`;
-            
-            return (
-              <div key={table.id} className="order-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', alignItems: 'center', background: 'var(--card)' }}>
-                <h3 style={{ margin: '0 0 15px 0', fontSize: '1.2rem' }}>Table {table.table_number}</h3>
-                
-                <div style={{ background: '#fff', padding: '10px', borderRadius: '10px', marginBottom: '15px' }}>
-                  <img src={qrImageSrc} alt={`QR Code for Table ${table.table_number}`} width="180" height="180" />
+        <div className="tables-grid">
+          {filteredTables.map(table => (
+            <div key={table.id} className="table-card">
+              <div className="table-card-top">
+                <div className="table-card-info">
+                  <span className="table-number">Table {table.table_number}</span>
                 </div>
-                
-
-                <div style={{ display: 'flex', gap: '10px', width: '100%' }}>
-                  <button 
-                    className="action-btn" 
-                    style={{ flex: 1, padding: '8px', fontSize: '0.9rem' }}
-                    onClick={() => handlePrintQR(table.id, table.table_number, table.table_token)}
-                  >
-                    🖨️ Print QR
-                  </button>
-                  <button 
-                    className="decline-btn" 
-                    style={{ padding: '8px', background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444' }}
-                    onClick={() => deleteTable(table.id)}
-                    title="Delete Table"
-                  >
-                    🗑️
-                  </button>
+                <div className="table-card-badges">
+                  <span className="table-badge active">Active</span>
+                  <span className={`table-badge ${table.table_token ? 'qr-ready' : 'qr-missing'}`}>
+                    {table.table_token ? 'QR Ready' : 'QR Missing'}
+                  </span>
                 </div>
               </div>
-            );
-          })}
+              <div className="table-card-actions">
+                <button className="table-action" onClick={() => openEdit(table)}>
+                  Edit
+                </button>
+                <button
+                  className="table-action qr"
+                  onClick={() => handlePrintQR(table.id, table.table_number, table.table_token)}
+                >
+                  QR
+                </button>
+                <button className="table-action delete" onClick={() => deleteTable(table.id)}>
+                  Delete
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {editingId && (
+        <div className="tables-modal-overlay" onClick={closeEdit}>
+          <div className="tables-modal" onClick={e => e.stopPropagation()}>
+            <h3>Edit Table</h3>
+            <p>Update the table number.</p>
+            <form onSubmit={handleEditTable}>
+              <input
+                type="text"
+                value={editValue}
+                onChange={e => setEditValue(e.target.value)}
+                autoFocus
+                required
+              />
+              <div className="tables-modal-actions">
+                <button type="submit" className="tables-modal-save">Save</button>
+                <button type="button" className="tables-modal-cancel" onClick={closeEdit}>Cancel</button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>
