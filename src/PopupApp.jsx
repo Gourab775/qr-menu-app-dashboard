@@ -136,6 +136,9 @@ function PopupApp() {
     }
   }, [isLoggedIn, restaurantId, preferences.soundEnabled])
 
+  // ============================================================
+  // WAITER CALLS — single effect: fetch pending + realtime subscription
+  // ============================================================
   useEffect(() => {
     if (!isLoggedIn || !restaurantId) return
 
@@ -143,220 +146,8 @@ function PopupApp() {
     let channel = null
     let reconnectTimer = null
 
-    const AUTH_RID = restaurantId
-
-    console.log('[Popup Waiter] ⚡ Effect running', { restaurant_id: AUTH_RID })
-
-    const runDiagnostics = async () => {
-      try {
-        const { data: allInTable, error: allErr } = await supabase
-          .from('waiter_calls')
-          .select('id, restaurant_id, status')
-          .limit(50)
-          .order('created_at', { ascending: false })
-        if (allErr) {
-          console.error('[Popup Waiter] 🩺 DIAG - failed to query waiter_calls:', allErr.message)
-          return
-        }
-        const uniqueRids = [...new Set((allInTable || []).map(r => r.restaurant_id))]
-        const statuses = [...new Set((allInTable || []).map(r => r.status))]
-        console.log('[Popup Waiter] 🩺 DIAG - waiter_calls table check:', {
-          total_in_table: (allInTable || []).length,
-          unique_restaurant_ids: uniqueRids,
-          statuses_found: statuses,
-          pending_count: (allInTable || []).filter(r => r.status === 'pending').length,
-          auth_restaurant_id: AUTH_RID,
-          auth_rid_matches: uniqueRids.length === 0 || uniqueRids.some(rid => rid === AUTH_RID)
-        })
-        if (uniqueRids.length > 0 && !uniqueRids.some(rid => rid === AUTH_RID)) {
-          console.error('[Popup Waiter] 🩺 DIAG - MISMATCH: auth restaurant_id', AUTH_RID, 'NOT FOUND in waiter_calls records. Found IDs:', uniqueRids)
-        }
-      } catch (diagErr) {
-        console.warn('[Popup Waiter] 🩺 DIAG - exception:', diagErr)
-      }
-    }
-
+    // ---- 1. Immediate fetch of pending calls ----
     const fetchPending = async () => {
-      try {
-        console.log('[Popup Waiter] 🔍 Fetching pending calls for restaurant:', AUTH_RID)
-        const { data, error } = await supabase
-          .from('waiter_calls')
-          .select('id, restaurant_id, table_id, order_code, session_order_id, status, created_at')
-          .eq('restaurant_id', AUTH_RID)
-          .eq('status', 'pending')
-          .order('created_at', { ascending: false })
-        console.log('[Popup Waiter] 📦 Fetch result:', {
-          count: data?.length,
-          error: error?.message || null,
-          code: error?.code || null,
-          filters: { restaurant_id: AUTH_RID, status: 'pending' }
-        })
-        if (error) throw error
-        if (data) {
-          if (isSubscribed) {
-            setWaiterCalls(data)
-            console.log('[Popup Waiter] ✅ State set with', data.length, 'pending calls')
-          }
-        }
-      } catch (err) {
-        console.error('[Popup Waiter] ❌ Fetch error:', err.message || err)
-        showToast('Failed to load waiter requests', 'error')
-      }
-    }
-
-    const subscribe = () => {
-      if (channel) {
-        console.log('[Popup Waiter] 🧹 Removing existing channel before resubscribe')
-        supabase.removeChannel(channel)
-        channel = null
-      }
-
-      console.log('[Popup Waiter] 🔌 Creating new subscription for restaurant_id:', AUTH_RID)
-
-      channel = supabase
-        .channel('waiter-calls')
-        .on('postgres_changes',
-          { event: 'INSERT', schema: 'public', table: 'waiter_calls' },
-          async (payload) => {
-            console.log('[Popup Waiter] 📩 INSERT event RAW payload:', JSON.stringify(payload))
-            const rid = payload.new.restaurant_id
-            const st = payload.new.status
-            console.log('[Popup Waiter] 📩 INSERT event details:', {
-              id: payload.new.id,
-              restaurant_id: rid,
-              expected_restaurant_id: AUTH_RID,
-              rid_match: rid === AUTH_RID,
-              status: st,
-              isPending: st === 'pending',
-              table_id: payload.new.table_id,
-              order_code: payload.new.order_code,
-              session_order_id: payload.new.session_order_id,
-              created_at: payload.new.created_at
-            })
-            if (rid !== AUTH_RID) {
-              console.log('[Popup Waiter] ⏭️ INSERT ignored (restaurant_id mismatch):', rid, '!=', AUTH_RID)
-              return
-            }
-            if (st === 'pending') {
-              setWaiterCalls(prev => {
-                if (prev.some(c => c.id === payload.new.id)) {
-                  console.log('[Popup Waiter] ⏭️ Duplicate INSERT ignored:', payload.new.id)
-                  return prev
-                }
-                console.log('[Popup Waiter] ➕ Added call via INSERT event:', payload.new.id)
-                return [payload.new, ...prev]
-              })
-            } else {
-              console.log('[Popup Waiter] ⏭️ INSERT ignored (status not pending):', st)
-            }
-          }
-        )
-        .on('postgres_changes',
-          { event: 'UPDATE', schema: 'public', table: 'waiter_calls' },
-          (payload) => {
-            console.log('[Popup Waiter] 📩 UPDATE event RAW payload:', JSON.stringify(payload))
-            const rid = payload.new.restaurant_id
-            console.log('[Popup Waiter] 📩 UPDATE event details:', {
-              id: payload.new.id,
-              old_status: payload.old?.status,
-              new_status: payload.new.status,
-              restaurant_id: rid,
-              expected_restaurant_id: AUTH_RID,
-              rid_match: rid === AUTH_RID
-            })
-            if (rid !== AUTH_RID) {
-              console.log('[Popup Waiter] ⏭️ UPDATE ignored (restaurant_id mismatch):', rid, '!=', AUTH_RID)
-              return
-            }
-            if (payload.new.status !== 'pending') {
-              setWaiterCalls(prev => {
-                const filtered = prev.filter(c => c.id !== payload.new.id)
-                if (filtered.length !== prev.length) {
-                  console.log('[Popup Waiter] ➖ Removed via UPDATE (status changed to', payload.new.status, '):', payload.new.id)
-                } else {
-                  console.log('[Popup Waiter] ⏭️ UPDATE ignored (not in current list):', payload.new.id)
-                }
-                return filtered
-              })
-            } else {
-              setWaiterCalls(prev => {
-                if (prev.some(c => c.id === payload.new.id)) {
-                  console.log('[Popup Waiter] ⏭️ UPDATE ignored (already in list):', payload.new.id)
-                  return prev
-                }
-                console.log('[Popup Waiter] ➕ Added back via UPDATE (status restored to pending):', payload.new.id)
-                return [payload.new, ...prev]
-              })
-            }
-          }
-        )
-        .on('postgres_changes',
-          { event: 'DELETE', schema: 'public', table: 'waiter_calls' },
-          (payload) => {
-            console.log('[Popup Waiter] 📩 DELETE event RAW payload:', JSON.stringify(payload))
-            const rid = payload.old.restaurant_id
-            console.log('[Popup Waiter] 📩 DELETE event details:', {
-              id: payload.old.id,
-              restaurant_id: rid,
-              expected_restaurant_id: AUTH_RID,
-              rid_match: rid === AUTH_RID
-            })
-            if (rid !== AUTH_RID) {
-              console.log('[Popup Waiter] ⏭️ DELETE ignored (restaurant_id mismatch):', rid, '!=', AUTH_RID)
-              return
-            }
-            setWaiterCalls(prev => {
-              const filtered = prev.filter(c => c.id !== payload.old.id)
-              if (filtered.length !== prev.length) {
-                console.log('[Popup Waiter] ➖ Removed via DELETE event:', payload.old.id)
-              } else {
-                console.log('[Popup Waiter] ⏭️ DELETE ignored (not in current list):', payload.old.id)
-              }
-              return filtered
-            })
-          }
-        )
-        .subscribe((status, err) => {
-          console.log('[Popup Waiter] 📡 Subscription status:', status, err || '')
-          if (status === 'SUBSCRIBED') {
-            console.log('[Popup Waiter] ✅ Successfully subscribed to waiter_calls changes')
-          }
-          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-            console.warn('[Popup Waiter] ⚠️ Subscription issue:', status, err || '')
-            if (isSubscribed) {
-              console.log('[Popup Waiter] 🔄 Will attempt resubscribe in 3s...')
-              reconnectTimer = setTimeout(() => {
-                if (isSubscribed) {
-                  console.log('[Popup Waiter] 🔄 Reconnecting waiter-calls channel...')
-                  fetchPending()
-                  subscribe()
-                }
-              }, 3000)
-            }
-          }
-        })
-    }
-
-    runDiagnostics()
-    fetchPending()
-    subscribe()
-
-    return () => {
-      isSubscribed = false
-      if (reconnectTimer) clearTimeout(reconnectTimer)
-      if (channel) {
-        console.log('[Popup Waiter] 🧹 Cleaning up waiter-calls channel')
-        supabase.removeChannel(channel)
-        channel = null
-      }
-    }
-  }, [isLoggedIn, restaurantId])
-
-  // Waiter calls — polling fallback (every 30s) + subtab-activation refetch
-  useEffect(() => {
-    if (!isLoggedIn || !restaurantId) return
-
-    const doFetch = async () => {
       try {
         const { data, error } = await supabase
           .from('waiter_calls')
@@ -366,25 +157,116 @@ function PopupApp() {
           .order('created_at', { ascending: false })
 
         if (error) {
-          console.error('[Popup Waiter] Poll fetch error:', error.message)
+          console.error('[Popup Waiter] Initial fetch error:', error.message)
           return
         }
+
+        console.log('[Popup Waiter] Initial fetch: found', data?.length || 0, 'pending calls, restaurant_id =', restaurantId)
+
+        // Enrich with table_number
         if (data) {
-          setWaiterCalls(data)
-          console.log('[Popup Waiter] Poll fetch complete:', data.length, 'pending calls')
+          const tableIds = [...new Set(data.filter(c => c.table_id).map(c => c.table_id))]
+          if (tableIds.length > 0) {
+            const { data: tables } = await supabase.from('restaurant_tables').select('id, table_number').in('id', tableIds)
+            if (tables) {
+              const tMap = {}
+              tables.forEach(t => { tMap[t.id] = t.table_number })
+              data.forEach(c => { if (c.table_id && tMap[c.table_id]) c.restaurant_tables = { table_number: tMap[c.table_id] } })
+            }
+          }
+          if (isSubscribed) {
+            setWaiterCalls(data)
+          }
         }
       } catch (err) {
-        console.error('[Popup Waiter] Poll fetch exception:', err)
+        console.error('[Popup Waiter] Initial fetch exception:', err)
       }
     }
 
-    if (activeSubTab === 'waiter-call') {
-      doFetch()
+    // ---- 2. Realtime subscription for instant updates ----
+    const setupRealtime = () => {
+      if (channel) {
+        supabase.removeChannel(channel)
+        channel = null
+      }
+
+      channel = supabase
+        .channel('waiter-calls')
+        .on('postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'waiter_calls' },
+          async (payload) => {
+            if (payload.new.restaurant_id !== restaurantId) return
+            console.log('[Popup Waiter] Realtime INSERT:', payload.new.id, 'table_id:', payload.new.table_id, 'status:', payload.new.status)
+            if (payload.new.status !== 'pending') return
+
+            let enriched = { ...payload.new, restaurant_tables: null }
+            if (payload.new.table_id) {
+              const { data: table } = await supabase
+                .from('restaurant_tables')
+                .select('table_number')
+                .eq('id', payload.new.table_id)
+                .maybeSingle()
+              if (table) enriched.restaurant_tables = { table_number: table.table_number }
+            }
+            setWaiterCalls(prev => {
+              if (prev.some(c => c.id === enriched.id)) return prev
+              return [enriched, ...prev]
+            })
+          }
+        )
+        .on('postgres_changes',
+          { event: 'UPDATE', schema: 'public', table: 'waiter_calls' },
+          (payload) => {
+            if (payload.new.restaurant_id !== restaurantId) return
+            console.log('[Popup Waiter] Realtime UPDATE:', payload.new.id, 'status:', payload.new.status, '(was:', payload.old?.status, ')')
+            if (payload.new.status !== 'pending') {
+              setWaiterCalls(prev => prev.filter(c => c.id !== payload.new.id))
+            } else {
+              setWaiterCalls(prev => {
+                if (prev.some(c => c.id === payload.new.id)) return prev
+                return [{ ...payload.new, restaurant_tables: null }, ...prev]
+              })
+            }
+          }
+        )
+        .on('postgres_changes',
+          { event: 'DELETE', schema: 'public', table: 'waiter_calls' },
+          (payload) => {
+            if (payload.old.restaurant_id !== restaurantId) return
+            console.log('[Popup Waiter] Realtime DELETE:', payload.old.id)
+            setWaiterCalls(prev => prev.filter(c => c.id !== payload.old.id))
+          }
+        )
+        .subscribe((status, err) => {
+          if (status === 'SUBSCRIBED') {
+            console.log('[Popup Waiter] Realtime subscription status: SUBSCRIBED')
+          }
+          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+            console.warn('[Popup Waiter] Realtime subscription status:', status, err || '')
+            if (isSubscribed) {
+              reconnectTimer = setTimeout(() => {
+                if (isSubscribed) {
+                  fetchPending()
+                  setupRealtime()
+                }
+              }, 3000)
+            }
+          }
+        })
     }
 
-    const interval = setInterval(doFetch, 30000)
-    return () => clearInterval(interval)
-  }, [isLoggedIn, restaurantId, activeSubTab])
+    fetchPending()
+    setupRealtime()
+
+    return () => {
+      isSubscribed = false
+      if (reconnectTimer) clearTimeout(reconnectTimer)
+      if (channel) {
+        supabase.removeChannel(channel)
+        channel = null
+      }
+    }
+  }, [isLoggedIn, restaurantId])
 
   useEffect(() => {
     const handleVisibility = () => {
