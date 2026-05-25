@@ -308,9 +308,21 @@
     gap: 12px;
   }
 
+  .analytics-header-left h1 {
+    font-size: 20px;
+  }
+
   .analytics-filters {
     width: 100%;
     overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    flex-wrap: nowrap;
+  }
+
+  .analytics-filter-btn {
+    flex-shrink: 0;
+    padding: 6px 14px;
+    font-size: 12px;
   }
 
   .kpi-card {
@@ -319,5 +331,114 @@
 
   .kpi-value {
     font-size: 24px;
+  }
+
+  .charts-grid {
+    gap: 12px;
+  }
+
+  .chart-card {
+    padding: 16px;
+  }
+
+  .chart-body {
+    min-height: 220px;
+  }
+}
+
+@media (max-width: 480px) {
+  .analytics-dashboard {
+    gap: 16px;
+  }
+
+  .kpi-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .kpi-value {
+    font-size: 22px;
+  }
+
+  .kpi-icon-wrap {
+    width: 40px;
+    height: 40px;
+  }
+
+  .chart-body {
+    min-height: 180px;
+  }
+
+  .chart-card {
+    padding: 14px;
+  }
+
+  .chart-header h3 {
+    font-size: 14px;
+  }
+
+  .chart-header {
+    margin-bottom: 12px;
+  }
+
+  .top-item-row {
+    gap: 8px;
+  }
+
+  .top-item-name {
+    font-size: 13px;
+  }
+
+  .top-item-count {
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 360px) {
+  .analytics-header-left h1 {
+    font-size: 18px;
+  }
+
+  .analytics-header-left p {
+    font-size: 13px;
+  }
+
+  .kpi-card {
+    padding: 12px;
+    gap: 12px;
+  }
+
+  .kpi-value {
+    font-size: 20px;
+  }
+
+  .kpi-label {
+    font-size: 12px;
+  }
+
+  .chart-body {
+    min-height: 160px;
+    overflow-x: auto;
+  }
+
+  .analytics-empty {
+    padding: 32px 16px;
+  }
+
+  .analytics-empty h3 {
+    font-size: 16px;
+  }
+}
+
+@media (min-width: 1800px) {
+  .kpi-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .charts-grid {
+    max-width: 1200px;
+  }
+
+  .insights-grid {
+    max-width: 1200px;
   }
 }

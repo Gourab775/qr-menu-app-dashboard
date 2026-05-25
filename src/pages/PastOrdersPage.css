@@ -413,3 +413,98 @@
     text-align: left;
   }
 }
+
+@media (max-width: 480px) {
+  .po-title-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .po-title {
+    font-size: 18px;
+  }
+
+  .po-card-main {
+    padding: 12px;
+  }
+
+  .po-card-details {
+    padding: 12px;
+  }
+
+  .po-detail-row {
+    grid-template-columns: 1fr auto;
+    gap: 8px;
+  }
+
+  .po-detail-row .po-detail-price {
+    grid-column: 1 / -1;
+    text-align: left;
+    min-width: 0;
+  }
+
+  .po-order-code {
+    font-size: 13px;
+  }
+
+  .po-card-right {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .po-details-btn {
+    font-size: 12px;
+    padding: 6px 12px;
+  }
+}
+
+@media (max-width: 360px) {
+  .po-title {
+    font-size: 16px;
+  }
+
+  .po-header {
+    margin-bottom: 14px;
+  }
+
+  .po-card-main {
+    gap: 8px;
+    padding: 10px;
+  }
+
+  .po-datetime {
+    font-size: 12px;
+  }
+
+  .po-items-count {
+    font-size: 12px;
+  }
+
+  .po-total {
+    font-size: 14px;
+    min-width: 0;
+  }
+
+  .po-status {
+    font-size: 11px;
+    padding: 3px 8px;
+  }
+
+  .po-date-input {
+    padding: 7px 10px;
+    font-size: 12px;
+  }
+
+  .po-time-btn {
+    padding: 5px 10px;
+    font-size: 12px;
+  }
+}
+
+@media (min-width: 1800px) {
+  .po-page {
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+}

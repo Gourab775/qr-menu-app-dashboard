@@ -101,6 +101,18 @@ button, input, select, textarea {
   transition: all var(--trans-smooth);
 }
 
+@media (max-width: 480px) {
+  .header {
+    padding: 8px 12px !important;
+  }
+}
+
+@media (max-width: 360px) {
+  .header {
+    padding: 6px 10px !important;
+  }
+}
+
 .header-title {
   font-weight: 400 !important;
   font-size: 16px !important;
@@ -122,6 +134,12 @@ button, input, select, textarea {
   }
 }
 
+@media (min-width: 1800px) {
+  .main-content {
+    padding: calc(72px + var(--space-4)) var(--space-5) var(--space-5) !important;
+  }
+}
+
 /* =========================================
    SIDEBAR 
    ========================================= */
@@ -129,6 +147,34 @@ button, input, select, textarea {
   background: var(--card) !important;
   border-right: 1px solid var(--border) !important;
   box-shadow: var(--shadow-md);
+}
+
+@media (max-width: 480px) {
+  .sidebar {
+    width: 220px !important;
+  }
+  .sidebar-header {
+    padding: var(--space-2) !important;
+  }
+  .sidebar-header h2 {
+    font-size: 15px !important;
+  }
+  .nav-item {
+    padding: var(--space-2) var(--space-2) !important;
+    margin: 4px var(--space-1) !important;
+    font-size: 13px !important;
+  }
+}
+
+@media (max-width: 360px) {
+  .sidebar {
+    width: 200px !important;
+  }
+  .nav-item {
+    font-size: 12px !important;
+    padding: 10px 12px !important;
+    gap: 8px !important;
+  }
 }
 
 .sidebar-header {
@@ -241,6 +287,22 @@ input:focus, textarea:focus, select:focus {
   border: 1px solid var(--border) !important;
   border-radius: var(--radius-xl) !important;
   box-shadow: var(--shadow-lg) !important;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+@media (max-width: 640px) {
+  .modal-content {
+    border-radius: var(--radius-lg) !important;
+    max-height: 85vh;
+  }
+}
+
+@media (max-width: 480px) {
+  .modal-content {
+    border-radius: var(--radius-md) var(--radius-md) 0 0 !important;
+    max-height: 85vh;
+  }
 }
 
 .modal-header {
@@ -337,6 +399,23 @@ td {
 
 tr:last-child td {
   border-bottom: none !important;
+}
+
+@media (max-width: 768px) {
+  th, td {
+    padding: 10px 12px !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .table-responsive {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  th, td {
+    padding: 8px 10px !important;
+    font-size: 13px !important;
+  }
 }
 
 /* Badges */
