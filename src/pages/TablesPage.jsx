@@ -21,8 +21,26 @@ export default function TablesPage({ restaurantId, restaurantSlug }) {
   const [editingId, setEditingId] = useState(null);
   const [editValue, setEditValue] = useState('');
 
+  const [viewingQR, setViewingQR] = useState(null);
+  const [customizingQR, setCustomizingQR] = useState(null);
+  const [qrPrefs, setQrPrefs] = useState({});
+  const [restaurantLogo, setRestaurantLogo] = useState('');
+  const [qrColor, setQrColor] = useState('#000000');
+  const [qrBgColor, setQrBgColor] = useState('#FFFFFF');
+  const [qrRounded, setQrRounded] = useState(false);
+  const [qrLogo, setQrLogo] = useState(false);
+
   const mountedRef = useRef(false);
   const abortControllerRef = useRef(null);
+
+  useEffect(() => {
+    if (!restaurantId) return;
+    supabase.from('restaurants').select('logo').eq('id', restaurantId).maybeSingle()
+      .then(({ data }) => {
+        if (data?.logo) setRestaurantLogo(data.logo);
+      })
+      .catch(() => {});
+  }, [restaurantId]);
 
   const loadTables = useCallback(async (signal = null) => {
     if (!signal && mountedRef.current) setLoading(true);
@@ -173,38 +191,125 @@ export default function TablesPage({ restaurantId, restaurantSlug }) {
     }
   };
 
-  const handlePrintQR = (id, tableNum, tableToken) => {
-    if (!tableToken) {
-      alert('This table is missing a security token. Please refresh to generate one.');
+  const getQRImageUrl = (table, prefs) => {
+    const p = prefs || {};
+    const color = (p.color || '#000000').replace('#', '');
+    const bgColor = (p.bgColor || '#FFFFFF').replace('#', '');
+    const qrUrl = `${FINAL_BASE_URL}?table=${encodeURIComponent(table.table_token)}`;
+    return `https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=${encodeURIComponent(qrUrl)}&color=${color}&bgcolor=${bgColor}`;
+  };
+
+  const getQRCodeUrl = (table) => {
+    return `${FINAL_BASE_URL}?table=${encodeURIComponent(table.table_token)}`;
+  };
+
+  const handleViewQR = (table) => {
+    setViewingQR(table);
+  };
+
+  const handleCustomizeQR = (table) => {
+    const existing = qrPrefs[table.id] || {};
+    setCustomizingQR(table);
+    setQrColor(existing.color || '#000000');
+    setQrBgColor(existing.bgColor || '#FFFFFF');
+    setQrRounded(existing.rounded || false);
+    setQrLogo(existing.logo || false);
+  };
+
+  const handleSaveQrPrefs = () => {
+    if (!customizingQR) return;
+    setQrPrefs(prev => ({
+      ...prev,
+      [customizingQR.id]: {
+        color: qrColor,
+        bgColor: qrBgColor,
+        rounded: qrRounded,
+        logo: qrLogo
+      }
+    }));
+    setCustomizingQR(null);
+  };
+
+  const handleDownloadQR = async (table) => {
+    const prefs = qrPrefs[table.id] || {};
+    const fgColor = (prefs.color || '#000000').replace('#', '');
+    const bgColor = (prefs.bgColor || '#FFFFFF').replace('#', '');
+    const isRounded = !!prefs.rounded;
+    const showLogo = !!prefs.logo;
+
+    const qrUrl = `${FINAL_BASE_URL}?table=${encodeURIComponent(table.table_token)}`;
+    const apiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=${encodeURIComponent(qrUrl)}&color=${fgColor}&bgcolor=${bgColor}`;
+
+    if (!isRounded && !showLogo) {
+      try {
+        const response = await fetch(apiUrl);
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Table-${table.table_number}-QR.png`;
+        a.click();
+        URL.revokeObjectURL(url);
+      } catch {
+        window.open(apiUrl, '_blank');
+      }
       return;
     }
-    const qrUrl = `${FINAL_BASE_URL}?table=${encodeURIComponent(tableToken)}`;
-    const qrImageSrc = `https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=${encodeURIComponent(qrUrl)}`;
 
-    const printWindow = window.open('', '_blank');
-    printWindow.document.write(`
-      <html>
-        <head>
-          <title>Print QR - Table ${tableNum}</title>
-          <style>
-            body { font-family: system-ui, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-            h1 { font-size: 2rem; margin-bottom: 2rem; }
-            img { width: 400px; height: 400px; margin-bottom: 2rem; }
-            p { color: #666; font-size: 1.2rem; margin-top: 1rem; }
-            @media print {
-              body { justify-content: flex-start; padding-top: 50px; }
-            }
-          </style>
-        </head>
-        <body>
-          <h1>Table ${tableNum}</h1>
-          <img src="${qrImageSrc}" alt="QR Code for Table ${tableNum}" onload="window.print(); window.onafterprint = function(){ window.close(); }" />
-          <p>Scan to view menu & order</p>
-          <p style="font-size: 0.9rem">${qrUrl}</p>
-        </body>
-      </html>
-    `);
-    printWindow.document.close();
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = async () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 500;
+      canvas.height = 500;
+      const ctx = canvas.getContext('2d');
+
+      if (isRounded) {
+        ctx.fillStyle = '#' + bgColor;
+        ctx.beginPath();
+        ctx.roundRect(0, 0, 500, 500, 40);
+        ctx.fill();
+        ctx.save();
+        ctx.beginPath();
+        ctx.roundRect(0, 0, 500, 500, 40);
+        ctx.clip();
+      }
+
+      ctx.drawImage(img, 0, 0, 500, 500);
+
+      if (isRounded) {
+        ctx.restore();
+      }
+
+      if (showLogo && restaurantLogo) {
+        const logoImg = new Image();
+        logoImg.crossOrigin = 'anonymous';
+        try {
+          await new Promise((resolve, reject) => {
+            logoImg.onload = resolve;
+            logoImg.onerror = reject;
+            logoImg.src = restaurantLogo;
+          });
+          const logoSize = 80;
+          const logoX = (500 - logoSize) / 2;
+          const logoY = (500 - logoSize) / 2;
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillRect(logoX - 4, logoY - 4, logoSize + 8, logoSize + 8);
+          ctx.drawImage(logoImg, logoX, logoY, logoSize, logoSize);
+        } catch {
+          /* logo failed to load, skip */
+        }
+      }
+
+      const link = document.createElement('a');
+      link.download = `Table-${table.table_number}-QR.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    };
+    img.onerror = () => {
+      window.open(apiUrl, '_blank');
+    };
+    img.src = apiUrl;
   };
 
   const openEdit = (table) => {
@@ -244,16 +349,13 @@ export default function TablesPage({ restaurantId, restaurantSlug }) {
           <span className="tables-count">{tables.length} total</span>
         </div>
         <div className="tables-header-right">
-          <div className="tables-search-wrap">
-            <span className="tables-search-icon">&#128269;</span>
-            <input
-              type="text"
-              className="tables-search-input"
-              placeholder="Search tables..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-            />
-          </div>
+          <input
+            type="text"
+            className="tables-search-input"
+            placeholder="Search tables..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
           <button
             className="tables-add-btn"
             onClick={() => setShowAddForm(prev => !prev)}
@@ -318,35 +420,43 @@ export default function TablesPage({ restaurantId, restaurantSlug }) {
         </div>
       ) : (
         <div className="tables-grid">
-          {filteredTables.map(table => (
-            <div key={table.id} className="table-card">
-              <div className="table-card-top">
-                <div className="table-card-info">
-                  <span className="table-number">Table {table.table_number}</span>
+          {filteredTables.map(table => {
+            const prefs = qrPrefs[table.id] || {};
+            const isRounded = !!prefs.rounded;
+            return (
+              <div key={table.id} className="table-card">
+                <div className="table-card-top">
+                  <div className="table-card-info">
+                    <span className="table-number">Table {table.table_number}</span>
+                    {table.name && <span className="table-name-text">{table.name}</span>}
+                  </div>
+                  <div className="table-card-badges">
+                    <span className="table-badge active">Active</span>
+                    <span className={`table-badge ${table.table_token ? 'qr-ready' : 'qr-missing'}`}>
+                      {table.table_token ? 'QR Ready' : 'QR Missing'}
+                    </span>
+                  </div>
                 </div>
-                <div className="table-card-badges">
-                  <span className="table-badge active">Active</span>
-                  <span className={`table-badge ${table.table_token ? 'qr-ready' : 'qr-missing'}`}>
-                    {table.table_token ? 'QR Ready' : 'QR Missing'}
-                  </span>
+                <div className="table-card-actions">
+                  <button className="table-action" onClick={() => openEdit(table)}>
+                    Edit
+                  </button>
+                  <button className="table-action qr-view" onClick={() => handleViewQR(table)}>
+                    View QR
+                  </button>
+                  <button className="table-action qr-customize" onClick={() => handleCustomizeQR(table)}>
+                    Customize
+                  </button>
+                  <button className="table-action qr-download" onClick={() => handleDownloadQR(table)}>
+                    Download
+                  </button>
+                  <button className="table-action delete" onClick={() => deleteTable(table.id)}>
+                    Delete
+                  </button>
                 </div>
               </div>
-              <div className="table-card-actions">
-                <button className="table-action" onClick={() => openEdit(table)}>
-                  Edit
-                </button>
-                <button
-                  className="table-action qr"
-                  onClick={() => handlePrintQR(table.id, table.table_number, table.table_token)}
-                >
-                  QR
-                </button>
-                <button className="table-action delete" onClick={() => deleteTable(table.id)}>
-                  Delete
-                </button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -368,6 +478,108 @@ export default function TablesPage({ restaurantId, restaurantSlug }) {
                 <button type="button" className="tables-modal-cancel" onClick={closeEdit}>Cancel</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {viewingQR && (
+        <div className="tables-modal-overlay" onClick={() => setViewingQR(null)}>
+          <div className="tables-qr-modal" onClick={e => e.stopPropagation()}>
+            <h3>Table {viewingQR.table_number}</h3>
+            <p className="qr-subtitle">QR Code for customer ordering</p>
+            <div className={`qr-image-wrap${qrPrefs[viewingQR.id]?.rounded ? ' rounded' : ''}`}>
+              <img
+                src={getQRImageUrl(viewingQR, qrPrefs[viewingQR.id])}
+                alt={`QR for Table ${viewingQR.table_number}`}
+              />
+            </div>
+            <p className="qr-url">{getQRCodeUrl(viewingQR)}</p>
+            <div className="qr-modal-actions">
+              <button
+                className="qr-modal-btn customize"
+                onClick={() => {
+                  setViewingQR(null);
+                  handleCustomizeQR(viewingQR);
+                }}
+              >
+                Customize QR
+              </button>
+              <button
+                className="qr-modal-btn primary"
+                onClick={() => handleDownloadQR(viewingQR)}
+              >
+                Download
+              </button>
+              <button
+                className="qr-modal-btn secondary"
+                onClick={() => setViewingQR(null)}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {customizingQR && (
+        <div className="tables-modal-overlay" onClick={() => setCustomizingQR(null)}>
+          <div className="tables-customize-modal" onClick={e => e.stopPropagation()}>
+            <h3>Customize QR</h3>
+            <p className="customize-subtitle">Table {customizingQR.table_number}</p>
+
+            <div className="customize-layout">
+              <div className="customize-preview">
+                <span className="customize-preview-label">Preview</span>
+                <div className={`preview-wrap${qrRounded ? ' rounded' : ''}`}>
+                  <img
+                    src={getQRImageUrl(customizingQR, {
+                      color: qrColor,
+                      bgColor: qrBgColor
+                    })}
+                    alt="QR Preview"
+                  />
+                </div>
+              </div>
+
+              <div className="customize-controls">
+                <div className="customize-row">
+                  <label>QR Color</label>
+                  <div className="color-input-wrap">
+                    <input type="color" value={qrColor} onChange={e => setQrColor(e.target.value)} />
+                    <span className="color-hex">{qrColor}</span>
+                  </div>
+                </div>
+
+                <div className="customize-row">
+                  <label>Background</label>
+                  <div className="color-input-wrap">
+                    <input type="color" value={qrBgColor} onChange={e => setQrBgColor(e.target.value)} />
+                    <span className="color-hex">{qrBgColor}</span>
+                  </div>
+                </div>
+
+                <div className="customize-row">
+                  <label>Rounded Style</label>
+                  <label className="toggle-switch">
+                    <input type="checkbox" checked={qrRounded} onChange={e => setQrRounded(e.target.checked)} />
+                    <span className="toggle-slider"></span>
+                  </label>
+                </div>
+
+                <div className="customize-row">
+                  <label>Restaurant Logo</label>
+                  <label className="toggle-switch">
+                    <input type="checkbox" checked={qrLogo} onChange={e => setQrLogo(e.target.checked)} disabled={!restaurantLogo} />
+                    <span className="toggle-slider"></span>
+                  </label>
+                </div>
+
+                <div className="customize-actions">
+                  <button className="save-btn" onClick={handleSaveQrPrefs}>Save</button>
+                  <button className="close-btn" onClick={() => setCustomizingQR(null)}>Cancel</button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}
