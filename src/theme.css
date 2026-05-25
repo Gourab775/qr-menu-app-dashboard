@@ -156,7 +156,7 @@ button, input, select, textarea {
 /* =========================================
    CARDS & CONTAINERS
    ========================================= */
-.order-card, .menu-item-card, .category-card, .settings-section, .stat-card {
+.order-card, .category-card, .settings-section, .stat-card {
   background: var(--card) !important;
   border: 1px solid var(--border) !important;
   border-radius: var(--radius-lg) !important;
@@ -165,7 +165,7 @@ button, input, select, textarea {
   transition: transform var(--trans-smooth), box-shadow var(--trans-smooth), border-color var(--trans-smooth) !important;
 }
 
-.order-card:hover, .menu-item-card:hover, .category-card:hover {
+.order-card:hover, .category-card:hover {
   transform: translateY(-3px) !important;
   box-shadow: var(--shadow-lg) !important;
   border-color: var(--border) !important;

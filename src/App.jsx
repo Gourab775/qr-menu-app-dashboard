@@ -40,6 +40,7 @@ function App() {
   const [showAddModal, setShowAddModal] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [filterType, setFilterType] = useState('all')
+  const [categoryFilter, setCategoryFilter] = useState('all')
   const [toast, setToast] = useState(null)
   const [isOnline, setIsOnline] = useState(navigator.onLine)
   const [preferences, setPreferences] = useState(() => {
@@ -686,7 +687,8 @@ function App() {
   const filteredItems = menuItems.filter(item => {
     const matchSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase())
     const matchFilter = filterType === 'all' || (filterType === 'veg' && item.is_veg) || (filterType === 'nonveg' && !item.is_veg)
-    return matchSearch && matchFilter
+    const matchCategory = categoryFilter === 'all' || item.category_id === categoryFilter
+    return matchSearch && matchFilter && matchCategory
   })
 
   if (resetMode) {
@@ -923,105 +925,81 @@ function App() {
 
         {activeTab === 'menu_items' && (
           <div className="menu-section">
-            <div className="menu-header-row">
-              <div className="menu-stats">
-                <span className="stat-label">Total Items</span>
-                <span className="stat-value">{menuItems.length}</span>
+            <div className="menu-header">
+              <div className="menu-header-left">
+                <h2 className="menu-title">Menu Items</h2>
+                <span className="menu-count">{menuItems.length}</span>
               </div>
-              <button onClick={() => {
-                setMenuLoading(true)
-                supabase.from('menu_items').select('id, name, price, description, is_veg, is_available, category_id, image_url').eq('restaurant_id', restaurantId).order('name', { ascending: true })
-                  .then(({ data, error }) => {
-                    if (error) {
-                      setToast ? setToast({ message: 'Failed to load menu items', type: 'error' }) : null
-                    } else {
-                      setMenuItems(data || [])
-                    }
-                    setMenuLoading(false)
-                  })
-              }} className="refresh-btn-glass">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M23 4v6h-6M1 20v-6h6" />
-                  <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-                </svg>
-                Refresh
-              </button>
-            </div>
-            <div className="menu-controls">
-              <div className="search-box">
-                <span className="search-icon">🔍</span>
-                <input
-                  type="text"
-                  placeholder="Search menu items..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-              </div>
-
-              <div className="filter-tabs">
-                <button
-                  className={`filter-tab ${filterType === 'all' ? 'active' : ''}`}
-                  onClick={() => setFilterType('all')}
+              <div className="menu-header-right">
+                <div className="menu-search">
+                  <input
+                    type="text"
+                    placeholder="Search items..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
+                </div>
+                <select
+                  className="menu-category-filter"
+                  value={categoryFilter}
+                  onChange={(e) => setCategoryFilter(e.target.value)}
                 >
-                  All
-                </button>
-                <button
-                  className={`filter-tab ${filterType === 'veg' ? 'active' : ''}`}
-                  onClick={() => setFilterType('veg')}
-                >
-                  🟢 Veg
-                </button>
-                <button
-                  className={`filter-tab ${filterType === 'nonveg' ? 'active' : ''}`}
-                  onClick={() => setFilterType('nonveg')}
-                >
-                  🔴 Non-Veg
+                  <option value="all">All Categories</option>
+                  {categories.map(cat => (
+                    <option key={cat.id} value={cat.id}>{cat.name}</option>
+                  ))}
+                </select>
+                <div className="menu-type-filter">
+                  <button
+                    className={`type-pill ${filterType === 'all' ? 'active' : ''}`}
+                    onClick={() => setFilterType('all')}
+                  >All</button>
+                  <button
+                    className={`type-pill veg ${filterType === 'veg' ? 'active' : ''}`}
+                    onClick={() => setFilterType('veg')}
+                  >Veg</button>
+                  <button
+                    className={`type-pill nonveg ${filterType === 'nonveg' ? 'active' : ''}`}
+                    onClick={() => setFilterType('nonveg')}
+                  >Non-Veg</button>
+                </div>
+                <button className="menu-add-btn" onClick={() => setShowAddModal(true)}>
+                  + Add Item
                 </button>
               </div>
-
-              <button className="add-btn" onClick={() => setShowAddModal(true)}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <line x1="12" y1="5" x2="12" y2="19" />
-                  <line x1="5" y1="12" x2="19" y2="12" />
-                </svg>
-                Add Item
-              </button>
             </div>
 
             {menuLoading ? (
-              <div className="loading-grid">
-                {[1, 2, 3, 4].map(i => (
-                  <div key={i} className="skeleton-card">
-                    <div className="skeleton-line"></div>
-                    <div className="skeleton-line short"></div>
-                    <div className="skeleton-line"></div>
-                  </div>
+              <div className="menu-loading">
+                {[1, 2, 3, 4, 5, 6].map(i => (
+                  <div key={i} className="menu-skeleton" />
                 ))}
               </div>
             ) : filteredItems.length === 0 ? (
-              <div className="empty-state">
-                <div className="empty-icon">{searchQuery || filterType !== 'all' ? '🔍' : '🍽️'}</div>
-                <h3>{searchQuery || filterType !== 'all' ? 'No items found' : 'No menu items yet'}</h3>
-                <p>{searchQuery || filterType !== 'all'
-                  ? 'Try adjusting your search or filter to find what you\'re looking for.'
-                  : 'Start building your menu by adding your first item.'}</p>
-                <button className="add-btn" onClick={() => {
-                  if (searchQuery || filterType !== 'all') {
+              <div className="menu-empty">
+                <div className="menu-empty-icon">
+                  {searchQuery || filterType !== 'all' || categoryFilter !== 'all' ? '🔍' : '🍽️'}
+                </div>
+                <h3>{searchQuery || filterType !== 'all' || categoryFilter !== 'all' ? 'No items found' : 'No menu items yet'}</h3>
+                <p>
+                  {searchQuery || filterType !== 'all' || categoryFilter !== 'all'
+                    ? 'Try adjusting your search or filters.'
+                    : 'Add your first menu item to get started.'}
+                </p>
+                <button className="menu-add-btn" onClick={() => {
+                  if (searchQuery || filterType !== 'all' || categoryFilter !== 'all') {
                     setSearchQuery('')
                     setFilterType('all')
+                    setCategoryFilter('all')
                   } else {
                     setShowAddModal(true)
                   }
                 }}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <line x1="12" y1="5" x2="12" y2="19" />
-                    <line x1="5" y1="12" x2="19" y2="12" />
-                  </svg>
-                  {searchQuery || filterType !== 'all' ? 'Clear filters' : 'Add your first item'}
+                  {searchQuery || filterType !== 'all' || categoryFilter !== 'all' ? 'Clear filters' : '+ Add Item'}
                 </button>
               </div>
             ) : (
-              <div className="menu-list">
+              <div className="menu-grid">
                 {filteredItems.map(item => (
                   <MenuItemCard
                     key={item.id}
@@ -1031,17 +1009,6 @@ function App() {
                     categories={categories}
                   />
                 ))}
-              </div>
-            )}
-
-            {filteredItems.length > 0 && (
-              <div className="menu-footer">
-                <div className="filter-summary">
-                  <span className="summary-text">
-                    Showing {filteredItems.length} of {menuItems.length} items
-                    {searchQuery && ` for "${searchQuery}"`}
-                  </span>
-                </div>
               </div>
             )}
           </div>
