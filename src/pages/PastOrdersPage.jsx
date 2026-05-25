@@ -12,7 +12,9 @@ const STATUS_CONFIG = {
 }
 
 function PastOrdersPage({ pastOrders, loading, onToast, hideFilters }) {
+  const [searchQuery, setSearchQuery] = useState('')
   const [timeFilter, setTimeFilter] = useState('today')
+  const [expandedId, setExpandedId] = useState(null)
 
   const filteredOrders = useMemo(() => {
     if (hideFilters) return pastOrders
@@ -22,154 +24,128 @@ function PastOrdersPage({ pastOrders, loading, onToast, hideFilters }) {
     const weekAgo = new Date(todayStart.getTime() - 7 * 24 * 60 * 60 * 1000)
 
     return pastOrders.filter(o => {
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase()
+        const code = (o.order_code || '').toLowerCase()
+        const table = (o.restaurant_tables?.table_number?.toString() || '')
+        if (!code.includes(q) && !table.includes(q)) return false
+      }
       const date = new Date(o.created_at)
       if (timeFilter === 'today') return date >= todayStart
       if (timeFilter === 'week') return date >= weekAgo
       return true
     })
-  }, [pastOrders, timeFilter, hideFilters])
-
-  const getStatusBadge = (status) => {
-    const cfg = STATUS_CONFIG[status] || { label: status, color: '#666', bg: 'rgba(255,255,255,0.05)' }
-    return (
-      <span className="past-status-badge" style={{ background: cfg.bg, color: cfg.color, borderColor: cfg.color }}>
-        {cfg.label}
-      </span>
-    )
-  }
+  }, [pastOrders, timeFilter, searchQuery, hideFilters])
 
   const displayOrders = hideFilters ? pastOrders : filteredOrders
 
   return (
-    <div className="past-orders-page">
-      {hideFilters ? (
-        <div className="past-orders-header-simple">
-          <span className="past-header-label">Past Orders</span>
-          <span className="past-header-total">Total: {pastOrders.length}</span>
+    <div className="po-page">
+      <div className="po-header">
+        <div className="po-title-row">
+          <h2 className="po-title">Past Orders</h2>
+          <span className="po-count">{pastOrders.length} orders</span>
         </div>
-      ) : (
-        <div className="past-orders-header">
-          <div className="past-orders-title-row">
-            <h2 className="past-orders-title">Past Orders</h2>
-            <div className="past-orders-stats">
-              <span className="past-stat-badge">{pastOrders.length} total</span>
-              <span className="past-stat-badge past-stat-today">{filteredOrders.length} shown</span>
+        {!hideFilters && (
+          <div className="po-filters">
+            <input
+              type="text"
+              className="po-search"
+              placeholder="Search by order ID or table..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+            />
+            <div className="po-time-filters">
+              {['today', 'week', 'all'].map(f => (
+                <button
+                  key={f}
+                  className={`po-time-btn ${timeFilter === f ? 'active' : ''}`}
+                  onClick={() => setTimeFilter(f)}
+                >
+                  {f === 'today' ? 'Today' : f === 'week' ? '7 Days' : 'All'}
+                </button>
+              ))}
             </div>
           </div>
-        </div>
-      )}
-
-      {!hideFilters && (
-        <div className="past-filter-bar">
-          <button
-            className={`past-filter-btn ${timeFilter === 'today' ? 'active' : ''}`}
-            onClick={() => setTimeFilter('today')}
-          >
-            Today
-          </button>
-          <button
-            className={`past-filter-btn ${timeFilter === 'week' ? 'active' : ''}`}
-            onClick={() => setTimeFilter('week')}
-          >
-            Last 7 Days
-          </button>
-          <button
-            className={`past-filter-btn ${timeFilter === 'all' ? 'active' : ''}`}
-            onClick={() => setTimeFilter('all')}
-          >
-            All
-          </button>
-        </div>
-      )}
+        )}
+      </div>
 
       {loading && pastOrders.length === 0 ? (
-        <div className="past-loading-grid">
+        <div className="po-loading">
           {[1, 2, 3].map(i => (
-            <div key={i} className="skeleton-card">
-              <div className="skeleton-line" style={{ width: '40%' }}></div>
-              <div className="skeleton-line"></div>
-              <div className="skeleton-line short"></div>
-            </div>
+            <div key={i} className="po-skeleton" />
           ))}
         </div>
-      ) : pastOrders.length === 0 ? (
-        <div className="past-empty-state">
-          <div className="past-empty-icon">
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" opacity="0.3">
-              <path d="M3 3h18v18H3V3z" />
-              <path d="M8 3v18" />
-              <path d="M16 3v18" />
-              <path d="M3 8h18" />
-              <path d="M3 16h18" />
-            </svg>
-          </div>
-          <p className="past-empty-text">No past orders yet</p>
-          <p className="past-empty-hint">Accepted and completed orders will appear here</p>
-        </div>
       ) : displayOrders.length === 0 ? (
-        <div className="past-empty-state">
-          <div className="past-empty-icon">
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" opacity="0.3">
-              <circle cx="12" cy="12" r="10" />
-              <path d="M12 8v4l3 3" />
-            </svg>
-          </div>
-          <p className="past-empty-text">No orders in this period</p>
-          <p className="past-empty-hint">Try a different time filter</p>
+        <div className="po-empty">
+          <svg className="po-empty-icon" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" opacity="0.3">
+            <rect x="3" y="3" width="18" height="18" rx="2" />
+            <path d="M9 3v18" />
+            <path d="M15 3v18" />
+            <path d="M3 9h18" />
+            <path d="M3 15h18" />
+          </svg>
+          <p className="po-empty-text">No past orders found</p>
+          {(searchQuery || timeFilter !== 'all') && (
+            <p className="po-empty-hint">Try adjusting your search or filters</p>
+          )}
         </div>
       ) : (
-        <div className="past-orders-grid">
+        <div className="po-list">
           {displayOrders.map(order => {
             const items = Array.isArray(order.items) ? order.items : []
             const tableNum = order.restaurant_tables?.table_number
             const orderCode = order.order_code || (order.id ? order.id.slice(0, 8).toUpperCase() : 'N/A')
             const totalPrice = order.total_price != null ? Number(order.total_price) : 0
+            const cfg = STATUS_CONFIG[order.status] || { label: order.status, color: '#666', bg: 'rgba(255,255,255,0.05)' }
+            const isExpanded = expandedId === order.id
 
             return (
-              <div key={order.id} className={`past-order-card ${order.status}`}>
-                <div className="past-card-top">
-                  <div className="past-card-id-row">
-                    <span className="past-order-code">#{orderCode}</span>
-                    {tableNum && <span className="past-table-tag">Table {tableNum}</span>}
+              <div key={order.id} className={`po-card ${isExpanded ? 'expanded' : ''}`}>
+                <div className="po-card-main">
+                  <div className="po-card-left">
+                    <span className="po-order-code">#{orderCode}</span>
+                    {tableNum && <span className="po-table-tag">Table {tableNum}</span>}
                   </div>
-                  <div className="past-card-time">
-                    <span className="past-date">{formatDate(order.created_at)}</span>
-                    <span className="past-time">{formatTime(order.created_at)}</span>
+                  <div className="po-card-center">
+                    <span className="po-datetime">
+                      {formatDate(order.created_at)}, {formatTime(order.created_at)}
+                    </span>
+                  </div>
+                  <div className="po-card-right">
+                    <span className="po-items-count">{items.length} item{items.length !== 1 ? 's' : ''}</span>
+                    <span className="po-total">₹{totalPrice.toFixed(0)}</span>
+                    <span className="po-status" style={{ background: cfg.bg, color: cfg.color }}>{cfg.label}</span>
+                    <button className="po-details-btn" onClick={() => setExpandedId(isExpanded ? null : order.id)}>
+                      {isExpanded ? 'Hide' : 'View Details'}
+                    </button>
                   </div>
                 </div>
-
-                <div className="past-card-body">
-                  <div className="past-items-list">
-                    {items.length > 0 ? items.map((item, i) => (
-                      <div key={i} className="past-item-row">
-                        <span className="past-item-name">{item.name || 'Item'}</span>
-                        <span className="past-item-qty">x{item.quantity ?? 1}</span>
-                        <span className="past-item-price">₹{((item.price ?? 0) * (item.quantity ?? 1)).toFixed(0)}</span>
+                {isExpanded && (
+                  <div className="po-card-details">
+                    {items.length > 0 ? (
+                      <div className="po-details-items">
+                        {items.map((item, i) => (
+                          <div key={i} className="po-detail-row">
+                            <span className="po-detail-name">{item.name || 'Item'}</span>
+                            <span className="po-detail-qty">x{item.quantity ?? 1}</span>
+                            <span className="po-detail-price">₹{((item.price ?? 0) * (item.quantity ?? 1)).toFixed(0)}</span>
+                          </div>
+                        ))}
                       </div>
-                    )) : (
-                      <div className="past-item-row">
-                        <span className="past-item-name" style={{ color: '#555', fontStyle: 'italic' }}>No items</span>
+                    ) : (
+                      <div className="po-detail-row">
+                        <span className="po-detail-name" style={{ color: '#71717a', fontStyle: 'italic' }}>No items</span>
+                      </div>
+                    )}
+                    {order.note && (
+                      <div className="po-detail-note">
+                        <span className="po-note-label">Note: </span>
+                        <span className="po-note-text">{order.note}</span>
                       </div>
                     )}
                   </div>
-
-                  {order.note && (
-                    <div className="past-note-row">
-                      <span className="past-note-label">Note:</span>
-                      <span className="past-note-text">{order.note}</span>
-                    </div>
-                  )}
-                </div>
-
-                <div className="past-card-bottom">
-                  <div className="past-total-row">
-                    <span className="past-total-label">Total</span>
-                    <span className="past-total-amount">₹{totalPrice.toFixed(0)}</span>
-                  </div>
-                  <div className="past-card-footer-row">
-                    {getStatusBadge(order.status)}
-                  </div>
-                </div>
+                )}
               </div>
             )
           })}
