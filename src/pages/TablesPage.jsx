@@ -217,9 +217,12 @@ export default function TablesPage({ restaurantId, restaurantSlug }) {
     setEditValue('');
   };
 
-  const filteredTables = tables.filter(t =>
-    t.table_number.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredTables = tables.filter((t) => {
+    const searchValue = search.toLowerCase();
+    const tableNumber = String(t?.table_number || "").toLowerCase();
+    const tableName = String(t?.name || "").toLowerCase();
+    return tableNumber.includes(searchValue) || tableName.includes(searchValue);
+  });
 
   if (loading) {
     return (

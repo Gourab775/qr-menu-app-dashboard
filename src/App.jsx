@@ -1135,17 +1135,7 @@ function Sidebar({ isOpen, onClose, activeTab, setActiveTab, onOpenOrders, waite
           >
             🔴 Live Orders
           </button>
-          <button
-            className={`nav-item ${activeTab === 'waiter-call' ? 'active' : ''}`}
-            onClick={() => { setActiveTab('waiter-call'); onClose(); }}
-          >
-            <span className="nav-item-content">
-              <span>🛎️ Waiter Call</span>
-              {waiterCalls.length > 0 && (
-                <span className="nav-badge">{waiterCalls.length}</span>
-              )}
-            </span>
-          </button>
+
           <button
             className={`nav-item ${activeTab === 'past-orders' ? 'active' : ''}`}
             onClick={() => { setActiveTab('past-orders'); onClose(); }}
