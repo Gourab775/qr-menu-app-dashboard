@@ -14,6 +14,7 @@ import OverviewPage from './pages/OverviewPage'
 import SettingsPage from './pages/SettingsPage'
 import TablesPage from './pages/TablesPage'
 import PastOrdersPage from './pages/PastOrdersPage'
+import LiveOrdersPage from './pages/LiveOrdersPage'
 import { formatDateTime, formatOrderDateTime } from './utils/formatDateTime'
 import * as orderStore from './services/orderStore'
 import './App.css'
@@ -1022,7 +1023,7 @@ function App() {
 
         {activeTab === 'featured' && <FeaturedItemsPanel restaurantId={restaurantId} />}
 
-        {activeTab === 'live-orders' && null}
+        {activeTab === 'live-orders' && <LiveOrdersPage restaurantId={restaurantId} />}
 
         {activeTab === 'waiter-call' && (
           <div className="waiter-call-page">
@@ -1131,7 +1132,7 @@ function Sidebar({ isOpen, onClose, activeTab, setActiveTab, onOpenOrders, waite
           </button>
           <button
             className={`nav-item ${activeTab === 'live-orders' ? 'active' : ''}`}
-            onClick={() => { onOpenOrders?.(); onClose(); }}
+            onClick={() => { setActiveTab('live-orders'); onClose(); }}
           >
             🔴 Live Orders
           </button>
