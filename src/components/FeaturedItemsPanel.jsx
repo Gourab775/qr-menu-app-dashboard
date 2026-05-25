@@ -13,6 +13,8 @@ export default function FeaturedItemsPanel({ restaurantId }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [toast, setToast] = useState(null)
+  const [editingId, setEditingId] = useState(null)
+  const [searchQuery, setSearchQuery] = useState('')
 
   const currentRestId = restaurantId || RESTAURANT_ID
 
@@ -61,7 +63,7 @@ export default function FeaturedItemsPanel({ restaurantId }) {
 
   const handleAddItem = async () => {
     try {
-      const maxOrder = featuredItems.reduce((max, item) => 
+      const maxOrder = featuredItems.reduce((max, item) =>
         Math.max(max, item.display_order || 0), 0)
 
       const { data, error } = await supabase
@@ -78,7 +80,9 @@ export default function FeaturedItemsPanel({ restaurantId }) {
 
       if (error) throw error
 
-      setFeaturedItems(prev => [...prev, { ...data, target: '' }])
+      const newItem = { ...data, target: '' }
+      setFeaturedItems(prev => [...prev, newItem])
+      setEditingId(newItem.id)
       showToast('New featured item added')
     } catch (err) {
       console.error('Add item error:', err)
@@ -134,6 +138,7 @@ export default function FeaturedItemsPanel({ restaurantId }) {
 
       if (error) throw error
 
+      setEditingId(null)
       showToast('Saved successfully')
     } catch (err) {
       console.error('Save error:', err)
@@ -142,7 +147,7 @@ export default function FeaturedItemsPanel({ restaurantId }) {
   }
 
   const handleDeleteItem = async (itemId) => {
-    if (!confirm('Delete this featured item?')) return
+    if (!confirm('Remove this item from featured?')) return
 
     try {
       const { error } = await supabase
@@ -153,10 +158,11 @@ export default function FeaturedItemsPanel({ restaurantId }) {
       if (error) throw error
 
       setFeaturedItems(prev => prev.filter(item => item.id !== itemId))
-      showToast('Item deleted')
+      if (editingId === itemId) setEditingId(null)
+      showToast('Item removed from featured')
     } catch (err) {
       console.error('Delete error:', err)
-      showToast('Failed to delete', 'error')
+      showToast('Failed to remove', 'error')
     }
   }
 
@@ -164,10 +170,19 @@ export default function FeaturedItemsPanel({ restaurantId }) {
     loadData()
   }, [])
 
+  const filteredItems = featuredItems.filter(item => {
+    if (!searchQuery) return true
+    const q = searchQuery.toLowerCase()
+    return (
+      (item.target && item.target.toLowerCase().includes(q)) ||
+      (item.redirect_url && item.redirect_url.toLowerCase().includes(q))
+    )
+  })
+
   if (loading) {
     return (
       <div className="featured-panel">
-        <div className="loading">Loading...</div>
+        <div className="featured-loading">Loading featured items...</div>
       </div>
     )
   }
@@ -175,20 +190,13 @@ export default function FeaturedItemsPanel({ restaurantId }) {
   if (error) {
     return (
       <div className="featured-panel">
-        <div className="panel-header-row">
-          <div className="panel-header">
-            <h2 className="panel-title">🎯 Featured Items Setup</h2>
-            <p className="panel-subtitle">Set image URL and target for featured items</p>
-          </div>
-          <button className="add-btn" onClick={handleAddItem}>
-            ➕ Add Item
-          </button>
+        <div className="featured-header">
+          <h2 className="featured-title">Featured Items</h2>
         </div>
-        <div className="empty-state">
-          <div className="empty-icon">⚠️</div>
-          <h3>Error Loading Data</h3>
-          <p>{error}</p>
-          <button className="add-btn" onClick={loadData} style={{ marginTop: '16px' }}>
+        <div className="featured-empty">
+          <p className="featured-empty-title">Error loading data</p>
+          <p className="featured-empty-desc">{error}</p>
+          <button className="featured-btn featured-btn-primary" onClick={loadData}>
             Try Again
           </button>
         </div>
@@ -199,37 +207,58 @@ export default function FeaturedItemsPanel({ restaurantId }) {
   return (
     <div className="featured-panel">
       {toast && (
-        <div className={`toast toast-${toast.type}`}>
-          <span className="toast-icon">{toast.type === 'success' ? '✓' : '✗'}</span>
-          <span className="toast-message">{toast.message}</span>
+        <div className={`featured-toast featured-toast-${toast.type}`}>
+          {toast.message}
         </div>
       )}
 
-      <div className="panel-header-row">
-        <div className="panel-header">
-          <h2 className="panel-title">🎯 Featured Items Setup</h2>
-          <p className="panel-subtitle">Set image URL and target for featured items</p>
+      <div className="featured-header">
+        <div className="featured-header-left">
+          <h2 className="featured-title">Featured Items</h2>
+          <span className="featured-count">{featuredItems.length}</span>
         </div>
-        <button className="add-btn" onClick={handleAddItem}>
-          ➕ Add Item
-        </button>
-      </div>
-
-      {featuredItems.length === 0 ? (
-        <div className="empty-state">
-          <div className="empty-icon">🎯</div>
-          <h3>No Featured Items</h3>
-          <p>Click "Add Item" to create your first featured item</p>
-          <button className="add-btn" onClick={handleAddItem} style={{ marginTop: '16px' }}>
-            Add your first item
+        <div className="featured-header-right">
+          <input
+            type="text"
+            className="featured-search"
+            placeholder="Search items..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+          />
+          <button className="featured-btn featured-btn-primary" onClick={handleAddItem}>
+            + Add Featured Item
           </button>
         </div>
+      </div>
+
+      {filteredItems.length === 0 ? (
+        <div className="featured-empty">
+          {searchQuery ? (
+            <>
+              <p className="featured-empty-title">No results found</p>
+              <p className="featured-empty-desc">Try a different search term</p>
+            </>
+          ) : (
+            <>
+              <p className="featured-empty-title">No featured items found</p>
+              <p className="featured-empty-desc">
+                Add your first featured item to get started
+              </p>
+              <button className="featured-btn featured-btn-primary" onClick={handleAddItem}>
+                + Add Featured Item
+              </button>
+            </>
+          )}
+        </div>
       ) : (
-        <div className="featured-list">
-          {featuredItems.map((item) => (
+        <div className="featured-grid">
+          {filteredItems.map(item => (
             <FeaturedItemCard
               key={item.id}
               item={item}
+              isEditing={editingId === item.id}
+              onEdit={() => setEditingId(item.id)}
+              onCancel={() => setEditingId(null)}
               onImageUrlChange={handleImageUrlChange}
               onTargetChange={handleTargetChange}
               onOrderChange={handleOrderChange}
@@ -243,74 +272,102 @@ export default function FeaturedItemsPanel({ restaurantId }) {
   )
 }
 
-function FeaturedItemCard({ item, onImageUrlChange, onTargetChange, onOrderChange, onSave, onDelete }) {
+function FeaturedItemCard({
+  item,
+  isEditing,
+  onEdit,
+  onCancel,
+  onImageUrlChange,
+  onTargetChange,
+  onOrderChange,
+  onSave,
+  onDelete
+}) {
   const canSave = item.target && item.image_url
-  const redirectPreview = item.redirect_url || '#not-set'
+
+  if (isEditing) {
+    return (
+      <div className="featured-card">
+        <div className="featured-card-img-wrap">
+          {item.image_url ? (
+            <img src={item.image_url} alt="" className="featured-card-img" />
+          ) : (
+            <div className="featured-card-img-placeholder">No Image</div>
+          )}
+        </div>
+        <div className="featured-card-body">
+          <div className="featured-field">
+            <label className="featured-field-label">Image URL</label>
+            <input
+              type="text"
+              className="featured-field-input"
+              placeholder="https://example.com/image.jpg"
+              value={item.image_url || ''}
+              onChange={e => onImageUrlChange(item.id, e.target.value)}
+            />
+          </div>
+          <div className="featured-field">
+            <label className="featured-field-label">Item Name</label>
+            <input
+              type="text"
+              className="featured-field-input"
+              placeholder="e.g. biryani, tandoor"
+              value={item.target || ''}
+              onChange={e => onTargetChange(item.id, e.target.value)}
+            />
+          </div>
+          <div className="featured-field featured-field-short">
+            <label className="featured-field-label">Display Order</label>
+            <input
+              type="number"
+              className="featured-field-input"
+              value={item.display_order || 0}
+              onChange={e => onOrderChange(item.id, e.target.value)}
+              min="0"
+            />
+          </div>
+          <div className="featured-card-actions">
+            <button
+              className="featured-btn featured-btn-save"
+              onClick={() => onSave(item)}
+              disabled={!canSave}
+            >
+              Save
+            </button>
+            <button className="featured-btn featured-btn-cancel" onClick={onCancel}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="featured-card">
-      <div className="featured-card-left">
-        <div className="featured-image-section">
-          {item.image_url ? (
-            <img src={item.image_url} alt="Featured" className="featured-thumb" />
-          ) : (
-            <div className="featured-thumb-placeholder">🎯</div>
-          )}
-        </div>
-
-        <div className="featured-info">
-          <h3 className="featured-title">Featured #{item.display_order || 1}</h3>
-          <span className="featured-position">Redirect: {redirectPreview}</span>
-        </div>
+      <div className="featured-card-img-wrap">
+        {item.image_url ? (
+          <img src={item.image_url} alt={item.target || 'Featured'} className="featured-card-img" />
+        ) : (
+          <div className="featured-card-img-placeholder">No Image</div>
+        )}
       </div>
-
-      <div className="featured-card-right">
-        <div className="input-group">
-          <label className="input-label">Image URL</label>
-          <input
-            type="text"
-            className="url-input"
-            placeholder="https://example.com/image.jpg"
-            value={item.image_url || ''}
-            onChange={(e) => onImageUrlChange(item.id, e.target.value)}
-          />
+      <div className="featured-card-body">
+        <div className="featured-card-header">
+          <h3 className="featured-card-name">{item.target || 'Unnamed Item'}</h3>
+          <span className="featured-badge">Featured</span>
         </div>
-
-        <div className="input-group">
-          <label className="input-label">Target (e.g. biryani, tandoor)</label>
-          <input
-            type="text"
-            className="target-input"
-            placeholder="Enter target name"
-            value={item.target || ''}
-            onChange={(e) => onTargetChange(item.id, e.target.value)}
-          />
+        <div className="featured-card-info">
+          <span>Order: {item.display_order || 0}</span>
+          {item.redirect_url && <span>Links to: {item.redirect_url}</span>}
+          <span className="featured-card-status">Active</span>
         </div>
-
-        <div className="order-input-group">
-          <label className="order-label">Order</label>
-          <input
-            type="number"
-            className="order-input"
-            value={item.display_order || 0}
-            onChange={(e) => onOrderChange(item.id, e.target.value)}
-            min="0"
-          />
-        </div>
-
-        <div className="featured-actions">
-          <button
-            className={`save-redirect-btn ${!canSave ? 'disabled' : ''}`}
-            onClick={() => onSave(item)}
-            disabled={!canSave}
-          >
-            💾 Save
+        <div className="featured-card-actions">
+          <button className="featured-btn featured-btn-edit" onClick={onEdit}>
+            Edit
           </button>
-          <button
-            className="delete-item-btn"
-            onClick={() => onDelete(item.id)}
-          >
-            🗑️
+          <button className="featured-btn featured-btn-remove" onClick={() => onDelete(item.id)}>
+            Remove
           </button>
         </div>
       </div>
