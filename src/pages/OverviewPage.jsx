@@ -6,6 +6,7 @@ import {
 import { supabase } from '../lib/supabase'
 import { fetchWithTimeout, deduplicateRequest } from '../lib/apiUtils'
 import { useAuth } from '../contexts/AuthContext'
+import { IconTrendingUp, IconPackage, IconShoppingBag, IconStar, IconBarChart } from '../components/Icons'
 import './OverviewPage.css'
 
 const API_TIMEOUT = 15000
@@ -371,7 +372,7 @@ export default function OverviewPage({ restaurantId }) {
         <>
           <div className="kpi-grid">
             <div className="kpi-card">
-              <div className="kpi-icon-wrap revenue">💰</div>
+              <div className="kpi-icon-wrap revenue"><IconTrendingUp size={20} /></div>
               <div className="kpi-info">
                 <span className="kpi-label">Total Revenue</span>
                 <span className="kpi-value">{formatCurrency(metrics.revenueTotal)}</span>
@@ -380,7 +381,7 @@ export default function OverviewPage({ restaurantId }) {
             </div>
 
             <div className="kpi-card">
-              <div className="kpi-icon-wrap orders">📦</div>
+              <div className="kpi-icon-wrap orders"><IconPackage size={20} /></div>
               <div className="kpi-info">
                 <span className="kpi-label">Total Orders</span>
                 <span className="kpi-value">{metrics.ordersTotal}</span>
@@ -389,7 +390,7 @@ export default function OverviewPage({ restaurantId }) {
             </div>
 
             <div className="kpi-card">
-              <div className="kpi-icon-wrap avg">📈</div>
+              <div className="kpi-icon-wrap avg"><IconBarChart size={20} /></div>
               <div className="kpi-info">
                 <span className="kpi-label">Average Order</span>
                 <span className="kpi-value">{formatCurrency(metrics.avgOrder)}</span>
@@ -398,7 +399,7 @@ export default function OverviewPage({ restaurantId }) {
             </div>
 
             <div className="kpi-card">
-              <div className="kpi-icon-wrap items">🍽️</div>
+              <div className="kpi-icon-wrap items"><IconShoppingBag size={20} /></div>
               <div className="kpi-info">
                 <span className="kpi-label">Items Sold</span>
                 <span className="kpi-value">{metrics.itemsSold}</span>
@@ -443,7 +444,7 @@ export default function OverviewPage({ restaurantId }) {
           <div className="insights-grid">
             <div className="chart-card" style={{padding: '32px'}}>
               <div className="chart-header" style={{marginBottom: '32px'}}>
-                <h3>🏆 Top Selling Items</h3>
+                <h3><IconStar size={18} /> Top Selling Items</h3>
                 <p>Most popular items by quantity sold</p>
               </div>
               {metrics.topItems?.length ? (
@@ -473,7 +474,7 @@ export default function OverviewPage({ restaurantId }) {
 
             <div className="chart-card" style={{padding: '32px'}}>
               <div className="chart-header" style={{marginBottom: '32px'}}>
-                <h3>📊 Key Conversion</h3>
+                <h3><IconBarChart size={18} /> Key Conversion</h3>
                 <p>Analysis of successful order fulfillment</p>
               </div>
               <div style={{display:'flex', flexDirection:'column', gap:'24px', flex:1, justifyContent:'center'}}>

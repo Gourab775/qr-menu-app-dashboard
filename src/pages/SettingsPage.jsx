@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase, RESTAURANT_ID } from '../lib/supabase'
 import { fetchWithTimeout } from '../lib/apiUtils'
 import { useAuth } from '../contexts/AuthContext'
+import { IconPackage, IconBarChart, IconSettings, IconBell, IconLock, IconUtensils, IconFolder, IconCheck, IconX, IconTimer, IconPhone, IconMail, IconStore, IconCopy, IconLogOut, IconEye, IconEyeOff, IconStar, IconHelpCircle, IconFileText, IconTrash2, IconPalette, IconInfo, IconImage } from '../components/Icons'
 
 const API_TIMEOUT = 15000
 
@@ -19,53 +20,53 @@ const SOUND_OPTIONS = [
 ]
 
 const HELP_TOPICS = [
-  { id: 'orders', icon: '📦', label: 'Order Issues', keywords: ['order', 'orders', 'not showing', 'missing'], answers: [
+  { id: 'orders', icon: <IconPackage size={20} />, label: 'Order Issues', keywords: ['order', 'orders', 'not showing', 'missing'], answers: [
     'Check your internet connection and refresh the Live Orders page',
     'New orders appear automatically when received - ensure you are logged in',
     'If orders still don\'t show, try clearing browser cache and logging in again'
   ]},
-  { id: 'dashboard', icon: '📊', label: 'Dashboard Help', keywords: ['dashboard', 'how', 'use', 'app', 'help'], answers: [
+  { id: 'dashboard', icon: <IconBarChart size={20} />, label: 'Dashboard Help', keywords: ['dashboard', 'how', 'use', 'app', 'help'], answers: [
     'Live Orders: Accept or decline incoming orders',
     'Analytics: View sales performance and reports',
     'Menu Items: Manage your food menu and categories',
     'Use sidebar to navigate between sections'
   ]},
-  { id: 'technical', icon: '⚙️', label: 'Technical Errors', keywords: ['error', 'bug', 'technical', 'issue'], answers: [
+  { id: 'technical', icon: <IconSettings size={20} />, label: 'Technical Errors', keywords: ['error', 'bug', 'technical', 'issue'], answers: [
     'Refresh the page to resolve minor display issues',
     'Check console for error messages',
     'Contact support with screenshot of the error'
   ]},
-  { id: 'notifications', icon: '🔔', label: 'Notification Issues', keywords: ['notification', 'sound', 'alert', 'bell'], answers: [
+  { id: 'notifications', icon: <IconBell size={20} />, label: 'Notification Issues', keywords: ['notification', 'sound', 'alert', 'bell'], answers: [
     'Make sure sound is enabled in Settings > Notifications',
     'Check if browser notifications are allowed',
     'Try selecting a different notification sound'
   ]},
-  { id: 'login', icon: '🔑', label: 'Login Problems', keywords: ['login', 'password', 'forgot', 'access'], answers: [
+  { id: 'login', icon: <IconLock size={20} />, label: 'Login Problems', keywords: ['login', 'password', 'forgot', 'access'], answers: [
     'Default password is: 1234',
     'Clear browser cache and try logging in again',
     'Contact support if you cannot access your account'
   ]},
-  { id: 'menu', icon: '🍽️', label: 'Menu Items', keywords: ['menu', 'item', 'add', 'delete', 'edit'], answers: [
+  { id: 'menu', icon: <IconUtensils size={20} />, label: 'Menu Items', keywords: ['menu', 'item', 'add', 'delete', 'edit'], answers: [
     'Go to Menu Items in sidebar to add new items',
     'Click on an item to edit its details',
     'Use categories to organize your menu'
   ]},
-  { id: 'categories', icon: '📂', label: 'Category Management', keywords: ['category', 'category', 'organize', 'group'], answers: [
+  { id: 'categories', icon: <IconFolder size={20} />, label: 'Category Management', keywords: ['category', 'category', 'organize', 'group'], answers: [
     'Navigate to Categories to create new categories',
     'Assign menu items to categories for better organization',
     'Categories appear in the order you set'
   ]},
-  { id: 'orders_accept', icon: '✅', label: 'Accepting Orders', keywords: ['accept', 'confirm', 'approve'], answers: [
+  { id: 'orders_accept', icon: <IconCheck size={20} />, label: 'Accepting Orders', keywords: ['accept', 'confirm', 'approve'], answers: [
     'Click Accept button on pending orders',
     'Accepted orders show in green with confirmation',
     'Once accepted, order moves to active status'
   ]},
-  { id: 'orders_decline', icon: '❌', label: 'Declining Orders', keywords: ['decline', 'reject', 'cancel'], answers: [
+  { id: 'orders_decline', icon: <IconX size={20} />, label: 'Declining Orders', keywords: ['decline', 'reject', 'cancel'], answers: [
     'Click Decline button on pending orders',
     'Declined orders are permanently removed',
     'This action cannot be undone'
   ]},
-  { id: 'timeout', icon: '⏱️', label: 'Auto-Decline Timeout', keywords: ['timeout', 'auto', 'decline', 'pending'], answers: [
+  { id: 'timeout', icon: <IconTimer size={20} />, label: 'Auto-Decline Timeout', keywords: ['timeout', 'auto', 'decline', 'pending'], answers: [
     'Set timeout in Settings > Auto-Decline',
     'Pending orders auto-decline after set time',
     'Options: 5, 10, 15, 20, or 30 minutes'
@@ -717,7 +718,7 @@ const handlePasswordChange = async (e) => {
             </div>
             <div className="notification-info">
               <button className="sound-select-btn" onClick={() => setShowModal('soundPicker')}>
-                <span>🔔 Notification Sound</span>
+                <span><IconBell size={16} /> Notification Sound</span>
                 <span className="sound-current">{SOUND_OPTIONS.find(s => s.id === preferences.notificationSound)?.name || 'Default Beep'}</span>
               </button>
             </div>
@@ -856,7 +857,7 @@ const handlePasswordChange = async (e) => {
                     className="password-toggle"
                     onClick={() => setShowPasswords(prev => ({ ...prev, current: !prev.current }))}
                   >
-                    {showPasswords.current ? '👁️' : '👁️‍🗨️'}
+                    {showPasswords.current ? <IconEye size={18} /> : <IconEyeOff size={18} />}
                   </button>
                 </div>
                 {passwordErrors.currentPassword && <span className="form-error">{passwordErrors.currentPassword}</span>}
@@ -877,7 +878,7 @@ const handlePasswordChange = async (e) => {
                     className="password-toggle"
                     onClick={() => setShowPasswords(prev => ({ ...prev, new: !prev.new }))}
                   >
-                    {showPasswords.new ? '👁️' : '👁️‍🗨️'}
+                    {showPasswords.new ? <IconEye size={18} /> : <IconEyeOff size={18} />}
                   </button>
                 </div>
                 {passwordErrors.newPassword && <span className="form-error">{passwordErrors.newPassword}</span>}
@@ -898,7 +899,7 @@ const handlePasswordChange = async (e) => {
                     className="password-toggle"
                     onClick={() => setShowPasswords(prev => ({ ...prev, confirm: !prev.confirm }))}
                   >
-                    {showPasswords.confirm ? '👁️' : '👁️‍🗨️'}
+                    {showPasswords.confirm ? <IconEye size={18} /> : <IconEyeOff size={18} />}
                   </button>
                 </div>
                 {passwordErrors.confirmPassword && <span className="form-error">{passwordErrors.confirmPassword}</span>}
@@ -929,8 +930,8 @@ const handlePasswordChange = async (e) => {
             </div>
             <div className="contact-content">
               <div className="contact-info">
-                <div className="contact-item"><span className="contact-icon">📞</span><div className="contact-details"><label>Phone</label><a href="tel:9477503224" className="contact-value">9477503224</a></div></div>
-                <div className="contact-item"><span className="contact-icon">📧</span><div className="contact-details"><label>Email</label><a href="mailto:gourabneogi7775@gmail.com" className="contact-value">gourabneogi7775@gmail.com</a></div></div>
+                <div className="contact-item"><span className="contact-icon"><IconPhone size={20} /></span><div className="contact-details"><label>Phone</label><a href="tel:9477503224" className="contact-value">9477503224</a></div></div>
+                <div className="contact-item"><span className="contact-icon"><IconMail size={20} /></span><div className="contact-details"><label>Email</label><a href="mailto:gourabneogi7775@gmail.com" className="contact-value">gourabneogi7775@gmail.com</a></div></div>
               </div>
               <div className="contact-message">
                 <p>For any support, queries, or technical issues, feel free to contact us. We're here to help.</p>
@@ -996,33 +997,33 @@ const handlePasswordChange = async (e) => {
     {
       title: 'Business',
       items: [
-        { icon: '🏪', label: 'Business Details', description: restaurant?.name || 'Configure', onClick: () => openModal('business') },
-        { icon: '🖼️', label: 'Logo', description: restaurant?.logo ? 'Set' : 'Not set', onClick: () => openModal('logo'), badge: restaurant?.logo ? 'Set' : '' }
+        { icon: <IconStore size={20} />, label: 'Business Details', description: restaurant?.name || 'Configure', onClick: () => openModal('business') },
+        { icon: <IconImage size={20} />, label: 'Logo', description: restaurant?.logo ? 'Set' : 'Not set', onClick: () => openModal('logo'), badge: restaurant?.logo ? 'Set' : '' }
       ]
     },
     {
       title: 'Preferences',
       items: [
-        { icon: '🔔', label: 'Notifications', description: 'Sound & alerts', onClick: () => openModal('notifications'), badge: preferences.soundEnabled ? 'On' : 'Off' },
-        { icon: '🎨', label: 'Theme', description: preferences.theme === 'default' ? 'Default Dark' : preferences.theme, onClick: () => openModal('theme') },
-        { icon: '⏱️', label: 'Auto-Decline', description: 'Disabled', badge: 'Off' }
+        { icon: <IconBell size={20} />, label: 'Notifications', description: 'Sound & alerts', onClick: () => openModal('notifications'), badge: preferences.soundEnabled ? 'On' : 'Off' },
+        { icon: <IconPalette size={20} />, label: 'Theme', description: preferences.theme === 'default' ? 'Default Dark' : preferences.theme, onClick: () => openModal('theme') },
+        { icon: <IconTimer size={20} />, label: 'Auto-Decline', description: 'Disabled', badge: 'Off' }
       ]
     },
     {
       title: 'Privacy & Security',
       items: [
-        { icon: '🔒', label: 'Change Password', description: 'Update your password', onClick: () => openModal('changepassword') },
-        { icon: '📜', label: 'Privacy Policy', description: 'Data handling', onClick: () => openModal('privacy') },
-        { icon: '📄', label: 'Terms of Service', description: 'Usage terms', onClick: () => openModal('terms') },
-        { icon: '🗑️', label: 'Clear Data', description: 'Reset local data', onClick: clearLocalData }
+        { icon: <IconLock size={20} />, label: 'Change Password', description: 'Update your password', onClick: () => openModal('changepassword') },
+        { icon: <IconFileText size={20} />, label: 'Privacy Policy', description: 'Data handling', onClick: () => openModal('privacy') },
+        { icon: <IconFileText size={20} />, label: 'Terms of Service', description: 'Usage terms', onClick: () => openModal('terms') },
+        { icon: <IconTrash2 size={20} />, label: 'Clear Data', description: 'Reset local data', onClick: clearLocalData }
       ]
     },
     {
       title: 'Support',
       items: [
-        { icon: '❓', label: 'Help Center', description: 'FAQs & support', onClick: () => openModal('help') },
-        { icon: '📞', label: 'Contact Us', description: 'Get in touch', onClick: () => openModal('contact') },
-        { icon: 'ℹ️', label: 'About', description: 'v1.0.0', onClick: () => showToast('Restaurant Dashboard v1.0.0') }
+        { icon: <IconHelpCircle size={20} />, label: 'Help Center', description: 'FAQs & support', onClick: () => openModal('help') },
+        { icon: <IconPhone size={20} />, label: 'Contact Us', description: 'Get in touch', onClick: () => openModal('contact') },
+        { icon: <IconInfo size={20} />, label: 'About', description: 'v1.0.0', onClick: () => showToast('Restaurant Dashboard v1.0.0') }
       ]
     }
   ]
@@ -1034,12 +1035,12 @@ const handlePasswordChange = async (e) => {
       </div>
 
       <div className="settings-id-card">
-        <div className="settings-id-icon">🏪</div>
+        <div className="settings-id-icon"><IconStore size={24} /></div>
         <div className="settings-id-info">
           <span className="settings-id-label">Restaurant ID</span>
           <span className="settings-id-value">{RESTAURANT_ID.slice(0, 12)}...</span>
         </div>
-        <button className="copy-id-btn" onClick={() => { navigator.clipboard.writeText(RESTAURANT_ID); showToast('ID copied') }}>📋</button>
+        <button className="copy-id-btn" onClick={() => { navigator.clipboard.writeText(RESTAURANT_ID); showToast('ID copied') }}><IconCopy size={18} /></button>
       </div>
 
       <div className="settings-sections">
@@ -1065,7 +1066,7 @@ const handlePasswordChange = async (e) => {
 
       <div className="settings-logout-section">
         <button className="settings-logout-btn" onClick={handleLogout}>
-          <span className="settings-item-icon">🚪</span>
+          <span className="settings-item-icon"><IconLogOut size={20} /></span>
           <span className="settings-logout-text">Logout</span>
           <span className="settings-item-arrow">›</span>
         </button>

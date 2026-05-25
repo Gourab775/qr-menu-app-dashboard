@@ -321,9 +321,9 @@
 }
 
 .tables-empty-icon {
-  font-size: 48px;
   margin-bottom: 16px;
-  opacity: 0.6;
+  opacity: 0.4;
+  color: var(--text-muted);
 }
 
 .tables-empty h3 {

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
+import { IconLock, IconCheck } from '../components/Icons'
 
 export default function ResetPassword({ onDone }) {
   const [password, setPassword] = useState('')
@@ -56,7 +57,7 @@ export default function ResetPassword({ onDone }) {
     return (
       <div className="login-page">
         <div className="login-card">
-          <div className="login-icon">✓</div>
+          <div className="login-icon"><IconCheck size={48} /></div>
           <h1 className="login-title">Password Reset</h1>
           <p className="login-subtitle">Your password has been updated successfully!</p>
           <p style={{ marginTop: '16px', color: '#666', fontSize: '14px' }}>
@@ -70,7 +71,7 @@ export default function ResetPassword({ onDone }) {
   return (
     <div className="login-page">
       <div className="login-card">
-        <div className="login-icon">🔐</div>
+        <div className="login-icon"><IconLock size={48} /></div>
         <h1 className="login-title">Set New Password</h1>
         <p className="login-subtitle">Enter your new password below</p>
 

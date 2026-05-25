@@ -104,7 +104,7 @@ export default function AddItemModal({ onSave, onClose, categories = [] }) {
                 className={`type-btn ${formData.is_veg ? 'veg' : 'nonveg'}`}
                 onClick={() => handleChange('is_veg', !formData.is_veg)}
               >
-                {formData.is_veg ? '🟢 Veg' : '🔴 Non-Veg'}
+                {formData.is_veg ? 'Veg' : 'Non-Veg'}
               </button>
             </div>
           </div>

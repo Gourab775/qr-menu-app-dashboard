@@ -1,3 +1,5 @@
+import { IconAlertTriangle } from './Icons'
+
 export default function ConfirmModal({ isOpen, title, message, onConfirm, onCancel, confirmText = 'Delete', loading = false }) {
   if (!isOpen) return null
 
@@ -5,7 +7,7 @@ export default function ConfirmModal({ isOpen, title, message, onConfirm, onCanc
     <div className="confirm-modal-overlay" onClick={onCancel}>
       <div className="confirm-modal" onClick={e => e.stopPropagation()}>
         <div className="confirm-modal-icon">
-          <span>⚠️</span>
+          <IconAlertTriangle size={32} />
         </div>
         <h3 className="confirm-modal-title">{title}</h3>
         <p className="confirm-modal-message">{message}</p>

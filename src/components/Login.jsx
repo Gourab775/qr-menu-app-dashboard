@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../contexts/AuthContext'
+import { IconMail, IconLock, IconUtensils, IconEye, IconEyeOff } from '../components/Icons'
 
 export default function Login() {
   const { signIn, resetPassword, isAuthenticated, session, loading: authLoading } = useAuth()
@@ -140,7 +141,7 @@ export default function Login() {
     return (
       <div className="login-page">
         <div className="login-card">
-          <div className="login-icon">📧</div>
+          <div className="login-icon"><IconMail size={48} /></div>
           <h1 className="login-title">Check Your Email</h1>
           <p className="login-subtitle">Password reset link sent to {email}</p>
           <p style={{ marginTop: '16px', color: '#666', fontSize: '14px' }}>
@@ -158,7 +159,7 @@ export default function Login() {
     return (
       <div className="login-page">
         <div className="login-card">
-          <div className="login-icon">🔐</div>
+          <div className="login-icon"><IconLock size={48} /></div>
           <h1 className="login-title">Reset Password</h1>
           <p className="login-subtitle">Enter your email to receive a reset link</p>
 
@@ -206,7 +207,7 @@ export default function Login() {
   return (
     <div className="login-page">
       <div className="login-card">
-        <div className="login-icon">🍽️</div>
+        <div className="login-icon"><IconUtensils size={48} /></div>
         <h1 className="login-title">Restaurant Dashboard</h1>
         <p className="login-subtitle">Enter your credentials to continue</p>
 
@@ -243,7 +244,7 @@ export default function Login() {
                 onClick={() => setShowPassword(!showPassword)}
                 disabled={loading}
               >
-                {showPassword ? '👁️' : '👁️‍🗨️'}
+                {showPassword ? <IconEye size={18} /> : <IconEyeOff size={18} />}
               </button>
             </div>
           </div>

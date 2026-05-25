@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { fetchWithTimeout } from '../lib/apiUtils';
+import { IconTable, IconSearch } from '../components/Icons';
 import './TablesPage.css';
 
 const API_TIMEOUT = 15000;
@@ -402,7 +403,7 @@ export default function TablesPage({ restaurantId, restaurantSlug }) {
 
       {tables.length === 0 ? (
         <div className="tables-empty">
-          <div className="tables-empty-icon">&#127960;</div>
+          <div className="tables-empty-icon"><IconTable size={48} /></div>
           <h3>No tables found</h3>
           <p>Add your first table to generate QR codes for customer ordering.</p>
           <button
@@ -414,7 +415,7 @@ export default function TablesPage({ restaurantId, restaurantSlug }) {
         </div>
       ) : filteredTables.length === 0 ? (
         <div className="tables-empty">
-          <div className="tables-empty-icon">&#128269;</div>
+          <div className="tables-empty-icon"><IconSearch size={48} /></div>
           <h3>No results</h3>
           <p>No tables match "{search}". Try a different search term.</p>
         </div>

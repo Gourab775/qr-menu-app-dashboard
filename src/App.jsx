@@ -17,6 +17,7 @@ import PastOrdersPage from './pages/PastOrdersPage'
 import LiveOrdersPage from './pages/LiveOrdersPage'
 import { formatDateTime, formatOrderDateTime } from './utils/formatDateTime'
 import * as orderStore from './services/orderStore'
+import { IconStore, IconSearch, IconUtensils, IconBellRing, IconBell, IconBarChart, IconFolder, IconTarget, IconClipboard, IconTable, IconSettings } from './components/Icons'
 import './App.css'
 import './theme.css'
 
@@ -718,7 +719,7 @@ function App() {
       <div className="app">
         <div className="login-page">
           <div className="login-card">
-            <div className="login-icon">🏪</div>
+            <div className="login-icon"><IconStore size={48} /></div>
             <h1 className="login-title">No Restaurant Found</h1>
             <p className="login-subtitle">No restaurant available for your account</p>
             <button className="login-btn" onClick={() => {
@@ -898,7 +899,7 @@ function App() {
               onClick={() => setActiveTab('waiter-call')}
               title={`${waiterCalls.length} waiter request${waiterCalls.length !== 1 ? 's' : ''}`}
             >
-              <span className="bell-icon">🔔</span>
+              <span className="bell-icon"><IconBellRing size={20} /></span>
               <span className="bell-badge">{waiterCalls.length}</span>
             </button>
           )}
@@ -979,7 +980,7 @@ function App() {
             ) : filteredItems.length === 0 ? (
               <div className="menu-empty">
                 <div className="menu-empty-icon">
-                  {searchQuery || filterType !== 'all' || categoryFilter !== 'all' ? '🔍' : '🍽️'}
+                  {searchQuery || filterType !== 'all' || categoryFilter !== 'all' ? <IconSearch size={48} /> : <IconUtensils size={48} />}
                 </div>
                 <h3>{searchQuery || filterType !== 'all' || categoryFilter !== 'all' ? 'No items found' : 'No menu items yet'}</h3>
                 <p>
@@ -1041,7 +1042,7 @@ function App() {
               </div>
             ) : waiterCalls.length === 0 ? (
               <div className="empty-state">
-                <div className="empty-icon">🔔</div>
+                <div className="empty-icon"><IconBellRing size={48} /></div>
                 <h3>No waiter calls</h3>
                 <p>Customer requests for assistance will appear here in realtime</p>
               </div>
@@ -1054,7 +1055,7 @@ function App() {
                     <div key={call.id} className="waiter-call-card">
                       <div className="waiter-call-card-top">
                         <div className="waiter-call-card-left">
-                          <span className="waiter-call-table-icon">🛎️</span>
+                          <span className="waiter-call-table-icon"><IconBell size={20} /></span>
                           <div className="waiter-call-card-info">
                             <span className="waiter-call-table-number">Table {tableNum}</span>
                             {note && <span className="waiter-call-note">{note}</span>}
@@ -1110,50 +1111,50 @@ function Sidebar({ isOpen, onClose, activeTab, setActiveTab, onOpenOrders, waite
             className={`nav-item ${activeTab === 'analytics' ? 'active' : ''}`}
             onClick={() => { setActiveTab('analytics'); onClose(); }}
           >
-            📊 Analytics
+            <IconBarChart size={18} /> Analytics
           </button>
           <button
             className={`nav-item ${activeTab === 'menu_items' ? 'active' : ''}`}
             onClick={() => { setActiveTab('menu_items'); onClose(); }}
           >
-            🍽️ Menu Items
+            <IconUtensils size={18} /> Menu Items
           </button>
           <button
             className={`nav-item ${activeTab === 'categories' ? 'active' : ''}`}
             onClick={() => { setActiveTab('categories'); onClose(); }}
           >
-            📂 Categories
+            <IconFolder size={18} /> Categories
           </button>
           <button
             className={`nav-item ${activeTab === 'featured' ? 'active' : ''}`}
             onClick={() => { setActiveTab('featured'); onClose(); }}
           >
-            🎯 Featured
+            <IconTarget size={18} /> Featured
           </button>
           <button
             className={`nav-item ${activeTab === 'live-orders' ? 'active' : ''}`}
             onClick={() => { setActiveTab('live-orders'); onClose(); }}
           >
-            🔴 Live Orders
+            <IconBell size={18} /> Live Orders
           </button>
 
           <button
             className={`nav-item ${activeTab === 'past-orders' ? 'active' : ''}`}
             onClick={() => { setActiveTab('past-orders'); onClose(); }}
           >
-            📋 Past Orders
+            <IconClipboard size={18} /> Past Orders
           </button>
           <button
             className={`nav-item ${activeTab === 'tables' ? 'active' : ''}`}
             onClick={() => { setActiveTab('tables'); onClose(); }}
           >
-            🪑 Tables
+            <IconTable size={18} /> Tables
           </button>
           <button
             className={`nav-item ${activeTab === 'settings' ? 'active' : ''}`}
             onClick={() => { setActiveTab('settings'); onClose(); }}
           >
-            ⚙️ Settings
+            <IconSettings size={18} /> Settings
           </button>
         </nav>
       </aside>

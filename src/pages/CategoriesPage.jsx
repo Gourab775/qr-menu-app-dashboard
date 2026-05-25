@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { supabase, RESTAURANT_ID } from '../lib/supabase'
 import { fetchWithTimeout } from '../lib/apiUtils'
 import ConfirmModal from '../components/ConfirmModal'
+import { IconAlertTriangle, IconFolder } from '../components/Icons'
 
 const API_TIMEOUT = 15000
 
@@ -217,7 +218,7 @@ export default function CategoriesPage({ restaurantId }) {
 
       {error ? (
         <div className="empty-state">
-          <div className="empty-icon">⚠️</div>
+          <div className="empty-icon"><IconAlertTriangle size={48} /></div>
           <h3>Failed to load categories</h3>
           <p>{error}</p>
           <button className="categories-add-btn" onClick={() => loadCategories()}>
@@ -226,7 +227,7 @@ export default function CategoriesPage({ restaurantId }) {
         </div>
       ) : filteredCategories.length === 0 ? (
         <div className="empty-state">
-          <div className="empty-icon-large">📂</div>
+          <div className="empty-icon-large"><IconFolder size={48} /></div>
           <h3>No categories found</h3>
           <p>{searchQuery ? 'Try a different search term' : 'Create categories to organize your menu items'}</p>
           <button className="categories-add-btn" onClick={() => setShowAddModal(true)}>

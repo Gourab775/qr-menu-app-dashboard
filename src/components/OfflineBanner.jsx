@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { IconWifiOff } from './Icons'
 
 export default function OfflineBanner() {
   const [isOnline, setIsOnline] = useState(navigator.onLine)
@@ -20,7 +21,7 @@ export default function OfflineBanner() {
 
   return (
     <div className="offline-banner">
-      <span className="offline-icon">📡</span>
+      <span className="offline-icon"><IconWifiOff size={18} /></span>
       <span>You are offline. Showing cached data.</span>
     </div>
   )

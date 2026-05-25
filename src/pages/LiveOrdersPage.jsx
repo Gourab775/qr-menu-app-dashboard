@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { formatOrderDateTime } from '../utils/formatDateTime'
 import * as orderStore from '../services/orderStore'
+import { IconClock, IconSearch, IconClipboard } from '../components/Icons'
 import '../PopupApp.css'
 import './LiveOrdersPage.css'
 
@@ -272,7 +273,7 @@ function LiveOrdersPage({ restaurantId }) {
         {activeView === 'live' && activeSubTab === 'orders' ? (
           orders.length === 0 ? (
             <div className="popup-empty">
-              <div className="popup-empty-icon">{'\uD83D\uDD50'}</div>
+              <div className="popup-empty-icon"><IconClock size={48} /></div>
               <h3>No live orders</h3>
               <p>Pending orders from customers will appear here</p>
             </div>
@@ -335,7 +336,7 @@ function LiveOrdersPage({ restaurantId }) {
         ) : activeView === 'live' && activeSubTab === 'waiter-call' ? (
           waiterCalls.length === 0 ? (
             <div className="popup-empty">
-              <div className="popup-empty-icon">{'\uD83D\uDD0D'}</div>
+              <div className="popup-empty-icon"><IconSearch size={48} /></div>
               <h3>No waiter calls</h3>
               <p>Customer requests for assistance will appear here</p>
             </div>
@@ -369,7 +370,7 @@ function LiveOrdersPage({ restaurantId }) {
         ) : (
           pastOrders.length === 0 ? (
             <div className="popup-empty">
-              <div className="popup-empty-icon">{'\uD83D\uDCCB'}</div>
+              <div className="popup-empty-icon"><IconClipboard size={48} /></div>
               <h3>No past orders</h3>
               <p>Accepted orders will appear here</p>
             </div>

@@ -1,4 +1,5 @@
 import { Component } from 'react'
+import { IconAlertTriangle } from './Icons'
 
 export class ErrorBoundary extends Component {
   constructor(props) {
@@ -36,7 +37,7 @@ export class ErrorBoundary extends Component {
             borderRadius: '16px',
             border: '1px solid #e94560'
           }}>
-            <div style={{ fontSize: '48px', marginBottom: '16px' }}>⚠️</div>
+            <div style={{ marginBottom: '16px' }}><IconAlertTriangle size={48} /></div>
             <h2 style={{ color: '#e94560', marginBottom: '16px' }}>Something went wrong</h2>
             <p style={{ color: '#a0a0a0', marginBottom: '24px' }}>
               {this.state.error?.message || 'An unexpected error occurred'}

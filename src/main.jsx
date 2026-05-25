@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client'
 import { AuthProvider } from './contexts/AuthContext.jsx'
 import App from './App.jsx'
 import PopupApp from './PopupApp.jsx'
+import { IconAlertTriangle } from './components/Icons'
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -40,7 +41,7 @@ class ErrorBoundary extends React.Component {
             borderRadius: '16px',
             border: '1px solid #e94560'
           }}>
-            <div style={{ fontSize: '48px', marginBottom: '16px' }}>⚠️</div>
+            <div style={{ marginBottom: '16px' }}><IconAlertTriangle size={48} /></div>
             <h2 style={{ color: '#e94560', marginBottom: '16px' }}>Something went wrong</h2>
             <p style={{ color: '#a0a0a0', marginBottom: '24px' }}>
               {this.state.error?.message || 'An unexpected error occurred'}
