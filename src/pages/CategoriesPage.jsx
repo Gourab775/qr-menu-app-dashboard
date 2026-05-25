@@ -15,6 +15,12 @@ export default function CategoriesPage({ restaurantId }) {
   const [showToast, setShowToast] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [deleting, setDeleting] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [editingCategory, setEditingCategory] = useState(null)
+  const [editName, setEditName] = useState('')
+  const [editImage, setEditImage] = useState('')
+  const [editSortOrder, setEditSortOrder] = useState(0)
+  const [savingEdit, setSavingEdit] = useState(false)
 
   const mountedRef = useRef(false)
   const abortControllerRef = useRef(null)
@@ -27,72 +33,60 @@ export default function CategoriesPage({ restaurantId }) {
   }
 
   const loadCategories = async (signal = null) => {
-    if (!signal && mountedRef.current) setLoading(true);
-    setError(null);
-
+    if (!signal && mountedRef.current) setLoading(true)
+    setError(null)
     try {
       const categoriesPromise = supabase
         .from('categories')
         .select('*')
         .eq('restaurant_id', currentRestId)
         .order('sort_order', { ascending: true })
-
       const { data, error } = await fetchWithTimeout(categoriesPromise, API_TIMEOUT)
-
-      if (signal?.aborted) return;
-
+      if (signal?.aborted) return
       if (error) throw error
       setCategories(data || [])
-
       const counts = {}
       for (const cat of data || []) {
         const countPromise = supabase
           .from('menu_items')
           .select('*', { count: 'exact', head: true })
           .eq('category_id', cat.id)
-        
         const { count } = await fetchWithTimeout(countPromise, API_TIMEOUT)
         if (!signal?.aborted) {
           counts[cat.id] = count || 0
         }
       }
-
       if (!signal?.aborted) {
         setItemCounts(counts)
       }
     } catch (err) {
-      console.error('Failed to load categories:', err);
+      console.error('Failed to load categories:', err)
       if (!signal?.aborted) {
-        setError(err.name === 'AbortError' ? 'Request cancelled' : 'Failed to load categories');
+        setError(err.name === 'AbortError' ? 'Request cancelled' : 'Failed to load categories')
       }
     } finally {
       if (!signal?.aborted) {
-        setLoading(false);
+        setLoading(false)
       }
     }
   }
 
   useEffect(() => {
-    if (!currentRestId) return;
-
-    mountedRef.current = true;
-    const controller = new AbortController();
-    abortControllerRef.current = controller;
-
-    loadCategories(controller.signal);
-
+    if (!currentRestId) return
+    mountedRef.current = true
+    const controller = new AbortController()
+    abortControllerRef.current = controller
+    loadCategories(controller.signal)
     return () => {
-      mountedRef.current = false;
-      controller.abort();
-      abortControllerRef.current = null;
-    };
-  }, [currentRestId]);
+      mountedRef.current = false
+      controller.abort()
+      abortControllerRef.current = null
+    }
+  }, [currentRestId])
 
   const handleAddCategory = async () => {
     if (!newCategoryName.trim()) return
-    
     const maxSortOrder = categories.reduce((max, c) => Math.max(max, c.sort_order || 0), 0)
-    
     try {
       const { error } = await supabase
         .from('categories')
@@ -101,9 +95,7 @@ export default function CategoriesPage({ restaurantId }) {
           restaurant_id: RESTAURANT_ID,
           sort_order: maxSortOrder + 1
         })
-
       if (error) throw error
-      
       setNewCategoryName('')
       setShowAddModal(false)
       showToastMsg('Category added')
@@ -119,21 +111,17 @@ export default function CategoriesPage({ restaurantId }) {
 
   const handleConfirmDelete = async () => {
     if (!deleteTarget) return
-    
     setDeleting(true)
     try {
       await supabase
         .from('menu_items')
         .update({ category_id: null })
         .eq('category_id', deleteTarget.id)
-
       const { error } = await supabase
         .from('categories')
         .delete()
         .eq('id', deleteTarget.id)
-
       if (error) throw error
-      
       showToastMsg('Category deleted')
       setDeleteTarget(null)
       loadCategories()
@@ -143,6 +131,47 @@ export default function CategoriesPage({ restaurantId }) {
       setDeleting(false)
     }
   }
+
+  const handleEditClick = (category) => {
+    setEditingCategory(category)
+    setEditName(category.name)
+    setEditImage(category.image || '')
+    setEditSortOrder(category.sort_order || 0)
+  }
+
+  const handleCancelEdit = () => {
+    setEditingCategory(null)
+    setEditName('')
+    setEditImage('')
+    setEditSortOrder(0)
+  }
+
+  const handleSaveEdit = async () => {
+    if (!editName.trim() || !editingCategory) return
+    setSavingEdit(true)
+    try {
+      const { error } = await supabase
+        .from('categories')
+        .update({
+          name: editName.trim(),
+          image: editImage || null,
+          sort_order: Number(editSortOrder) || 0
+        })
+        .eq('id', editingCategory.id)
+      if (error) throw error
+      showToastMsg('Category updated')
+      setEditingCategory(null)
+      loadCategories()
+    } catch (err) {
+      showToastMsg('Failed to update category', 'error')
+    } finally {
+      setSavingEdit(false)
+    }
+  }
+
+  const filteredCategories = categories.filter(cat =>
+    cat.name.toLowerCase().includes(searchQuery.toLowerCase())
+  )
 
   if (loading) {
     return (
@@ -167,15 +196,23 @@ export default function CategoriesPage({ restaurantId }) {
         </div>
       )}
 
-      <div className="page-header">
-        <div className="header-left">
-          <h2 className="page-title">Categories</h2>
-          <span className="item-count">{categories.length} categories</span>
+      <div className="categories-header">
+        <div className="categories-header-left">
+          <h2 className="categories-title">Categories</h2>
+          <span className="categories-count">{categories.length} categories</span>
         </div>
-        <button className="add-btn" onClick={() => setShowAddModal(true)}>
-          <span className="btn-icon">+</span>
-          Add Category
-        </button>
+        <div className="categories-header-right">
+          <input
+            type="text"
+            className="categories-search"
+            placeholder="Search categories..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+          <button className="categories-add-btn" onClick={() => setShowAddModal(true)}>
+            + Add Category
+          </button>
+        </div>
       </div>
 
       {error ? (
@@ -183,29 +220,28 @@ export default function CategoriesPage({ restaurantId }) {
           <div className="empty-icon">⚠️</div>
           <h3>Failed to load categories</h3>
           <p>{error}</p>
-          <button className="add-btn" onClick={() => loadCategories()}>
+          <button className="categories-add-btn" onClick={() => loadCategories()}>
             Retry
           </button>
         </div>
-      ) : categories.length === 0 ? (
+      ) : filteredCategories.length === 0 ? (
         <div className="empty-state">
           <div className="empty-icon-large">📂</div>
-          <h3>No Categories Yet</h3>
-          <p>Create categories to organize your menu items</p>
-          <button className="add-btn" onClick={() => setShowAddModal(true)}>
-            Create your first category
+          <h3>No categories found</h3>
+          <p>{searchQuery ? 'Try a different search term' : 'Create categories to organize your menu items'}</p>
+          <button className="categories-add-btn" onClick={() => setShowAddModal(true)}>
+            + Add Category
           </button>
         </div>
       ) : (
         <div className="categories-grid">
-          {categories.map(cat => (
+          {filteredCategories.map(cat => (
             <CategoryCard
               key={cat.id}
               category={cat}
               itemCount={itemCounts[cat.id] || 0}
-              onUpdate={loadCategories}
+              onEditClick={() => handleEditClick(cat)}
               onDeleteClick={() => handleDeleteClick(cat)}
-              showToast={showToastMsg}
             />
           ))}
         </div>
@@ -243,6 +279,57 @@ export default function CategoriesPage({ restaurantId }) {
         </div>
       )}
 
+      {editingCategory && (
+        <div className="modal-overlay" onClick={handleCancelEdit}>
+          <div className="add-modal category-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Edit Category</h3>
+              <button className="modal-close" onClick={handleCancelEdit}>×</button>
+            </div>
+            <div className="modal-form">
+              <div className="form-group">
+                <label>Category Name</label>
+                <input
+                  type="text"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  placeholder="Category name"
+                  autoFocus
+                  onKeyDown={(e) => e.key === 'Enter' && handleSaveEdit()}
+                />
+              </div>
+              <div className="form-group">
+                <label>Image URL (optional)</label>
+                <input
+                  type="url"
+                  value={editImage}
+                  onChange={(e) => setEditImage(e.target.value)}
+                  placeholder="https://example.com/image.jpg"
+                />
+              </div>
+              <div className="form-group">
+                <label>Sort Order</label>
+                <input
+                  type="number"
+                  value={editSortOrder}
+                  onChange={(e) => setEditSortOrder(e.target.value)}
+                  placeholder="0"
+                  min="0"
+                />
+              </div>
+              <div className="modal-actions">
+                <button className="cancel-btn" onClick={handleCancelEdit}>
+                  Cancel
+                </button>
+                <button className="save-btn" onClick={handleSaveEdit} disabled={!editName.trim() || savingEdit}>
+                  {savingEdit ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <ConfirmModal
         isOpen={!!deleteTarget}
         title="Delete Category?"
@@ -259,144 +346,43 @@ export default function CategoriesPage({ restaurantId }) {
   )
 }
 
-function CategoryCard({ category, itemCount, onUpdate, onDeleteClick, showToast }) {
-  const [isEditing, setIsEditing] = useState(false)
-  const [editData, setEditData] = useState({
-    name: category.name,
-    image: category.image || '',
-    sort_order: category.sort_order || 0
-  })
-  const [saving, setSaving] = useState(false)
+function CategoryCard({ category, itemCount, onEditClick, onDeleteClick }) {
   const [imageError, setImageError] = useState(false)
-
-  const handleChange = (field, value) => {
-    setEditData(prev => ({ ...prev, [field]: value }))
-  }
-
-  const handleSave = async () => {
-    setSaving(true)
-    try {
-      const { error } = await supabase
-        .from('categories')
-        .update({
-          name: editData.name.trim(),
-          image: editData.image || null,
-          sort_order: Number(editData.sort_order) || 0
-        })
-        .eq('id', category.id)
-
-      if (error) throw error
-      
-      setIsEditing(false)
-      showToast('Category updated')
-      onUpdate()
-    } catch (err) {
-      showToast('Failed to update', 'error')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const handleCancel = () => {
-    setEditData({
-      name: category.name,
-      image: category.image || '',
-      sort_order: category.sort_order || 0
-    })
-    setIsEditing(false)
-    setImageError(false)
-  }
 
   const getInitials = (name) => {
     return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
   }
 
   return (
-    <div className={`category-card ${isEditing ? 'editing' : ''}`}>
-      <div className="category-card-left">
-        <div className="category-image-wrapper">
-          {editData.image && !imageError ? (
-            <img 
-              src={editData.image} 
-              alt={editData.name}
-              className="category-image"
-              onError={() => setImageError(true)}
-            />
-          ) : (
-            <div className={`category-placeholder ${editData.name.toLowerCase().includes('main') ? 'main' : ''}`}>
-              {getInitials(editData.name)}
-            </div>
-          )}
-        </div>
-        
-        <div className="category-info">
-          {isEditing ? (
-            <input
-              type="text"
-              className="category-name-input"
-              value={editData.name}
-              onChange={(e) => handleChange('name', e.target.value)}
-              autoFocus
-            />
-          ) : (
-            <h3 className="category-name">{editData.name}</h3>
-          )}
-          
-          <span className="category-count">{itemCount} items</span>
-          
-          <input
-            type="url"
-            className="category-image-url"
-            value={editData.image}
-            onChange={(e) => handleChange('image', e.target.value)}
-            placeholder="Paste image URL..."
-            disabled={!isEditing}
+    <div className="category-card">
+      <div className="category-image-wrapper">
+        {category.image && !imageError ? (
+          <img
+            src={category.image}
+            alt={category.name}
+            className="category-image"
+            onError={() => setImageError(true)}
           />
-        </div>
-      </div>
-
-      <div className="category-card-right">
-        <div className="sort-order-wrapper">
-          <span className="sort-label">Order</span>
-          <input
-            type="number"
-            className="sort-order-input"
-            value={editData.sort_order}
-            onChange={(e) => handleChange('sort_order', e.target.value)}
-            disabled={!isEditing}
-            min="0"
-          />
-        </div>
-
-        {isEditing ? (
-          <div className="edit-actions">
-            <button 
-              className="edit-save-btn" 
-              onClick={handleSave}
-              disabled={saving}
-            >
-              {saving ? '...' : '✓'}
-            </button>
-            <button className="edit-cancel-btn" onClick={handleCancel}>
-              ✗
-            </button>
-          </div>
         ) : (
-          <div className="category-card-actions">
-            <button 
-              className="edit-toggle-btn"
-              onClick={() => setIsEditing(true)}
-            >
-              Edit
-            </button>
-            <button 
-              className="remove-btn-category"
-              onClick={onDeleteClick}
-            >
-              🗑️ Remove
-            </button>
+          <div className="category-placeholder">
+            {getInitials(category.name)}
           </div>
         )}
+      </div>
+      <div className="category-info">
+        <span className="category-name">{category.name}</span>
+        <span className="category-meta">{itemCount} items</span>
+        {category.status && (
+          <span className={`category-status ${category.status}`}>{category.status}</span>
+        )}
+      </div>
+      <div className="category-actions">
+        <button className="category-btn category-btn-edit" onClick={onEditClick}>
+          Edit
+        </button>
+        <button className="category-btn category-btn-delete" onClick={onDeleteClick}>
+          Delete
+        </button>
       </div>
     </div>
   )
