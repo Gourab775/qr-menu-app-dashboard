@@ -989,7 +989,7 @@ function App() {
       <header className="header">
         <button className="menu-btn" onClick={() => setSidebarOpen(true)}>
           ☰
-          {hasUnseenOrders && <span className="menu-btn-badge" />}
+          {(hasUnseenOrders || orders.length > 0) && <span className="menu-btn-badge" />}
         </button>
 <h2 className="header-title">
   {activeTab === 'analytics' && 'Analytics'}
@@ -1192,7 +1192,7 @@ function App() {
         {activeTab === 'past-orders' && <PastOrdersPage pastOrders={pastOrders} loading={loading} onToast={showToast} />}
       </main>
 
-      <Sidebar isOpen={sidebarOpen} onClose={closeSidebar} activeTab={activeTab} setActiveTab={setActiveTab} onOpenOrders={openOrdersPopup} waiterCalls={waiterCalls} hasUnseenOrders={hasUnseenOrders} />
+      <Sidebar isOpen={sidebarOpen} onClose={closeSidebar} activeTab={activeTab} setActiveTab={setActiveTab} onOpenOrders={openOrdersPopup} waiterCalls={waiterCalls} hasUnseenOrders={hasUnseenOrders} hasPendingOrders={orders.length > 0} />
 
       {showAddModal && (
         <AddItemModal
@@ -1206,7 +1206,7 @@ function App() {
   )
 }
 
-function Sidebar({ isOpen, onClose, activeTab, setActiveTab, onOpenOrders, waiterCalls, hasUnseenOrders }) {
+function Sidebar({ isOpen, onClose, activeTab, setActiveTab, onOpenOrders, waiterCalls, hasUnseenOrders, hasPendingOrders }) {
   return (
     <>
       {isOpen && <div className="overlay" onClick={onClose} />}
@@ -1245,7 +1245,7 @@ function Sidebar({ isOpen, onClose, activeTab, setActiveTab, onOpenOrders, waite
             onClick={() => { setActiveTab('live-orders'); onClose(); }}
           >
             <IconBell size={18} /> Live Orders
-            {hasUnseenOrders && <span className="sidebar-badge" />}
+            {(hasUnseenOrders || hasPendingOrders) && <span className="sidebar-badge" />}
           </button>
 
           <button
