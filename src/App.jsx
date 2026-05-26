@@ -5,6 +5,7 @@ import { fetchWithTimeout, deduplicateRequest } from './lib/apiUtils'
 import MenuItemCard from './components/MenuItemCard'
 import AddItemModal from './components/AddItemModal'
 import Toast from './components/Toast'
+import UpdateNotification from './components/UpdateNotification'
 import Login from './components/Login'
 import OfflineBanner from './components/OfflineBanner'
 import FeaturedItemsPanel from './components/FeaturedItemsPanel'
@@ -21,6 +22,7 @@ import './App.css'
 import './theme.css'
 
 const API_TIMEOUT = 15000
+const CURRENT_VERSION = "2.0.0"
 
 function App() {
   const { session, profile, loading: authLoading, initialized, signOut, role, restaurantId } = useAuth()
@@ -48,6 +50,8 @@ function App() {
   const [filterType, setFilterType] = useState('all')
   const [categoryFilter, setCategoryFilter] = useState('all')
   const [toast, setToast] = useState(null)
+  const [updateNotification, setUpdateNotification] = useState(null)
+  const updateNotificationShownRef = useRef(null)
   const [isOnline, setIsOnline] = useState(navigator.onLine)
   const [preferences, setPreferences] = useState(() => {
     try {
@@ -675,7 +679,63 @@ function App() {
     }
   }, [isLoggedIn, restaurantId])
 
+  // App version update checker + realtime listener
+  useEffect(() => {
+    if (!isLoggedIn) return
 
+    const checkForUpdate = (record) => {
+      if (!record || record.app_name !== 'dashboard') return
+      const shownKey = `update_${record.version}`
+      if (updateNotificationShownRef.current === shownKey) return
+      updateNotificationShownRef.current = shownKey
+      setUpdateNotification(record)
+    }
+
+    supabase
+      .from('app_versions')
+      .select('*')
+      .eq('app_name', 'dashboard')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (error) {
+          console.error('[UpdateCheck] Query error:', error)
+          return
+        }
+        if (data && data.version !== CURRENT_VERSION) {
+          checkForUpdate(data)
+        }
+      })
+
+    const channel = supabase
+      .channel('app-versions')
+      .on('postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'app_versions' },
+        (payload) => {
+          const record = payload.new
+          if (record.app_name === 'dashboard' && record.version !== CURRENT_VERSION) {
+            checkForUpdate(record)
+          }
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [isLoggedIn])
+
+  const handleUpdateNow = useCallback((updateUrl) => {
+    if (updateUrl) {
+      window.open(updateUrl, '_blank', 'noopener,noreferrer')
+    }
+    setUpdateNotification(null)
+  }, [])
+
+  const handleDismissUpdate = useCallback(() => {
+    setUpdateNotification(null)
+  }, [])
 
   const openOrdersPopup = useCallback(() => {
     if (window.electronAPI?.showPopup) {
@@ -918,6 +978,12 @@ function App() {
   return (
     <div className="app">
       {toast && <Toast message={toast.message} type={toast.type} />}
+      <UpdateNotification
+        update={updateNotification}
+        onUpdate={handleUpdateNow}
+        onDismiss={handleDismissUpdate}
+      />
+      {updateNotification?.force_update && <div className="update-block-overlay" />}
       <OfflineBanner />
 
       <header className="header">
