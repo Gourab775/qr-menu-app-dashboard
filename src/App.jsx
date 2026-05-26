@@ -942,7 +942,7 @@ function App() {
   {activeTab === 'past-orders' && 'Past Orders'}
 </h2>
         <div className="header-notifications">
-          {waiterCalls.length > 0 && (
+          {activeTab !== 'live-orders' && waiterCalls.length > 0 && (
             <button
               className="header-waiter-bell"
               onClick={() => { setHasNewWaiterCall(false); previousPageRef.current = activeTab; setActiveTab('waiter-call') }}
