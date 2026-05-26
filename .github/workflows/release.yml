@@ -1,0 +1,30 @@
+name: Build & Publish Version
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run build
+
+      - name: Publish version to Supabase
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          UPDATE_MESSAGE: ${{ secrets.UPDATE_MESSAGE }}
+          UPDATE_URL: ${{ secrets.UPDATE_URL }}
+          APP_NAME: dashboard
+        run: node publish-version.js
