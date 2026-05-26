@@ -56,7 +56,6 @@ export default function TablesPage({ restaurantId, restaurantSlug }) {
           restaurant_id,
           table_number,
           table_token,
-          name,
           is_active
         `)
         .eq('restaurant_id', restaurantId)
@@ -66,7 +65,12 @@ export default function TablesPage({ restaurantId, restaurantSlug }) {
 
       if (signal?.aborted) return;
 
-      if (err) throw err;
+      if (err) {
+        console.error("[Fetch Error]", err);
+        throw err;
+      }
+
+      console.log("[Fetched Tables]", data);
 
       const missingTokens = (data || []).filter(t => !t.table_token);
       if (missingTokens.length > 0) {
@@ -349,11 +353,9 @@ export default function TablesPage({ restaurantId, restaurantSlug }) {
     setEditActive(true);
   };
 
-  const filteredTables = tables.filter((t) => {
-    const searchValue = search.toLowerCase();
-    const tableNumber = String(t?.table_number || "").toLowerCase();
-    const tableName = String(t?.name || "").toLowerCase();
-    return tableNumber.includes(searchValue) || tableName.includes(searchValue);
+  const filteredTables = tables.filter(table => {
+    const tableNumber = String(table?.table_number || "").toLowerCase();
+    return tableNumber.includes(search.toLowerCase());
   });
 
   if (loading) {
@@ -455,7 +457,6 @@ export default function TablesPage({ restaurantId, restaurantSlug }) {
                 <div className="table-card-top">
                   <div className="table-card-info">
                     <span className="table-number">Table {table.table_number}</span>
-                    {table.name && <span className="table-name-text">{table.name}</span>}
                   </div>
                   <div className="table-card-badges">
                     <span className={`table-badge ${table.is_active ? 'active' : 'inactive'}`}>
