@@ -1,45 +1,18 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   XAxis, YAxis, Tooltip, ResponsiveContainer,
-  AreaChart, Area, Line
+  AreaChart, Area, BarChart, Bar, CartesianGrid
 } from 'recharts'
 import { supabase } from '../lib/supabase'
 import { fetchWithTimeout, deduplicateRequest } from '../lib/apiUtils'
 import { useAuth } from '../contexts/AuthContext'
-import { IconTrendingUp, IconPackage, IconShoppingBag, IconStar, IconBarChart } from '../components/Icons'
+import { IconTrendingUp, IconPackage, IconShoppingBag, IconStar, IconBarChart, IconClock, IconTable } from '../components/Icons'
 import './OverviewPage.css'
 
 const API_TIMEOUT = 15000
 
-const ACCENT = {
-  green: '#22c55e',
-  blue: '#3b82f6',
-  orange: '#f59e0b',
-  purple: '#8b5cf6',
-  background: '#09090b',
-  card: '#18181b',
-  border: '#27272a',
-  text: '#fafafa',
-  muted: '#a1a1aa'
-}
-
-const CHART_COLORS = {
-  revenue: ACCENT.green,
-  orders: ACCENT.blue
-}
-
 function formatCurrency(v) {
-  return '₹' + (v || 0).toLocaleString('en-IN')
-}
-
-function getTimeAgo(date) {
-  const diff = Date.now() - new Date(date).getTime()
-  const mins = Math.floor(diff / 60000)
-  if (mins < 1) return 'now'
-  if (mins < 60) return mins + 'm'
-  const hours = Math.floor(mins / 60)
-  if (hours < 24) return hours + 'h'
-  return new Date(date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })
+  return '\u20B9' + (v || 0).toLocaleString('en-IN')
 }
 
 function getLocalDateString(date) {
@@ -106,29 +79,28 @@ export default function OverviewPage({ restaurantId }) {
 
   const fetchAnalytics = useCallback(async (signal = null) => {
     const filterKey = currentFilterRef.current
-    
+
     if (isFetchingRef.current && !signal) return
-    
+
     if (!initialized || !isAuthenticated || !restaurantId) {
       setLoading(false)
-      setMetrics(emptyState())
+      setMetrics(null)
       return
     }
-    
+
     const dateRange = getDateRange(filterKey)
     if (!dateRange || !dateRange.start || !dateRange.end) {
-      console.warn('Invalid date range, using defaults')
       const now = new Date()
       dateRange.start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6).toISOString()
       dateRange.end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).toISOString()
       dateRange.startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6)
       dateRange.endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999)
     }
-    
+
     const { start, end, startDate, endDate } = dateRange
-    
+
     isFetchingRef.current = true
-    
+
     if (!signal) {
       setLoading(true)
       setError(null)
@@ -149,8 +121,8 @@ export default function OverviewPage({ restaurantId }) {
         return await fetchWithTimeout(ordersPromise, API_TIMEOUT)
       }
 
-      const executeFetch = signal 
-        ? fetchFn 
+      const executeFetch = signal
+        ? fetchFn
         : () => deduplicateRequest(requestKey, fetchFn)
 
       const { data: orders, error: queryError } = await executeFetch()
@@ -162,9 +134,9 @@ export default function OverviewPage({ restaurantId }) {
       const list = Array.isArray(orders) ? orders : []
 
       const hourlyFilter = isHourlyFilter(filterKey)
-      
+
       let timePoints, revMap, ordMap, getTimeKey, formatLabel
-      
+
       if (hourlyFilter) {
         timePoints = getHoursInRange(startDate, endDate)
         revMap = {}
@@ -221,6 +193,42 @@ export default function OverviewPage({ restaurantId }) {
         .slice(0, 5)
         .map(([name, count]) => ({ name, count }))
 
+      const leastOrderedItems = Object.entries(items)
+        .sort((a, b) => a[1] - b[1])
+        .slice(0, 5)
+        .map(([name, count]) => ({ name, count }))
+
+      const hourCounts = {}
+      list.forEach(o => {
+        if (!o?.created_at) return
+        const hour = new Date(o.created_at).getHours()
+        hourCounts[hour] = (hourCounts[hour] || 0) + 1
+      })
+
+      const peakHourData = Array.from({length: 24}, (_, i) => ({
+        hour: `${i.toString().padStart(2, '0')}:00`,
+        orders: hourCounts[i] || 0
+      }))
+
+      const peakHourEntry = Object.entries(hourCounts).sort((a, b) => b[1] - a[1])[0]
+      const peakOrderTime = peakHourEntry
+        ? `${peakHourEntry[0].padStart(2, '0')}:00 - ${(parseInt(peakHourEntry[0]) + 1).toString().padStart(2, '0')}:00`
+        : '--:--'
+
+      const mostOrderedItem = topItems.length > 0 ? topItems[0].name : '—'
+
+      const activeTableIds = new Set(list.filter(o => o.table_id).map(o => o.table_id))
+
+      const tableCountMap = {}
+      list.forEach(o => {
+        if (!o.table_id) return
+        tableCountMap[o.table_id] = (tableCountMap[o.table_id] || 0) + 1
+      })
+      const topTables = Object.entries(tableCountMap)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([id, count]) => ({ id: id.slice(0, 8), count }))
+
       const chartData = timePoints.map(point => {
         const timeKey = hourlyFilter ? point.getHours().toString() : getLocalDateString(point)
         return {
@@ -242,13 +250,19 @@ export default function OverviewPage({ restaurantId }) {
         completedOrders: completed.length,
         pendingOrders: pending.length,
         topItems,
-        chartData
+        chartData,
+        peakHourData,
+        peakOrderTime,
+        mostOrderedItem,
+        activeTables: activeTableIds.size,
+        leastOrderedItems,
+        topTables
       })
     } catch (err) {
       console.error('Analytics fetch failed:', err)
       if (!mountedRef.current) return
       setError(err.name === 'AbortError' ? 'Request cancelled' : err.message)
-      setMetrics(emptyState())
+      setMetrics(null)
     } finally {
       if (mountedRef.current) {
         isFetchingRef.current = false
@@ -257,11 +271,6 @@ export default function OverviewPage({ restaurantId }) {
       }
     }
   }, [restaurantId, getDateRange])
-
-  const emptyState = () => ({
-    ordersTotal: 0, revenueTotal: 0, revenuePending: 0, avgOrder: 0, itemsSold: 0,
-    completedOrders: 0, pendingOrders: 0, topItems: [], chartData: []
-  })
 
   useEffect(() => {
     mountedRef.current = true
@@ -303,8 +312,6 @@ export default function OverviewPage({ restaurantId }) {
     fetchAnalytics()
   }, [fetchAnalytics])
 
-  const fmtPct = (a, b) => b ? Math.round(a / b * 100) : 0
-
   const tabs = [
     { id: 'today', label: 'Today' },
     { id: 'lastday', label: 'Last Day' },
@@ -314,12 +321,26 @@ export default function OverviewPage({ restaurantId }) {
 
   const filterLabel = tabs.find(t => t.id === filter)?.label || 'Overview'
 
+  const CustomTooltip = ({ active, payload, label }) => {
+    if (!active || !payload || !payload.length) return null
+    return (
+      <div className="chart-tooltip">
+        <div className="chart-tooltip-label">{label}</div>
+        {payload.map((p, i) => (
+          <div key={i} className="chart-tooltip-row">
+            <span className="chart-tooltip-dot" style={{ background: p.color }} />
+            <span>{p.name}: {p.name === 'Revenue' ? formatCurrency(p.value) : p.value}</span>
+          </div>
+        ))}
+      </div>
+    )
+  }
+
   if (!initialized || !isAuthenticated) {
     return (
       <div className="analytics-dashboard">
         <div className="skeleton-container">
-          <div className="skeleton-grid">
-            <div className="skeleton skeleton-card"></div>
+          <div className="skeleton-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
             <div className="skeleton skeleton-card"></div>
             <div className="skeleton skeleton-card"></div>
             <div className="skeleton skeleton-card"></div>
@@ -333,8 +354,8 @@ export default function OverviewPage({ restaurantId }) {
     <div className="analytics-dashboard">
       <div className="analytics-header">
         <div className="analytics-header-left">
-          <h1>Analytics Overview</h1>
-          <p>Performance insights for {filterLabel.toLowerCase()}</p>
+          <h1>Analytics</h1>
+          <p>Performance overview for {filterLabel.toLowerCase()}</p>
         </div>
         <div className="analytics-filters">
           {tabs.map(t => (
@@ -356,10 +377,12 @@ export default function OverviewPage({ restaurantId }) {
             <div className="skeleton skeleton-card"></div>
             <div className="skeleton skeleton-card"></div>
             <div className="skeleton skeleton-card"></div>
+            <div className="skeleton skeleton-card"></div>
+            <div className="skeleton skeleton-card"></div>
           </div>
           <div className="skeleton-grid" style={{ marginTop: '24px' }}>
-            <div className="skeleton skeleton-card" style={{ height: '320px', gridColumn: 'span 2' }}></div>
-            <div className="skeleton skeleton-card" style={{ height: '320px' }}></div>
+            <div className="skeleton skeleton-chart"></div>
+            <div className="skeleton skeleton-chart"></div>
           </div>
         </div>
       ) : error && !metrics ? (
@@ -372,38 +395,56 @@ export default function OverviewPage({ restaurantId }) {
         <>
           <div className="kpi-grid">
             <div className="kpi-card">
-              <div className="kpi-icon-wrap revenue"><IconTrendingUp size={20} /></div>
-              <div className="kpi-info">
-                <span className="kpi-label">Total Revenue</span>
-                <span className="kpi-value">{formatCurrency(metrics.revenueTotal)}</span>
-                <span className="kpi-sub positive">From {metrics.completedOrders} completed</span>
-              </div>
-            </div>
-
-            <div className="kpi-card">
               <div className="kpi-icon-wrap orders"><IconPackage size={20} /></div>
               <div className="kpi-info">
                 <span className="kpi-label">Total Orders</span>
                 <span className="kpi-value">{metrics.ordersTotal}</span>
-                <span className="kpi-sub neutral">{metrics.completedOrders} completed • {metrics.pendingOrders} pending</span>
+                <span className="kpi-sub">{metrics.completedOrders} completed</span>
+              </div>
+            </div>
+
+            <div className="kpi-card">
+              <div className="kpi-icon-wrap revenue"><IconTrendingUp size={20} /></div>
+              <div className="kpi-info">
+                <span className="kpi-label">Total Revenue</span>
+                <span className="kpi-value">{formatCurrency(metrics.revenueTotal)}</span>
+                <span className="kpi-sub">{metrics.completedOrders} paid orders</span>
               </div>
             </div>
 
             <div className="kpi-card">
               <div className="kpi-icon-wrap avg"><IconBarChart size={20} /></div>
               <div className="kpi-info">
-                <span className="kpi-label">Average Order</span>
+                <span className="kpi-label">Avg Order Value</span>
                 <span className="kpi-value">{formatCurrency(metrics.avgOrder)}</span>
-                <span className="kpi-sub positive">Per successful order</span>
+                <span className="kpi-sub">per completed order</span>
+              </div>
+            </div>
+
+            <div className="kpi-card">
+              <div className="kpi-icon-wrap tables"><IconTable size={20} /></div>
+              <div className="kpi-info">
+                <span className="kpi-label">Active Tables</span>
+                <span className="kpi-value">{metrics.activeTables}</span>
+                <span className="kpi-sub">tables with orders</span>
+              </div>
+            </div>
+
+            <div className="kpi-card">
+              <div className="kpi-icon-wrap time"><IconClock size={20} /></div>
+              <div className="kpi-info">
+                <span className="kpi-label">Peak Order Time</span>
+                <span className="kpi-value kpi-value-sm">{metrics.peakOrderTime}</span>
+                <span className="kpi-sub">busiest hour</span>
               </div>
             </div>
 
             <div className="kpi-card">
               <div className="kpi-icon-wrap items"><IconShoppingBag size={20} /></div>
               <div className="kpi-info">
-                <span className="kpi-label">Items Sold</span>
-                <span className="kpi-value">{metrics.itemsSold}</span>
-                <span className="kpi-sub neutral">Across all categories</span>
+                <span className="kpi-label">Most Ordered Item</span>
+                <span className="kpi-value kpi-value-sm kpi-value-text">{metrics.mostOrderedItem}</span>
+                <span className="kpi-sub">{metrics.itemsSold} total items sold</span>
               </div>
             </div>
           </div>
@@ -411,43 +452,98 @@ export default function OverviewPage({ restaurantId }) {
           <div className="charts-grid">
             <div className="chart-card">
               <div className="chart-header">
-                <h3>Revenue & Order Trend</h3>
-                <p>Daily performance over the selected period</p>
+                <h3>Revenue Trend</h3>
+                <p>Revenue over time</p>
               </div>
               <div className="chart-body">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={metrics.chartData}>
                     <defs>
-                      <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor={CHART_COLORS.revenue} stopOpacity={0.3}/>
-                        <stop offset="95%" stopColor={CHART_COLORS.revenue} stopOpacity={0}/>
+                      <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="var(--green)" stopOpacity={0.25}/>
+                        <stop offset="95%" stopColor="var(--green)" stopOpacity={0}/>
                       </linearGradient>
                     </defs>
-                    <XAxis dataKey="label" stroke="#71717a" fontSize={12} tickLine={false} axisLine={false} dy={10} />
-                    <YAxis yAxisId="left" stroke="#71717a" fontSize={12} tickLine={false} axisLine={false} dx={-10} tickFormatter={(value) => `₹${value}`} />
-                    <YAxis yAxisId="right" orientation="right" stroke="#71717a" fontSize={12} tickLine={false} axisLine={false} dx={10} />
-                    <Tooltip 
-                      contentStyle={{ background: 'rgba(24, 24, 27, 0.9)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', boxShadow: '0 8px 32px rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)' }}
-                      labelStyle={{ color: '#a1a1aa', fontWeight: 'bold', marginBottom: '8px' }}
-                      itemStyle={{ fontWeight: '500' }}
-                    />
-                    <Area yAxisId="left" type="monotone" name="Revenue" dataKey="revenue" stroke={CHART_COLORS.revenue} strokeWidth={3} fillOpacity={1} fill="url(#colorRev)" />
-                    <Line yAxisId="right" type="monotone" name="Orders" dataKey="orders" stroke={CHART_COLORS.orders} strokeWidth={2} dot={{r: 4, strokeWidth: 2}} activeDot={{r: 6}} />
+                    <XAxis dataKey="label" stroke="var(--text-muted)" fontSize={12} tickLine={false} axisLine={false} dy={8} />
+                    <YAxis stroke="var(--text-muted)" fontSize={12} tickLine={false} axisLine={false} dx={-8} tickFormatter={(v) => `\u20B9${v}`} />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Area type="monotone" dataKey="revenue" stroke="var(--green)" strokeWidth={2.5} fill="url(#revGrad)" name="Revenue" />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
             </div>
 
+            <div className="chart-card">
+              <div className="chart-header">
+                <h3>Orders Trend</h3>
+                <p>Orders over time</p>
+              </div>
+              <div className="chart-body">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={metrics.chartData}>
+                    <defs>
+                      <linearGradient id="ordGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="var(--blue)" stopOpacity={0.25}/>
+                        <stop offset="95%" stopColor="var(--blue)" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <XAxis dataKey="label" stroke="var(--text-muted)" fontSize={12} tickLine={false} axisLine={false} dy={8} />
+                    <YAxis stroke="var(--text-muted)" fontSize={12} tickLine={false} axisLine={false} dx={-8} allowDecimals={false} />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Area type="monotone" dataKey="orders" stroke="var(--blue)" strokeWidth={2.5} fill="url(#ordGrad)" name="Orders" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
 
+            <div className="chart-card">
+              <div className="chart-header">
+                <h3>Peak Hours</h3>
+                <p>Orders by hour of day</p>
+              </div>
+              <div className="chart-body">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={metrics.peakHourData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                    <XAxis dataKey="hour" stroke="var(--text-muted)" fontSize={11} tickLine={false} axisLine={false} dy={8} interval={2} />
+                    <YAxis stroke="var(--text-muted)" fontSize={12} tickLine={false} axisLine={false} dx={-8} allowDecimals={false} />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Bar dataKey="orders" fill="var(--orange)" radius={[4, 4, 0, 0]} name="Orders" maxBarSize={32} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            <div className="chart-card">
+              <div className="chart-header">
+                <h3>Top Items</h3>
+                <p>Most ordered items</p>
+              </div>
+              <div className="chart-body">
+                {metrics.topItems.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={metrics.topItems} layout="vertical" margin={{ left: 0, right: 16, top: 8, bottom: 8 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
+                      <XAxis type="number" stroke="var(--text-muted)" fontSize={12} tickLine={false} axisLine={false} />
+                      <YAxis type="category" dataKey="name" stroke="var(--text-muted)" fontSize={12} tickLine={false} axisLine={false} width={90} />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Bar dataKey="count" fill="var(--primary)" radius={[0, 4, 4, 0]} name="Sold" maxBarSize={24} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="chart-empty">No item data available</div>
+                )}
+              </div>
+            </div>
           </div>
 
           <div className="insights-grid">
-            <div className="chart-card" style={{padding: '32px'}}>
-              <div className="chart-header" style={{marginBottom: '32px'}}>
-                <h3><IconStar size={18} /> Top Selling Items</h3>
-                <p>Most popular items by quantity sold</p>
+            <div className="chart-card">
+              <div className="chart-header">
+                <h3>Top Selling Items</h3>
+                <p>Most popular items by quantity</p>
               </div>
-              {metrics.topItems?.length ? (
+              {metrics.topItems.length > 0 ? (
                 <div className="top-items-list">
                   {metrics.topItems.map((item, i) => (
                     <div key={item.name} className="top-item-row">
@@ -455,12 +551,12 @@ export default function OverviewPage({ restaurantId }) {
                       <div className="top-item-details">
                         <div className="top-item-name-row">
                           <span className="top-item-name">{item.name}</span>
-                          <span className="top-item-count">{item.count} Sold</span>
+                          <span className="top-item-count">{item.count} sold</span>
                         </div>
                         <div className="top-item-bar-bg">
-                          <div 
-                            className="top-item-bar-fill" 
-                            style={{ width: `${(item.count / metrics.topItems[0].count) * 100}%` }} 
+                          <div
+                            className="top-item-bar-fill"
+                            style={{ width: `${(item.count / metrics.topItems[0].count) * 100}%` }}
                           />
                         </div>
                       </div>
@@ -468,41 +564,77 @@ export default function OverviewPage({ restaurantId }) {
                   ))}
                 </div>
               ) : (
-                <div className="analytics-empty" style={{border: 'none', padding: '20px'}}>No item sales yet</div>
+                <div className="chart-empty">No items sold yet</div>
               )}
             </div>
 
-            <div className="chart-card" style={{padding: '32px'}}>
-              <div className="chart-header" style={{marginBottom: '32px'}}>
-                <h3><IconBarChart size={18} /> Key Conversion</h3>
-                <p>Analysis of successful order fulfillment</p>
+            <div className="chart-card">
+              <div className="chart-header">
+                <h3>Restaurant Insights</h3>
+                <p>Key operational metrics</p>
               </div>
-              <div style={{display:'flex', flexDirection:'column', gap:'24px', flex:1, justifyContent:'center'}}>
-                <div>
-                  <div style={{display:'flex', justifyContent:'space-between', marginBottom:'8px'}}>
-                    <span style={{color: '#a1a1aa', fontWeight: 500}}>Completion Rate</span>
-                    <span style={{color: '#fff', fontWeight: 700}}>{fmtPct(metrics.completedOrders, metrics.ordersTotal)}%</span>
+              <div className="insights-content">
+                <div className="insight-item">
+                  <div className="insight-item-header">
+                    <IconClock size={16} />
+                    <span>Busy Hours</span>
                   </div>
-                  <div className="top-item-bar-bg" style={{height:'12px', borderRadius:'6px'}}>
-                    <div className="top-item-bar-fill" style={{ width: `${fmtPct(metrics.completedOrders, metrics.ordersTotal)}%`, background: 'linear-gradient(90deg, #22c55e, #86efac)' }} />
-                  </div>
+                  <div className="insight-item-value">{metrics.peakOrderTime}</div>
+                  <div className="insight-item-sub">Peak order time slot</div>
                 </div>
 
-                <div>
-                  <div style={{display:'flex', justifyContent:'space-between', marginBottom:'8px'}}>
-                    <span style={{color: '#a1a1aa', fontWeight: 500}}>Avg. Items Per Order</span>
-                    <span style={{color: '#fff', fontWeight: 700}}>
-                      {metrics.ordersTotal ? (metrics.itemsSold / metrics.ordersTotal).toFixed(1) : '0'}
-                    </span>
+                <div className="insight-item">
+                  <div className="insight-item-header">
+                    <IconShoppingBag size={16} />
+                    <span>Least Ordered Items</span>
                   </div>
+                  {metrics.leastOrderedItems.length > 0 ? (
+                    <div className="insight-item-list">
+                      {metrics.leastOrderedItems.slice(0, 3).map((item, i) => (
+                        <span key={item.name} className="insight-tag">{item.name} ({item.count})</span>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="insight-item-value">—</div>
+                  )}
                 </div>
 
-                {metrics.pendingOrders > 0 && (
-                  <div style={{padding:'16px', background:'rgba(245, 158, 11, 0.1)', border:'1px solid rgba(245, 158, 11, 0.2)', borderRadius:'12px'}}>
-                    <h4 style={{color:'#f59e0b', fontSize:'14px', marginBottom:'4px'}}>Action Needed</h4>
-                    <p style={{color:'#d4d4d8', fontSize:'13px'}}>You have {metrics.pendingOrders} pending orders waiting to be processed.</p>
+                <div className="insight-item">
+                  <div className="insight-item-header">
+                    <IconTable size={16} />
+                    <span>Table Usage</span>
                   </div>
-                )}
+                  {metrics.topTables.length > 0 ? (
+                    <div className="insight-item-list">
+                      {metrics.topTables.map((t, i) => (
+                        <span key={t.id} className="insight-tag">Table #{i + 1} ({t.count} orders)</span>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="insight-item-value">No table data</div>
+                  )}
+                </div>
+
+                <div className="insight-item">
+                  <div className="insight-item-header">
+                    <IconBarChart size={16} />
+                    <span>Order Trends</span>
+                  </div>
+                  <div className="insight-metrics">
+                    <div className="insight-metric">
+                      <span className="insight-metric-label">Items Sold</span>
+                      <span className="insight-metric-value">{metrics.itemsSold}</span>
+                    </div>
+                    <div className="insight-metric">
+                      <span className="insight-metric-label">Pending</span>
+                      <span className="insight-metric-value">{metrics.pendingOrders}</span>
+                    </div>
+                    <div className="insight-metric">
+                      <span className="insight-metric-label">Completed</span>
+                      <span className="insight-metric-value">{metrics.completedOrders}</span>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
