@@ -38,9 +38,12 @@ function App() {
   const [loading, setLoading] = useState(false)
   const [menuLoading, setMenuLoading] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [activeTab, setActiveTab] = useState('analytics')
+  const [activeTab, setActiveTab] = useState(() => {
+    try { return localStorage.getItem('dashboard_current_page') || 'analytics' } catch { return 'analytics' }
+  })
   const [hasUnseenOrders, setHasUnseenOrders] = useState(false)
   const activeTabRef = useRef(activeTab)
+  const previousPageRef = useRef('analytics')
   const [showProfile, setShowProfile] = useState(false)
   const [showAddModal, setShowAddModal] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -77,6 +80,7 @@ function App() {
     activeTabRef.current = activeTab
     if (activeTab === 'live-orders') setHasUnseenOrders(false)
     if (activeTab === 'waiter-call') setHasNewWaiterCall(false)
+    try { localStorage.setItem('dashboard_current_page', activeTab) } catch {}
   }, [activeTab])
 
   const profileRef = useRef(null)
@@ -871,6 +875,7 @@ function App() {
       const { error } = await supabase.from('waiter_calls').delete().eq('id', callId)
       if (error) throw error
       showToast('Waiter request resolved')
+      if (previousPageRef.current) setActiveTab(previousPageRef.current)
     } catch (err) {
       console.error('[Waiter] handleResolveWaiter error:', err)
       if (removedCall) {
@@ -936,12 +941,11 @@ function App() {
           {waiterCalls.length > 0 && (
             <button
               className="header-waiter-bell"
-              onClick={() => { setHasNewWaiterCall(false); setActiveTab('waiter-call') }}
+              onClick={() => { setHasNewWaiterCall(false); previousPageRef.current = activeTab; setActiveTab('waiter-call') }}
               title={`${waiterCalls.length} waiter request${waiterCalls.length !== 1 ? 's' : ''}`}
             >
               <span className="bell-icon"><IconBellRing size={20} /></span>
-              {hasNewWaiterCall && <span className="bell-red-dot" />}
-              <span className="bell-badge">{waiterCalls.length}</span>
+              <span className="bell-badge" />
             </button>
           )}
         </div>
