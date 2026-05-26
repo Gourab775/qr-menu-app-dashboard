@@ -54,7 +54,9 @@ function App() {
   const [preferences, setPreferences] = useState(() => {
     try {
       const saved = localStorage.getItem('dashboard_preferences')
-      return saved ? JSON.parse(saved) : {
+      const orderEnabled = localStorage.getItem('order_sound_enabled')
+      const waiterEnabled = localStorage.getItem('waiter_sound_enabled')
+      const base = saved ? JSON.parse(saved) : {
         soundEnabled: true,
         orderNotifications: true,
         autoDeclineTimeout: 10,
@@ -62,8 +64,13 @@ function App() {
         order_notification_sound: 'classic-notification',
         waiter_notification_sound: 'service-bell'
       }
+      return {
+        ...base,
+        order_sound_enabled: orderEnabled !== null ? orderEnabled === 'true' : true,
+        waiter_sound_enabled: waiterEnabled !== null ? waiterEnabled === 'true' : true
+      }
     } catch {
-      return { soundEnabled: true, orderNotifications: true, autoDeclineTimeout: 10, theme: 'dark', order_notification_sound: 'classic-notification', waiter_notification_sound: 'service-bell' }
+      return { soundEnabled: true, orderNotifications: true, autoDeclineTimeout: 10, theme: 'dark', order_notification_sound: 'classic-notification', waiter_notification_sound: 'service-bell', order_sound_enabled: true, waiter_sound_enabled: true }
     }
   })
 
@@ -93,9 +100,6 @@ function App() {
   const ordersFetchFailedRef = useRef(false)
 
   const waiterPlayFnRef = useRef(null)
-  const soundEnabledRef = useRef(preferences.soundEnabled)
-
-  useEffect(() => { soundEnabledRef.current = preferences.soundEnabled }, [preferences.soundEnabled])
 
   const userRole = role || 'staff'
   const userFullName = profile?.full_name || profile?.email || session?.user?.email || 'User'
@@ -439,7 +443,7 @@ function App() {
     document.addEventListener('keydown', handleGesture)
 
     const playOrderSound = () => {
-      if (!preferences.soundEnabled || !orderPlayFn) return
+      if (localStorage.getItem('order_sound_enabled') === 'false' || !orderPlayFn) return
       try { orderPlayFn() } catch { }
     }
 
@@ -488,7 +492,7 @@ function App() {
             if (newStatus === 'pending') {
               setOrders(prev => {
                 if (prev.some(o => o.id === newOrderId)) return prev.map(o => o.id === newOrderId ? { ...o, ...resolved } : o)
-                if (preferences.soundEnabled) playOrderSound()
+                playOrderSound()
                 return [resolved, ...prev].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
               })
               if (activeTabRef.current !== 'live-orders') {
@@ -580,7 +584,7 @@ function App() {
       subscriptionActiveRef.current = false
       supabase.removeChannel(channel)
     }
-  }, [isLoggedIn, restaurantId, preferences.soundEnabled, preferences.orderNotifications, preferences.notificationSound, preferences.order_notification_sound, preferences.waiter_notification_sound])
+  }, [isLoggedIn, restaurantId, preferences.order_notification_sound, preferences.waiter_notification_sound])
 
   useEffect(() => {
     orderStore.publish(orders, pastOrders)
@@ -626,7 +630,7 @@ function App() {
             if (activeTabRef.current !== 'waiter-call') {
               setHasNewWaiterCall(true)
             }
-            if (soundEnabledRef.current && waiterPlayFnRef.current) {
+            if (localStorage.getItem('waiter_sound_enabled') !== 'false' && waiterPlayFnRef.current) {
               try { waiterPlayFnRef.current() } catch {}
             }
           }

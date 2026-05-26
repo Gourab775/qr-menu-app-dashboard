@@ -42,7 +42,6 @@ function PopupApp() {
   const popupRef = useRef(null)
   const isMountedRef = useRef(true)
   const lastOrderIds = useRef(new Set())
-  const soundEnabledRef = useRef(preferences.soundEnabled)
   const waiterPlayFnRef = useRef(null)
 
   const isLoggedIn = !!session
@@ -79,8 +78,6 @@ function PopupApp() {
 
   useEffect(() => {
     if (!isLoggedIn || !restaurantId) return
-
-    soundEnabledRef.current = preferences.soundEnabled
 
     const soundReadyRef = { current: false }
     const audioCtxRef = { current: null }
@@ -131,7 +128,7 @@ function PopupApp() {
       const prevIds = lastOrderIds.current
       const currIds = new Set(pending.map(o => o.id))
       const hasNewOrder = pending.some(o => !prevIds.has(o.id))
-      if (hasNewOrder && soundEnabledRef.current && orderPlayFn) {
+      if (localStorage.getItem('order_sound_enabled') !== 'false' && orderPlayFn) {
         try { orderPlayFn() } catch {}
       }
       lastOrderIds.current = currIds
@@ -146,7 +143,7 @@ function PopupApp() {
       if (audioCtxRef.current) { try { audioCtxRef.current.close() } catch {} }
       cleanup()
     }
-  }, [isLoggedIn, restaurantId, preferences.soundEnabled, preferences.order_notification_sound, preferences.waiter_notification_sound])
+  }, [isLoggedIn, restaurantId, preferences.order_notification_sound, preferences.waiter_notification_sound])
 
   // WAITER CALLS — fetch + realtime only, no polling
   useEffect(() => {
@@ -185,7 +182,7 @@ function PopupApp() {
                   restaurant_tables: table || null
                 }, ...prev])
               })
-            if (soundEnabledRef.current && waiterPlayFnRef.current) {
+            if (localStorage.getItem('waiter_sound_enabled') !== 'false' && waiterPlayFnRef.current) {
               try { waiterPlayFnRef.current() } catch {}
             }
           }

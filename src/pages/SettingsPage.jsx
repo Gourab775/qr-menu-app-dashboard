@@ -6,19 +6,6 @@ import { IconPackage, IconBarChart, IconSettings, IconBell, IconLock, IconUtensi
 
 const API_TIMEOUT = 15000
 
-const SOUND_OPTIONS = [
-  { id: 'beep', name: 'Default Beep', freq: [800, 1000], duration: 0.3 },
-  { id: 'chime', name: 'Soft Chime', freq: [600, 800, 1000], duration: 0.5 },
-  { id: 'bell', name: 'Bell Ring', freq: [500, 700], duration: 0.6 },
-  { id: 'alert', name: 'Alert Tone', freq: [1000, 1200, 800], duration: 0.4 },
-  { id: 'digital', name: 'Digital Ping', freq: [1500, 2000], duration: 0.2 },
-  { id: 'pop', name: 'Notification Pop', freq: [400, 600], duration: 0.25 },
-  { id: 'ding', name: 'Classic Ding', freq: [700, 900], duration: 0.35 },
-  { id: 'subtle', name: 'Subtle Click', freq: [300], duration: 0.15 },
-  { id: 'triple', name: 'Triple Alert', freq: [800, 800, 800], duration: 0.45 },
-  { id: ' ascend', name: 'Ascending Tone', freq: [400, 600, 800], duration: 0.4 }
-]
-
 const ORDER_SOUNDS = [
   { id: 'classic-notification', name: 'Classic Notification', freq: [800, 1000], duration: 0.2 },
   { id: 'restaurant-alert', name: 'Restaurant Alert', freq: [600, 900, 1200], duration: 0.4 },
@@ -51,9 +38,9 @@ const HELP_TOPICS = [
     'Contact support with screenshot of the error'
   ]},
   { id: 'notifications', icon: <IconBell size={20} />, label: 'Notification Issues', keywords: ['notification', 'sound', 'alert', 'bell'], answers: [
-    'Make sure sound is enabled in Settings > Notifications',
+    'Make sure Order Notification Sound is enabled in Settings > Notifications',
     'Check if browser notifications are allowed',
-    'Try selecting a different notification sound'
+    'Try selecting a different order or waiter sound'
   ]},
   { id: 'login', icon: <IconLock size={20} />, label: 'Login Problems', keywords: ['login', 'password', 'forgot', 'access'], answers: [
     'Default password is: 1234',
@@ -118,10 +105,10 @@ const HELP_RESPONSES = {
     title: 'Notification Issues',
     description: 'Problems with sounds and alerts',
     answers: [
-      { q: 'No sound on new orders?', a: 'Go to Settings > Notifications and enable Sound Alerts. Also check your device volume.' },
+      { q: 'No sound on new orders?', a: 'Go to Settings > Notifications and enable Order Notification Sound. Also check your device volume.' },
       { q: 'Sound not playing?', a: 'Click anywhere on the page first to initialize audio. Some browsers require user interaction.' },
-      { q: 'How to change notification sound?', a: 'Go to Settings > Notifications > Notification Sound to preview and select a sound.' },
-      { q: 'Can I disable notifications?', a: 'Yes, toggle off Sound Alerts or Order Notifications in Settings.' }
+      { q: 'How to change notification sound?', a: 'Go to Settings > Notifications to select an order or waiter sound.' },
+      { q: 'Can I disable notifications?', a: 'Yes, toggle off Order Notifications or the individual sound toggles in Settings.' }
     ]
   },
   login: {
@@ -349,8 +336,15 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
     const newPrefs = { ...preferences, [key]: value }
     setPreferences(newPrefs)
     localStorage.setItem('dashboard_preferences', JSON.stringify(newPrefs))
-    showToast(key === 'soundEnabled' ? (value ? 'Sound enabled' : 'Sound disabled') : 
-                   key === 'orderNotifications' ? (value ? 'Notifications enabled' : 'Notifications disabled') : 'Settings saved')
+    if (key === 'order_sound_enabled') {
+      localStorage.setItem('order_sound_enabled', value)
+    }
+    if (key === 'waiter_sound_enabled') {
+      localStorage.setItem('waiter_sound_enabled', value)
+    }
+    showToast(key === 'orderNotifications' ? (value ? 'Notifications enabled' : 'Notifications disabled') : 
+                   key === 'order_sound_enabled' ? (value ? 'Order sound enabled' : 'Order sound disabled') :
+                   key === 'waiter_sound_enabled' ? (value ? 'Waiter sound enabled' : 'Waiter sound disabled') : 'Settings saved')
   }
 
   const playSoundPreview = (soundOptions, soundId) => {
@@ -702,24 +696,25 @@ const handlePasswordChange = async (e) => {
             <div className="settings-toggles">
               <div className="toggle-item">
                 <div className="toggle-info">
-                  <span className="toggle-label">Sound Alerts</span>
-                  <span className="toggle-desc">Play sound for new orders</span>
-                </div>
-                <button className={`toggle-switch ${preferences.soundEnabled ? 'active' : ''}`} onClick={() => updatePreference('soundEnabled', !preferences.soundEnabled)}><span className="toggle-knob" /></button>
-              </div>
-              <div className="toggle-item">
-                <div className="toggle-info">
                   <span className="toggle-label">Order Notifications</span>
                   <span className="toggle-desc">Show alerts for pending orders</span>
                 </div>
                 <button className={`toggle-switch ${preferences.orderNotifications ? 'active' : ''}`} onClick={() => updatePreference('orderNotifications', !preferences.orderNotifications)}><span className="toggle-knob" /></button>
               </div>
-            </div>
-            <div className="notification-info">
-              <button className="sound-select-btn" onClick={() => setShowModal('soundPicker')}>
-                <span><IconBell size={16} /> Notification Sound</span>
-                <span className="sound-current">{SOUND_OPTIONS.find(s => s.id === preferences.notificationSound)?.name || 'Default Beep'}</span>
-              </button>
+              <div className="toggle-item">
+                <div className="toggle-info">
+                  <span className="toggle-label">Order Notification Sound</span>
+                  <span className="toggle-desc">Play sound when new order arrives</span>
+                </div>
+                <button className={`toggle-switch ${preferences.order_sound_enabled !== false ? 'active' : ''}`} onClick={() => updatePreference('order_sound_enabled', preferences.order_sound_enabled === false ? true : false)}><span className="toggle-knob" /></button>
+              </div>
+              <div className="toggle-item">
+                <div className="toggle-info">
+                  <span className="toggle-label">Waiter Call Sound</span>
+                  <span className="toggle-desc">Play sound on new waiter calls</span>
+                </div>
+                <button className={`toggle-switch ${preferences.waiter_sound_enabled !== false ? 'active' : ''}`} onClick={() => updatePreference('waiter_sound_enabled', preferences.waiter_sound_enabled === false ? true : false)}><span className="toggle-knob" /></button>
+              </div>
             </div>
             <div className="notification-sound-section">
               <label className="sound-section-label">Order Notification Sound</label>
@@ -739,27 +734,6 @@ const handlePasswordChange = async (e) => {
                 <button className="sound-preview-btn" onClick={() => playSoundPreview(WAITER_SOUNDS, preferences.waiter_notification_sound || 'service-bell')}>Preview</button>
               </div>
             </div>
-          </div>
-        </div>
-      )
-    }
-    if (showModal === 'soundPicker') {
-      return (
-        <div className="modal-overlay" onClick={closeModal}>
-          <div className="settings-modal sound-modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>Notification Sound</h3>
-              <button className="modal-close" onClick={closeModal}>×</button>
-            </div>
-            <div className="sound-options">
-              {SOUND_OPTIONS.map(sound => (
-                <button key={sound.id} className={`sound-option ${preferences.notificationSound === sound.id ? 'active' : ''}`} onClick={() => { updatePreference('notificationSound', sound.id); playSoundPreview(SOUND_OPTIONS, sound.id); }}>
-                  <span className="sound-name">{sound.name}</span>
-                  {preferences.notificationSound === sound.id && <span className="sound-check">✓</span>}
-                </button>
-              ))}
-            </div>
-            <div className="sound-preview-note"><p>Tap to preview and select</p></div>
           </div>
         </div>
       )
@@ -1002,7 +976,7 @@ const handlePasswordChange = async (e) => {
     {
       title: 'Preferences',
       items: [
-        { icon: <IconBell size={20} />, label: 'Notifications', description: 'Sound & alerts', onClick: () => openModal('notifications'), badge: preferences.soundEnabled ? 'On' : 'Off' },
+        { icon: <IconBell size={20} />, label: 'Notifications', description: 'Sound & alerts', onClick: () => openModal('notifications') },
         { icon: <IconPalette size={20} />, label: 'Theme', description: preferences.theme === 'light' ? 'Light' : 'Dark', onClick: () => openModal('theme') }
       ]
     },

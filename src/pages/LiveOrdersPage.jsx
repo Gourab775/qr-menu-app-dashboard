@@ -26,7 +26,6 @@ function LiveOrdersPage({ restaurantId }) {
 
   const isMountedRef = useRef(true)
   const lastOrderIds = useRef(new Set())
-  const soundEnabledRef = useRef(preferences.soundEnabled)
   const isLoggedIn = !!session
 
   const showToast = useCallback((message, type = 'success') => {
@@ -41,8 +40,6 @@ function LiveOrdersPage({ restaurantId }) {
 
   useEffect(() => {
     if (!isLoggedIn || !restaurantId) return
-
-    soundEnabledRef.current = preferences.soundEnabled
 
     const soundReadyRef = { current: false }
     const audioCtxRef = { current: null }
@@ -91,7 +88,7 @@ function LiveOrdersPage({ restaurantId }) {
       const prevIds = lastOrderIds.current
       const currIds = new Set(pending.map(o => o.id))
       const hasNewOrder = pending.some(o => !prevIds.has(o.id))
-      if (hasNewOrder && soundEnabledRef.current && playFn) {
+      if (hasNewOrder && localStorage.getItem('order_sound_enabled') !== 'false' && playFn) {
         try { playFn() } catch {}
       }
       lastOrderIds.current = currIds
@@ -106,7 +103,7 @@ function LiveOrdersPage({ restaurantId }) {
       if (audioCtxRef.current) { try { audioCtxRef.current.close() } catch {} }
       cleanup()
     }
-  }, [isLoggedIn, restaurantId, preferences.soundEnabled])
+  }, [isLoggedIn, restaurantId])
 
   useEffect(() => {
     if (!isLoggedIn || !restaurantId) return
