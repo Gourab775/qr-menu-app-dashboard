@@ -51,7 +51,12 @@ export default function TablesPage({ restaurantId, restaurantSlug }) {
     try {
       const tablesPromise = supabase
         .from('restaurant_tables')
-        .select('*')
+        .select(`
+          id,
+          table_number,
+          name,
+          is_active
+        `)
         .eq('restaurant_id', restaurantId)
         .order('table_number', { ascending: true });
 
@@ -175,29 +180,37 @@ export default function TablesPage({ restaurantId, restaurantSlug }) {
     console.log("[Status Before]", currentTable?.is_active);
     console.log("[Status After]", editActive);
 
-    try {
-      const { error: err } = await supabase
-        .from('restaurant_tables')
-        .update({
-          table_number: typeof editValue === "string" ? editValue.trim() : editValue,
-          is_active: editActive,
-        })
-        .eq('id', editingId);
+    const payload = {
+      table_number: typeof editValue === "string" ? editValue.trim() : editValue,
+      is_active: editActive,
+    };
 
-      if (err) {
-        if (err.code === '23505') {
+    console.log("[Saving]", payload);
+
+    try {
+      const { data, error } = await supabase
+        .from('restaurant_tables')
+        .update(payload)
+        .eq('id', editingId)
+        .select();
+
+      if (error) {
+        console.error("[Table Update Error]", error);
+        if (error.code === '23505') {
           setError(`Table number ${editValue} already exists.`);
         } else {
-          throw err;
+          throw error;
         }
         return;
       }
+
+      setTables(prev => prev.map(t => t.id === editingId ? data[0] : t));
 
       setEditingId(null);
       setEditValue('');
       loadTables();
     } catch (err) {
-      console.error('Failed to edit table:', err);
+      console.error("[Table Update Error]", err);
       setError('Failed to update table.');
     }
   };

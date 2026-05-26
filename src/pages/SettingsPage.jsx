@@ -334,6 +334,12 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
 
   const updatePreference = async (key, value) => {
     const newPrefs = { ...preferences, [key]: value }
+    if (key === 'orderNotifications' && !value) {
+      newPrefs.order_sound_enabled = false
+      newPrefs.waiter_sound_enabled = false
+      localStorage.setItem('order_sound_enabled', false)
+      localStorage.setItem('waiter_sound_enabled', false)
+    }
     setPreferences(newPrefs)
     localStorage.setItem('dashboard_preferences', JSON.stringify(newPrefs))
     if (key === 'order_sound_enabled') {
@@ -701,14 +707,14 @@ const handlePasswordChange = async (e) => {
                 </div>
                 <button className={`toggle-switch ${preferences.orderNotifications ? 'active' : ''}`} onClick={() => updatePreference('orderNotifications', !preferences.orderNotifications)}><span className="toggle-knob" /></button>
               </div>
-              <div className="toggle-item">
+              <div className={`toggle-item${!preferences.orderNotifications ? ' opacity-50 pointer-events-none' : ''}`}>
                 <div className="toggle-info">
                   <span className="toggle-label">Order Notification Sound</span>
                   <span className="toggle-desc">Play sound when new order arrives</span>
                 </div>
                 <button className={`toggle-switch ${preferences.order_sound_enabled !== false ? 'active' : ''}`} onClick={() => updatePreference('order_sound_enabled', preferences.order_sound_enabled === false ? true : false)}><span className="toggle-knob" /></button>
               </div>
-              <div className="toggle-item">
+              <div className={`toggle-item${!preferences.orderNotifications ? ' opacity-50 pointer-events-none' : ''}`}>
                 <div className="toggle-info">
                   <span className="toggle-label">Waiter Call Sound</span>
                   <span className="toggle-desc">Play sound on new waiter calls</span>
@@ -716,7 +722,7 @@ const handlePasswordChange = async (e) => {
                 <button className={`toggle-switch ${preferences.waiter_sound_enabled !== false ? 'active' : ''}`} onClick={() => updatePreference('waiter_sound_enabled', preferences.waiter_sound_enabled === false ? true : false)}><span className="toggle-knob" /></button>
               </div>
             </div>
-            <div className="notification-sound-section">
+            <div className={`notification-sound-section${!preferences.orderNotifications ? ' opacity-50 pointer-events-none' : ''}`}>
               <label className="sound-section-label">Order Notification Sound</label>
               <div className="sound-control-row">
                 <select className="sound-select" value={preferences.order_notification_sound || 'classic-notification'} onChange={e => updatePreference('order_notification_sound', e.target.value)}>
@@ -725,7 +731,7 @@ const handlePasswordChange = async (e) => {
                 <button className="sound-preview-btn" onClick={() => playSoundPreview(ORDER_SOUNDS, preferences.order_notification_sound || 'classic-notification')}>Preview</button>
               </div>
             </div>
-            <div className="notification-sound-section">
+            <div className={`notification-sound-section${!preferences.orderNotifications ? ' opacity-50 pointer-events-none' : ''}`}>
               <label className="sound-section-label">Waiter Call Sound</label>
               <div className="sound-control-row">
                 <select className="sound-select" value={preferences.waiter_notification_sound || 'service-bell'} onChange={e => updatePreference('waiter_notification_sound', e.target.value)}>
