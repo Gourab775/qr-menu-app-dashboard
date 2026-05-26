@@ -110,7 +110,7 @@ export default function TablesPage({ restaurantId, restaurantSlug }) {
 
   const handleAddTable = async (e) => {
     e.preventDefault();
-    if (!newTableNum.trim()) return;
+    if (typeof newTableNum !== "string" || !newTableNum.trim()) return;
 
     setAdding(true);
     setError(null);
@@ -122,7 +122,8 @@ export default function TablesPage({ restaurantId, restaurantSlug }) {
       const payload = {
         id: newId,
         restaurant_id: restaurantId,
-        table_number: newTableNum.trim(),
+        table_number: typeof newTableNum === "string" ? newTableNum.trim() : newTableNum,
+        is_active: true,
         table_token: token
       };
 
@@ -167,12 +168,20 @@ export default function TablesPage({ restaurantId, restaurantSlug }) {
 
   const handleEditTable = async (e) => {
     e.preventDefault();
-    if (!editValue.trim() || !editingId) return;
+    if (typeof editValue !== "string" || !editValue.trim() || !editingId) return;
+
+    const currentTable = tables.find(t => t.id === editingId);
+    console.log("[Current Table]", currentTable);
+    console.log("[Status Before]", currentTable?.is_active);
+    console.log("[Status After]", editActive);
 
     try {
       const { error: err } = await supabase
         .from('restaurant_tables')
-        .update({ table_number: editValue.trim(), is_active: editActive })
+        .update({
+          table_number: typeof editValue === "string" ? editValue.trim() : editValue,
+          is_active: editActive,
+        })
         .eq('id', editingId);
 
       if (err) {
@@ -315,9 +324,12 @@ export default function TablesPage({ restaurantId, restaurantSlug }) {
   };
 
   const openEdit = (table) => {
+    console.log("[Current Table]", table);
+    console.log("[Status Before]", table.is_active);
+    console.log("[Status After]", !table.is_active);
     setEditingId(table.id);
     setEditValue(table.table_number);
-    setEditActive(table.is_active !== false);
+    setEditActive(table.is_active);
   };
 
   const closeEdit = () => {
@@ -435,8 +447,8 @@ export default function TablesPage({ restaurantId, restaurantSlug }) {
                     {table.name && <span className="table-name-text">{table.name}</span>}
                   </div>
                   <div className="table-card-badges">
-                    <span className={`table-badge ${table.is_active !== false ? 'active' : 'inactive'}`}>
-                      {table.is_active !== false ? 'Active' : 'Inactive'}
+                    <span className={`table-badge ${table.is_active ? 'active' : 'inactive'}`}>
+                      {table.is_active ? 'Active' : 'Inactive'}
                     </span>
                     <span className={`table-badge ${table.table_token ? 'qr-ready' : 'qr-missing'}`}>
                       {table.table_token ? 'QR Ready' : 'QR Missing'}
