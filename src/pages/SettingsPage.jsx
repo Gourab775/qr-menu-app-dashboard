@@ -19,6 +19,20 @@ const SOUND_OPTIONS = [
   { id: ' ascend', name: 'Ascending Tone', freq: [400, 600, 800], duration: 0.4 }
 ]
 
+const ORDER_SOUNDS = [
+  { id: 'classic-notification', name: 'Classic Notification', freq: [800, 1000], duration: 0.2 },
+  { id: 'restaurant-alert', name: 'Restaurant Alert', freq: [600, 900, 1200], duration: 0.4 },
+  { id: 'soft-chime', name: 'Soft Chime', freq: [523, 659, 784], duration: 0.5 },
+  { id: 'digital-alert', name: 'Digital Alert', freq: [1000, 1500, 2000], duration: 0.3 }
+]
+
+const WAITER_SOUNDS = [
+  { id: 'service-bell', name: 'Service Bell', freq: [800, 1200], duration: 0.5 },
+  { id: 'counter-bell', name: 'Counter Bell', freq: [1000, 1500], duration: 0.4 },
+  { id: 'reception-bell', name: 'Reception Bell', freq: [600, 900, 1200], duration: 0.6 },
+  { id: 'soft-bell', name: 'Soft Bell', freq: [700, 1000], duration: 0.4 }
+]
+
 const HELP_TOPICS = [
   { id: 'orders', icon: <IconPackage size={20} />, label: 'Order Issues', keywords: ['order', 'orders', 'not showing', 'missing'], answers: [
     'Check your internet connection and refresh the Live Orders page',
@@ -339,12 +353,12 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
                    key === 'orderNotifications' ? (value ? 'Notifications enabled' : 'Notifications disabled') : 'Settings saved')
   }
 
-  const playSoundPreview = (soundId) => {
+  const playSoundPreview = (soundOptions, soundId) => {
     try {
       const AudioContext = window.AudioContext || window.webkitAudioContext
       const ctx = new AudioContext()
       
-      const sound = SOUND_OPTIONS.find(s => s.id === soundId)
+      const sound = soundOptions.find(s => s.id === soundId)
       if (!sound) return
       
       let delay = 0
@@ -707,6 +721,24 @@ const handlePasswordChange = async (e) => {
                 <span className="sound-current">{SOUND_OPTIONS.find(s => s.id === preferences.notificationSound)?.name || 'Default Beep'}</span>
               </button>
             </div>
+            <div className="notification-sound-section">
+              <label className="sound-section-label">Order Notification Sound</label>
+              <div className="sound-control-row">
+                <select className="sound-select" value={preferences.order_notification_sound || 'classic-notification'} onChange={e => updatePreference('order_notification_sound', e.target.value)}>
+                  {ORDER_SOUNDS.map(s => (<option key={s.id} value={s.id}>{s.name}</option>))}
+                </select>
+                <button className="sound-preview-btn" onClick={() => playSoundPreview(ORDER_SOUNDS, preferences.order_notification_sound || 'classic-notification')}>Preview</button>
+              </div>
+            </div>
+            <div className="notification-sound-section">
+              <label className="sound-section-label">Waiter Call Sound</label>
+              <div className="sound-control-row">
+                <select className="sound-select" value={preferences.waiter_notification_sound || 'service-bell'} onChange={e => updatePreference('waiter_notification_sound', e.target.value)}>
+                  {WAITER_SOUNDS.map(s => (<option key={s.id} value={s.id}>{s.name}</option>))}
+                </select>
+                <button className="sound-preview-btn" onClick={() => playSoundPreview(WAITER_SOUNDS, preferences.waiter_notification_sound || 'service-bell')}>Preview</button>
+              </div>
+            </div>
           </div>
         </div>
       )
@@ -721,7 +753,7 @@ const handlePasswordChange = async (e) => {
             </div>
             <div className="sound-options">
               {SOUND_OPTIONS.map(sound => (
-                <button key={sound.id} className={`sound-option ${preferences.notificationSound === sound.id ? 'active' : ''}`} onClick={() => { updatePreference('notificationSound', sound.id); playSoundPreview(sound.id); }}>
+                <button key={sound.id} className={`sound-option ${preferences.notificationSound === sound.id ? 'active' : ''}`} onClick={() => { updatePreference('notificationSound', sound.id); playSoundPreview(SOUND_OPTIONS, sound.id); }}>
                   <span className="sound-name">{sound.name}</span>
                   {preferences.notificationSound === sound.id && <span className="sound-check">✓</span>}
                 </button>

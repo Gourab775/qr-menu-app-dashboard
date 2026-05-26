@@ -3168,6 +3168,54 @@ body {
 
 .sound-current { color: var(--text-muted); font-size: 13px; }
 
+.notification-sound-section {
+  padding: 12px 20px;
+  border-top: 1px solid var(--border);
+}
+
+.sound-section-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 8px;
+  color: var(--text);
+}
+
+.sound-control-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.sound-select {
+  flex: 1;
+  padding: 8px 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+  outline: none;
+}
+
+.sound-select:focus { border-color: var(--primary); }
+
+.sound-preview-btn {
+  padding: 8px 14px;
+  background: var(--primary);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: white;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.2s;
+}
+
+.sound-preview-btn:hover { background: var(--primary-hover); }
+
 .theme-options {
   display: flex;
   flex-direction: column;

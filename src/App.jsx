@@ -55,10 +55,12 @@ function App() {
         soundEnabled: true,
         orderNotifications: true,
         autoDeclineTimeout: 10,
-        theme: 'dark'
+        theme: 'dark',
+        order_notification_sound: 'classic-notification',
+        waiter_notification_sound: 'service-bell'
       }
     } catch {
-      return { soundEnabled: true, orderNotifications: true, autoDeclineTimeout: 10, theme: 'dark' }
+      return { soundEnabled: true, orderNotifications: true, autoDeclineTimeout: 10, theme: 'dark', order_notification_sound: 'classic-notification', waiter_notification_sound: 'service-bell' }
     }
   })
 
@@ -85,6 +87,11 @@ function App() {
   const logoutRef = useRef(false)
   const firstOrdersFetchDone = useRef(false)
   const ordersFetchFailedRef = useRef(false)
+
+  const waiterPlayFnRef = useRef(null)
+  const soundEnabledRef = useRef(preferences.soundEnabled)
+
+  useEffect(() => { soundEnabledRef.current = preferences.soundEnabled }, [preferences.soundEnabled])
 
   const userRole = role || 'staff'
   const userFullName = profile?.full_name || profile?.email || session?.user?.email || 'User'
@@ -373,26 +380,26 @@ function App() {
     const soundReadyRef = { current: false }
     const audioCtxRef = { current: null }
 
-    const SOUND_OPTIONS = [
-      { id: 'beep', name: 'Default Beep', freq: [800, 1000], duration: 0.3 },
-      { id: 'chime', name: 'Soft Chime', freq: [600, 800, 1000], duration: 0.5 },
-      { id: 'bell', name: 'Bell Ring', freq: [500, 700], duration: 0.6 },
-      { id: 'alert', name: 'Alert Tone', freq: [1000, 1200, 800], duration: 0.4 },
-      { id: 'digital', name: 'Digital Ping', freq: [1500, 2000], duration: 0.2 },
-      { id: 'pop', name: 'Notification Pop', freq: [400, 600], duration: 0.25 },
-      { id: 'ding', name: 'Classic Ding', freq: [700, 900], duration: 0.35 },
-      { id: 'subtle', name: 'Subtle Click', freq: [300], duration: 0.15 },
-      { id: 'triple', name: 'Triple Alert', freq: [800, 800, 800], duration: 0.45 },
-      { id: 'ascend', name: 'Ascending Tone', freq: [400, 600, 800], duration: 0.4 }
+    const ORDER_SOUNDS = [
+      { id: 'classic-notification', name: 'Classic Notification', freq: [800, 1000], duration: 0.2 },
+      { id: 'restaurant-alert', name: 'Restaurant Alert', freq: [600, 900, 1200], duration: 0.4 },
+      { id: 'soft-chime', name: 'Soft Chime', freq: [523, 659, 784], duration: 0.5 },
+      { id: 'digital-alert', name: 'Digital Alert', freq: [1000, 1500, 2000], duration: 0.3 }
     ]
 
-    const createSound = () => {
+    const WAITER_SOUNDS = [
+      { id: 'service-bell', name: 'Service Bell', freq: [800, 1200], duration: 0.5 },
+      { id: 'counter-bell', name: 'Counter Bell', freq: [1000, 1500], duration: 0.4 },
+      { id: 'reception-bell', name: 'Reception Bell', freq: [600, 900, 1200], duration: 0.6 },
+      { id: 'soft-bell', name: 'Soft Bell', freq: [700, 1000], duration: 0.4 }
+    ]
+
+    const createSound = (soundList, soundId) => {
       const AudioContext = window.AudioContext || window.webkitAudioContext
       if (!AudioContext) return null
       try {
         const ctx = new AudioContext()
-        audioCtxRef.current = ctx
-        const selSound = SOUND_OPTIONS.find(s => s.id === preferences.notificationSound) || SOUND_OPTIONS[0]
+        const selSound = soundList.find(s => s.id === soundId) || soundList[0]
         return () => {
           if (ctx.state === 'suspended') ctx.resume()
           let delay = 0
@@ -413,10 +420,13 @@ function App() {
       } catch { return null }
     }
 
-    let playFn = null
+    let orderPlayFn = null
+    let waiterPlayFn = null
     const initAudio = () => {
       if (soundReadyRef.current) return
-      playFn = createSound()
+      orderPlayFn = createSound(ORDER_SOUNDS, preferences.order_notification_sound)
+      waiterPlayFn = createSound(WAITER_SOUNDS, preferences.waiter_notification_sound)
+      waiterPlayFnRef.current = waiterPlayFn
       soundReadyRef.current = true
     }
 
@@ -424,9 +434,9 @@ function App() {
     document.addEventListener('click', handleGesture)
     document.addEventListener('keydown', handleGesture)
 
-    const playSound = () => {
-      if (!preferences.soundEnabled || !playFn) return
-      try { playFn() } catch { }
+    const playOrderSound = () => {
+      if (!preferences.soundEnabled || !orderPlayFn) return
+      try { orderPlayFn() } catch { }
     }
 
     const subscriptionActiveRef = { current: false }
@@ -474,7 +484,7 @@ function App() {
             if (newStatus === 'pending') {
               setOrders(prev => {
                 if (prev.some(o => o.id === newOrderId)) return prev.map(o => o.id === newOrderId ? { ...o, ...resolved } : o)
-                if (preferences.soundEnabled) playSound()
+                if (preferences.soundEnabled) playOrderSound()
                 return [resolved, ...prev].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
               })
               if (activeTabRef.current !== 'live-orders') {
@@ -566,7 +576,7 @@ function App() {
       subscriptionActiveRef.current = false
       supabase.removeChannel(channel)
     }
-  }, [isLoggedIn, restaurantId, preferences.soundEnabled, preferences.orderNotifications, preferences.notificationSound])
+  }, [isLoggedIn, restaurantId, preferences.soundEnabled, preferences.orderNotifications, preferences.notificationSound, preferences.order_notification_sound, preferences.waiter_notification_sound])
 
   useEffect(() => {
     orderStore.publish(orders, pastOrders)
@@ -611,6 +621,9 @@ function App() {
               })
             if (activeTabRef.current !== 'waiter-call') {
               setHasNewWaiterCall(true)
+            }
+            if (soundEnabledRef.current && waiterPlayFnRef.current) {
+              try { waiterPlayFnRef.current() } catch {}
             }
           }
           if (payload.eventType === 'UPDATE') {

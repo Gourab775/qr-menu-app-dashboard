@@ -5,10 +5,18 @@ import { formatOrderDateTime } from './utils/formatDateTime'
 import * as orderStore from './services/orderStore'
 import './PopupApp.css'
 
-const SOUND_OPTIONS = [
-  { id: 'beep', name: 'Default Beep', freq: [800, 1000], duration: 0.3 },
-  { id: 'chime', name: 'Soft Chime', freq: [600, 800, 1000], duration: 0.5 },
-  { id: 'digital', name: 'Digital Ping', freq: [1500, 2000], duration: 0.2 },
+const ORDER_SOUNDS = [
+  { id: 'classic-notification', name: 'Classic Notification', freq: [800, 1000], duration: 0.2 },
+  { id: 'restaurant-alert', name: 'Restaurant Alert', freq: [600, 900, 1200], duration: 0.4 },
+  { id: 'soft-chime', name: 'Soft Chime', freq: [523, 659, 784], duration: 0.5 },
+  { id: 'digital-alert', name: 'Digital Alert', freq: [1000, 1500, 2000], duration: 0.3 }
+]
+
+const WAITER_SOUNDS = [
+  { id: 'service-bell', name: 'Service Bell', freq: [800, 1200], duration: 0.5 },
+  { id: 'counter-bell', name: 'Counter Bell', freq: [1000, 1500], duration: 0.4 },
+  { id: 'reception-bell', name: 'Reception Bell', freq: [600, 900, 1200], duration: 0.6 },
+  { id: 'soft-bell', name: 'Soft Bell', freq: [700, 1000], duration: 0.4 }
 ]
 
 function PopupApp() {
@@ -25,9 +33,9 @@ function PopupApp() {
   const [preferences, setPreferences] = useState(() => {
     try {
       const saved = localStorage.getItem('popup_preferences')
-      return saved ? JSON.parse(saved) : { soundEnabled: true, orderNotifications: true, notificationSound: 'beep' }
+      return saved ? JSON.parse(saved) : { soundEnabled: true, orderNotifications: true, notificationSound: 'beep', order_notification_sound: 'classic-notification', waiter_notification_sound: 'service-bell' }
     } catch {
-      return { soundEnabled: true, orderNotifications: true, notificationSound: 'beep' }
+      return { soundEnabled: true, orderNotifications: true, notificationSound: 'beep', order_notification_sound: 'classic-notification', waiter_notification_sound: 'service-bell' }
     }
   })
 
@@ -35,6 +43,7 @@ function PopupApp() {
   const isMountedRef = useRef(true)
   const lastOrderIds = useRef(new Set())
   const soundEnabledRef = useRef(preferences.soundEnabled)
+  const waiterPlayFnRef = useRef(null)
 
   const isLoggedIn = !!session
   const userFullName = profile?.full_name || profile?.email || session?.user?.email || 'User'
@@ -75,29 +84,30 @@ function PopupApp() {
 
     const soundReadyRef = { current: false }
     const audioCtxRef = { current: null }
-    let playFn = null
+    let orderPlayFn = null
+    let waiterPlayFn = null
 
-    const createSound = () => {
+    const createSound = (soundList, soundId) => {
       const AudioContext = window.AudioContext || window.webkitAudioContext
       if (!AudioContext) return null
       try {
         const ctx = new AudioContext()
-        audioCtxRef.current = ctx
+        const selSound = soundList.find(s => s.id === soundId) || soundList[0]
         return () => {
           if (ctx.state === 'suspended') ctx.resume()
           let delay = 0
-          SOUND_OPTIONS[0].freq.forEach((freq, i) => {
+          selSound.freq.forEach((freq, i) => {
             setTimeout(() => {
               const osc = ctx.createOscillator()
               const gain = ctx.createGain()
               osc.connect(gain); gain.connect(ctx.destination)
               osc.frequency.value = freq; osc.type = 'sine'
-              const td = SOUND_OPTIONS[0].duration / SOUND_OPTIONS[0].freq.length
+              const td = selSound.duration / selSound.freq.length
               gain.gain.setValueAtTime(0.25, ctx.currentTime)
               gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + td)
               osc.start(ctx.currentTime); osc.stop(ctx.currentTime + td)
             }, delay)
-            delay += (SOUND_OPTIONS[0].duration * 1000) / SOUND_OPTIONS[0].freq.length
+            delay += (selSound.duration * 1000) / selSound.freq.length
           })
         }
       } catch { return null }
@@ -105,7 +115,9 @@ function PopupApp() {
 
     const initAudio = () => {
       if (soundReadyRef.current) return
-      playFn = createSound()
+      orderPlayFn = createSound(ORDER_SOUNDS, preferences.order_notification_sound)
+      waiterPlayFn = createSound(WAITER_SOUNDS, preferences.waiter_notification_sound)
+      waiterPlayFnRef.current = waiterPlayFn
       soundReadyRef.current = true
     }
     const handleGesture = () => { initAudio(); document.removeEventListener('click', handleGesture); document.removeEventListener('keydown', handleGesture) }
@@ -119,8 +131,8 @@ function PopupApp() {
       const prevIds = lastOrderIds.current
       const currIds = new Set(pending.map(o => o.id))
       const hasNewOrder = pending.some(o => !prevIds.has(o.id))
-      if (hasNewOrder && soundEnabledRef.current && playFn) {
-        try { playFn() } catch {}
+      if (hasNewOrder && soundEnabledRef.current && orderPlayFn) {
+        try { orderPlayFn() } catch {}
       }
       lastOrderIds.current = currIds
 
@@ -134,7 +146,7 @@ function PopupApp() {
       if (audioCtxRef.current) { try { audioCtxRef.current.close() } catch {} }
       cleanup()
     }
-  }, [isLoggedIn, restaurantId, preferences.soundEnabled])
+  }, [isLoggedIn, restaurantId, preferences.soundEnabled, preferences.order_notification_sound, preferences.waiter_notification_sound])
 
   // WAITER CALLS — fetch + realtime only, no polling
   useEffect(() => {
@@ -173,6 +185,9 @@ function PopupApp() {
                   restaurant_tables: table || null
                 }, ...prev])
               })
+            if (soundEnabledRef.current && waiterPlayFnRef.current) {
+              try { waiterPlayFnRef.current() } catch {}
+            }
           }
           if (payload.eventType === 'UPDATE') {
             setWaiterCalls(prev => prev.filter(x => x.id !== payload.new.id))
