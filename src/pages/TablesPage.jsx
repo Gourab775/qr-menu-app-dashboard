@@ -53,7 +53,9 @@ export default function TablesPage({ restaurantId, restaurantSlug }) {
         .from('restaurant_tables')
         .select(`
           id,
+          restaurant_id,
           table_number,
+          table_token,
           name,
           is_active
         `)
@@ -175,44 +177,40 @@ export default function TablesPage({ restaurantId, restaurantSlug }) {
     e.preventDefault();
     if (typeof editValue !== "string" || !editValue.trim() || !editingId) return;
 
-    const currentTable = tables.find(t => t.id === editingId);
-    console.log("[Current Table]", currentTable);
-    console.log("[Status Before]", currentTable?.is_active);
-    console.log("[Status After]", editActive);
+    const table = tables.find(t => t.id === editingId);
+    console.log("[Status Before]", table?.is_active);
+    console.log("[Status After]", !table?.is_active);
 
     const payload = {
-      table_number: typeof editValue === "string" ? editValue.trim() : editValue,
-      is_active: editActive,
+      is_active: !table.is_active
     };
 
-    console.log("[Saving]", payload);
+    console.log("[Saving Payload]", payload);
 
-    try {
-      const { data, error } = await supabase
-        .from('restaurant_tables')
-        .update(payload)
-        .eq('id', editingId)
-        .select();
+    const { data, error } = await supabase
+      .from("restaurant_tables")
+      .update(payload)
+      .eq("id", table.id)
+      .select();
 
-      if (error) {
-        console.error("[Table Update Error]", error);
-        if (error.code === '23505') {
-          setError(`Table number ${editValue} already exists.`);
-        } else {
-          throw error;
-        }
-        return;
-      }
-
-      setTables(prev => prev.map(t => t.id === editingId ? data[0] : t));
-
-      setEditingId(null);
-      setEditValue('');
-      loadTables();
-    } catch (err) {
-      console.error("[Table Update Error]", err);
+    if (error) {
+      console.error("[SAVE ERROR]", error);
       setError('Failed to update table.');
+      return;
     }
+
+    console.log("[SAVE RESPONSE]", data);
+
+    setTables(prev =>
+      prev.map(t =>
+        t.id === table.id
+          ? { ...t, is_active: payload.is_active }
+          : t
+      )
+    );
+
+    setEditingId(null);
+    setEditValue('');
   };
 
   const getQRImageUrl = (table, prefs) => {
