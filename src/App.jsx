@@ -6,7 +6,6 @@ import MenuItemCard from './components/MenuItemCard'
 import AddItemModal from './components/AddItemModal'
 import Toast from './components/Toast'
 import Login from './components/Login'
-import ResetPassword from './components/ResetPassword'
 import OfflineBanner from './components/OfflineBanner'
 import FeaturedItemsPanel from './components/FeaturedItemsPanel'
 import CategoriesPage from './pages/CategoriesPage'
@@ -25,7 +24,6 @@ const API_TIMEOUT = 15000
 
 function App() {
   const { session, profile, loading: authLoading, initialized, signOut, role, restaurantId } = useAuth()
-  const [resetMode, setResetMode] = useState(() => window.location.hash === '#reset-password')
   const [restaurantSlug, setRestaurantSlug] = useState('')
   const [restaurantName, setRestaurantName] = useState('')
   const [orders, setOrders] = useState([])
@@ -737,10 +735,6 @@ function App() {
     const matchCategory = categoryFilter === 'all' || item.category_id === categoryFilter
     return matchSearch && matchFilter && matchCategory
   })
-
-  if (resetMode) {
-    return <ResetPassword onDone={() => { setResetMode(false); window.location.hash = '' }} />
-  }
 
   if (!isLoggedIn) return <Login />
 

@@ -42,7 +42,7 @@ const HELP_TOPICS = [
     'Check if browser notifications are allowed',
     'Try selecting a different order or waiter sound'
   ]},
-  { id: 'login', icon: <IconLock size={20} />, label: 'Login Problems', keywords: ['login', 'password', 'forgot', 'access'], answers: [
+  { id: 'login', icon: <IconLock size={20} />, label: 'Login Problems', keywords: ['login', 'password', 'access'], answers: [
     'Default password is: 1234',
     'Clear browser cache and try logging in again',
     'Contact support if you cannot access your account'
@@ -116,7 +116,7 @@ const HELP_RESPONSES = {
     description: 'Access and authentication issues',
     answers: [
       { q: 'What is the default password?', a: 'The default password is: 1234' },
-      { q: 'Forgot password, what to do?', a: 'Contact support for password reset assistance.' },
+
       { q: 'Session expired repeatedly?', a: 'Clear browser cache and ensure cookies are enabled.' },
       { q: 'Can I change my password?', a: 'Yes, go to Settings > Change Password to update your password.' }
     ]

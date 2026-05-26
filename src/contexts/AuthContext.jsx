@@ -231,13 +231,6 @@ export function AuthProvider({ children }) {
     }
   }, [])
 
-  const resetPassword = useCallback(async (email) => {
-    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: window.location.origin + '/reset-password'
-    })
-    if (error) throw error
-  }, [])
-
   const refreshProfile = useCallback(async () => {
     const userId = session?.user?.id
     if (!userId) return null
@@ -257,7 +250,6 @@ export function AuthProvider({ children }) {
     isAuthenticated: !!session,
     signIn,
     signOut,
-    resetPassword,
     refreshProfile,
   }
 

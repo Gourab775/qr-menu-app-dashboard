@@ -2460,18 +2460,6 @@ body {
 
 .login-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-.forgot-link {
-  background: none;
-  border: none;
-  color: var(--blue);
-  font-size: 14px;
-  cursor: pointer;
-  margin-top: 16px;
-  text-decoration: underline;
-}
-
-.forgot-link:hover { color: var(--primary-hover); }
-
 .login-hint {
   margin-top: 20px;
   font-size: 12px;
