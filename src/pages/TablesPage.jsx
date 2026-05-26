@@ -179,36 +179,36 @@ export default function TablesPage({ restaurantId, restaurantSlug }) {
 
   const handleEditTable = async (e) => {
     e.preventDefault();
-    if (typeof editValue !== "string" || !editValue.trim() || !editingId) return;
+    if (!editingId) return;
 
     const table = tables.find(t => t.id === editingId);
-    console.log("[Status Before]", table?.is_active);
-    console.log("[Status After]", !table?.is_active);
+    if (!table) return;
 
-    const payload = {
-      is_active: !table.is_active
-    };
+    const newStatus = !table.is_active;
 
-    console.log("[Saving Payload]", payload);
+    console.log("[Saving Status]", newStatus);
 
-    const { data, error } = await supabase
-      .from("restaurant_tables")
-      .update(payload)
-      .eq("id", table.id)
-      .select();
+    const { data, error } =
+      await supabase
+        .from("restaurant_tables")
+        .update({
+           is_active: newStatus
+        })
+        .eq("id", table.id)
+        .select();
+
+    console.log("[SAVE DATA]", data);
+    console.log("[SAVE ERROR]", error);
 
     if (error) {
-      console.error("[SAVE ERROR]", error);
       setError('Failed to update table.');
       return;
     }
 
-    console.log("[SAVE RESPONSE]", data);
-
     setTables(prev =>
       prev.map(t =>
         t.id === table.id
-          ? { ...t, is_active: payload.is_active }
+          ? { ...t, is_active: newStatus }
           : t
       )
     );
