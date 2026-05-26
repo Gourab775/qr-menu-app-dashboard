@@ -32,6 +32,7 @@ function App() {
   const [pastOrders, setPastOrders] = useState([])
   const [waiterCalls, setWaiterCalls] = useState([])
   const [waiterCallsLoading, setWaiterCallsLoading] = useState(false)
+  const [hasNewWaiterCall, setHasNewWaiterCall] = useState(false)
   const [menuItems, setMenuItems] = useState([])
   const [categories, setCategories] = useState([])
   const [loading, setLoading] = useState(false)
@@ -73,6 +74,7 @@ function App() {
   useEffect(() => {
     activeTabRef.current = activeTab
     if (activeTab === 'live-orders') setHasUnseenOrders(false)
+    if (activeTab === 'waiter-call') setHasNewWaiterCall(false)
   }, [activeTab])
 
   const profileRef = useRef(null)
@@ -607,6 +609,9 @@ function App() {
                   restaurant_tables: table || null
                 }, ...prev])
               })
+            if (activeTabRef.current !== 'waiter-call') {
+              setHasNewWaiterCall(true)
+            }
           }
           if (payload.eventType === 'UPDATE') {
             setWaiterCalls(prev => prev.filter(x => x.id !== payload.new.id))
@@ -918,10 +923,11 @@ function App() {
           {waiterCalls.length > 0 && (
             <button
               className="header-waiter-bell"
-              onClick={() => setActiveTab('waiter-call')}
+              onClick={() => { setHasNewWaiterCall(false); setActiveTab('waiter-call') }}
               title={`${waiterCalls.length} waiter request${waiterCalls.length !== 1 ? 's' : ''}`}
             >
               <span className="bell-icon"><IconBellRing size={20} /></span>
+              {hasNewWaiterCall && <span className="bell-red-dot" />}
               <span className="bell-badge">{waiterCalls.length}</span>
             </button>
           )}

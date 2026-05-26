@@ -2334,6 +2334,12 @@ body {
     height: 16px;
     font-size: 9px;
   }
+  .bell-red-dot {
+    width: 8px;
+    height: 8px;
+    top: -1px;
+    right: -1px;
+  }
   .orders-grid {
     gap: 10px;
   }
@@ -3513,6 +3519,24 @@ body {
   font-weight: 700;
   border-radius: 9px;
   padding: 0 5px;
+}
+
+.bell-red-dot {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 10px;
+  height: 10px;
+  background: #ef4444;
+  border: 2px solid var(--card);
+  border-radius: 50%;
+  z-index: 2;
+  animation: bell-dot-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes bell-dot-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
 }
 
 /* Featured Items Panel */
