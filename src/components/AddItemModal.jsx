@@ -12,6 +12,8 @@ export default function AddItemModal({ onSave, onClose, categories = [] }) {
   })
   const [saving, setSaving] = useState(false)
   const [nameError, setNameError] = useState('')
+  const [descError, setDescError] = useState('')
+  const [priceError, setPriceError] = useState('')
 
   const handleChange = (field, value) => {
     if (field === 'name') {
@@ -27,6 +29,32 @@ export default function AddItemModal({ onSave, onClose, categories = [] }) {
       setFormData(prev => ({ ...prev, name: truncated }))
       return
     }
+    if (field === 'description') {
+      const filtered = value.replace(/[^a-zA-Z0-9]/g, '')
+      const truncated = filtered.slice(0, 35)
+      let error = ''
+      if (filtered !== value) {
+        error = 'Only letters and numbers allowed'
+      } else if (truncated.length >= 35) {
+        error = 'Maximum 35 characters'
+      }
+      setDescError(error)
+      setFormData(prev => ({ ...prev, description: truncated }))
+      return
+    }
+    if (field === 'price') {
+      const filtered = value.replace(/\D/g, '')
+      const truncated = filtered.slice(0, 4)
+      let error = ''
+      if (value !== '' && filtered !== value) {
+        error = 'Only digits allowed'
+      } else if (truncated.length >= 4) {
+        error = 'Maximum 4 digits'
+      }
+      setPriceError(error)
+      setFormData(prev => ({ ...prev, price: truncated }))
+      return
+    }
     setFormData(prev => ({ ...prev, [field]: value }))
   }
 
@@ -37,6 +65,14 @@ export default function AddItemModal({ onSave, onClose, categories = [] }) {
     }
     if (!/^[a-zA-Z0-9]{1,15}$/.test(formData.name)) {
       setNameError('Name must be 1-15 alphanumeric characters')
+      return
+    }
+    if (formData.description && !/^[a-zA-Z0-9]{1,35}$/.test(formData.description)) {
+      setDescError('Description must be 1-35 alphanumeric characters')
+      return
+    }
+    if (!/^\d{1,4}$/.test(formData.price)) {
+      setPriceError('Price must be 1-4 digits')
       return
     }
     setSaving(true)
@@ -77,6 +113,7 @@ export default function AddItemModal({ onSave, onClose, categories = [] }) {
               placeholder="Brief description..."
               rows="2"
             />
+            {descError && <span className="form-error">{descError}</span>}
           </div>
 
           <div className="form-group">
@@ -114,6 +151,7 @@ export default function AddItemModal({ onSave, onClose, categories = [] }) {
                 placeholder="0"
                 min="0"
               />
+              {priceError && <span className="form-error">{priceError}</span>}
             </div>
             
             <div className="form-group">
@@ -143,7 +181,7 @@ export default function AddItemModal({ onSave, onClose, categories = [] }) {
             <button type="button" className="cancel-btn" onClick={onClose}>
               Cancel
             </button>
-            <button type="submit" className="save-btn" disabled={saving || !formData.name || !formData.price || !!nameError}>
+            <button type="submit" className="save-btn" disabled={saving || !formData.name || !formData.price || !!nameError || !!descError || !!priceError}>
               {saving ? 'Adding...' : 'Add Item'}
             </button>
           </div>

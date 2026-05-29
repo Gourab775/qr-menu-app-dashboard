@@ -955,6 +955,14 @@ function App() {
       showToast('Item name must be 1-15 alphanumeric characters', 'error')
       return
     }
+    if (itemData.description && !/^[a-zA-Z0-9]{1,35}$/.test(itemData.description)) {
+      showToast('Description must be 1-35 alphanumeric characters', 'error')
+      return
+    }
+    if (!/^\d{1,4}$/.test(String(itemData.price))) {
+      showToast('Price must be 1-4 digits', 'error')
+      return
+    }
     try {
       const { data, error } = await supabase
         .from('menu_items')

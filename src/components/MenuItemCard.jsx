@@ -28,6 +28,7 @@ export default function MenuItemCard({ item, onSave, onDelete, categories = [] }
   })
   const [saving, setSaving] = useState(false)
   const [nameError, setNameError] = useState('')
+  const [priceError, setPriceError] = useState('')
   const [imageError, setImageError] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -68,6 +69,7 @@ export default function MenuItemCard({ item, onSave, onDelete, categories = [] }
       category_id: item.category_id || ''
     })
     setNameError('')
+    setPriceError('')
     setEditing(false)
   }
 
@@ -169,7 +171,21 @@ export default function MenuItemCard({ item, onSave, onDelete, categories = [] }
         </div>
         <div className="mief-row">
           <label>Price (₹)</label>
-          <input type="number" value={formData.price} onChange={e => setFormData(p => ({ ...p, price: Number(e.target.value) }))} min="0" />
+          <input type="number" value={formData.price} onChange={e => {
+            const raw = e.target.value
+            const strVal = String(raw)
+            const digits = strVal.replace(/\D/g, '')
+            const truncated = digits.slice(0, 4)
+            let error = ''
+            if (strVal !== '' && digits !== strVal) {
+              error = 'Only digits allowed'
+            } else if (truncated.length >= 4) {
+              error = 'Maximum 4 digits'
+            }
+            setPriceError(error)
+            setFormData(p => ({ ...p, price: truncated === '' ? '' : Number(truncated) }))
+          }} min="0" />
+          {priceError && <span className="form-error">{priceError}</span>}
         </div>
         <div className="mief-row">
           <label>Type</label>
@@ -186,7 +202,7 @@ export default function MenuItemCard({ item, onSave, onDelete, categories = [] }
         </div>
         <div className="mief-actions">
           <button className="mief-cancel" onClick={handleCancel}>Cancel</button>
-          <button className="mief-save" onClick={handleSave} disabled={saving || !formData.name || !!nameError}>
+          <button className="mief-save" onClick={handleSave} disabled={saving || !formData.name || !!nameError || !!priceError}>
             {saving ? 'Saving...' : 'Save'}
           </button>
         </div>
