@@ -12,6 +12,7 @@ export default function CategoriesPage({ restaurantId }) {
   const [error, setError] = useState(null)
   const [showAddModal, setShowAddModal] = useState(false)
   const [newCategoryName, setNewCategoryName] = useState('')
+  const [newMainCategoryId, setNewMainCategoryId] = useState('')
   const [itemCounts, setItemCounts] = useState({})
   const [showToast, setShowToast] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
@@ -21,7 +22,9 @@ export default function CategoriesPage({ restaurantId }) {
   const [editName, setEditName] = useState('')
   const [editImage, setEditImage] = useState('')
   const [editSortOrder, setEditSortOrder] = useState(0)
+  const [editMainCategoryId, setEditMainCategoryId] = useState('')
   const [savingEdit, setSavingEdit] = useState(false)
+  const [mainCategories, setMainCategories] = useState([])
 
   const mountedRef = useRef(false)
   const abortControllerRef = useRef(null)
@@ -60,6 +63,15 @@ export default function CategoriesPage({ restaurantId }) {
       if (!signal?.aborted) {
         setItemCounts(counts)
       }
+      const mcPromise = supabase
+        .from('main_categories')
+        .select('id, name, sort_order')
+        .eq('restaurant_id', currentRestId)
+        .order('sort_order', { ascending: true })
+      const { data: mcData } = await fetchWithTimeout(mcPromise, API_TIMEOUT)
+      if (!signal?.aborted && mcData) {
+        setMainCategories(mcData)
+      }
     } catch (err) {
       console.error('Failed to load categories:', err)
       if (!signal?.aborted) {
@@ -94,10 +106,12 @@ export default function CategoriesPage({ restaurantId }) {
         .insert({
           name: newCategoryName.trim(),
           restaurant_id: RESTAURANT_ID,
-          sort_order: maxSortOrder + 1
+          sort_order: maxSortOrder + 1,
+          main_category_id: newMainCategoryId || null
         })
       if (error) throw error
       setNewCategoryName('')
+      setNewMainCategoryId('')
       setShowAddModal(false)
       showToastMsg('Category added')
       loadCategories()
@@ -138,6 +152,7 @@ export default function CategoriesPage({ restaurantId }) {
     setEditName(category.name)
     setEditImage(category.image || '')
     setEditSortOrder(category.sort_order || 0)
+    setEditMainCategoryId(category.main_category_id || '')
   }
 
   const handleCancelEdit = () => {
@@ -145,6 +160,7 @@ export default function CategoriesPage({ restaurantId }) {
     setEditName('')
     setEditImage('')
     setEditSortOrder(0)
+    setEditMainCategoryId('')
   }
 
   const handleSaveEdit = async () => {
@@ -156,7 +172,8 @@ export default function CategoriesPage({ restaurantId }) {
         .update({
           name: editName.trim(),
           image: editImage || null,
-          sort_order: Number(editSortOrder) || 0
+          sort_order: Number(editSortOrder) || 0,
+          main_category_id: editMainCategoryId || null
         })
         .eq('id', editingCategory.id)
       if (error) throw error
@@ -241,6 +258,7 @@ export default function CategoriesPage({ restaurantId }) {
               key={cat.id}
               category={cat}
               itemCount={itemCounts[cat.id] || 0}
+              mainCategories={mainCategories}
               onEditClick={() => handleEditClick(cat)}
               onDeleteClick={() => handleDeleteClick(cat)}
             />
@@ -267,6 +285,20 @@ export default function CategoriesPage({ restaurantId }) {
                   onKeyDown={(e) => e.key === 'Enter' && handleAddCategory()}
                 />
               </div>
+              {mainCategories.length > 0 && (
+                <div className="form-group">
+                  <label>Main Category</label>
+                  <select
+                    value={newMainCategoryId}
+                    onChange={(e) => setNewMainCategoryId(e.target.value)}
+                  >
+                    <option value="">None</option>
+                    {mainCategories.map(mc => (
+                      <option key={mc.id} value={mc.id}>{mc.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div className="modal-actions">
                 <button className="cancel-btn" onClick={() => setShowAddModal(false)}>
                   Cancel
@@ -299,6 +331,20 @@ export default function CategoriesPage({ restaurantId }) {
                   onKeyDown={(e) => e.key === 'Enter' && handleSaveEdit()}
                 />
               </div>
+              {mainCategories.length > 0 && (
+                <div className="form-group">
+                  <label>Main Category</label>
+                  <select
+                    value={editMainCategoryId}
+                    onChange={(e) => setEditMainCategoryId(e.target.value)}
+                  >
+                    <option value="">None</option>
+                    {mainCategories.map(mc => (
+                      <option key={mc.id} value={mc.id}>{mc.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div className="form-group">
                 <label>Image URL (optional)</label>
                 <input
@@ -347,8 +393,9 @@ export default function CategoriesPage({ restaurantId }) {
   )
 }
 
-function CategoryCard({ category, itemCount, onEditClick, onDeleteClick }) {
+function CategoryCard({ category, itemCount, mainCategories = [], onEditClick, onDeleteClick }) {
   const [imageError, setImageError] = useState(false)
+  const mainCat = mainCategories.find(mc => mc.id === category.main_category_id)
 
   const getInitials = (name) => {
     return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
@@ -373,6 +420,9 @@ function CategoryCard({ category, itemCount, onEditClick, onDeleteClick }) {
       <div className="category-info">
         <span className="category-name">{category.name}</span>
         <span className="category-meta">{itemCount} items</span>
+        {mainCat && (
+          <span className="category-main-cat">{mainCat.name}</span>
+        )}
         {category.status && (
           <span className={`category-status ${category.status}`}>{category.status}</span>
         )}

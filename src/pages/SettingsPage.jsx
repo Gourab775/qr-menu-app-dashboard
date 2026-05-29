@@ -237,6 +237,13 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
     confirm: false
   })
 
+  const [mainCategories, setMainCategories] = useState([])
+  const [mainCatLoading, setMainCatLoading] = useState(false)
+  const [newMainCatName, setNewMainCatName] = useState('')
+  const [editingMainCatId, setEditingMainCatId] = useState(null)
+  const [editMainCatName, setEditMainCatName] = useState('')
+  const [deleteMainCatTarget, setDeleteMainCatTarget] = useState(null)
+
   const mountedRef = useRef(false)
   const abortControllerRef = useRef(null)
 
@@ -332,6 +339,78 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
     }
   }
 
+  const loadMainCategories = async () => {
+    setMainCatLoading(true)
+    try {
+      const { data } = await supabase
+        .from('main_categories')
+        .select('*')
+        .eq('restaurant_id', currentRestId)
+        .order('sort_order', { ascending: true })
+      if (data) setMainCategories(data)
+    } catch (err) {
+      console.error('Failed to load main categories:', err)
+    } finally {
+      setMainCatLoading(false)
+    }
+  }
+
+  const handleAddMainCategory = async () => {
+    if (!newMainCatName.trim()) return
+    const maxOrder = mainCategories.reduce((max, c) => Math.max(max, c.sort_order || 0), 0)
+    try {
+      const { error } = await supabase
+        .from('main_categories')
+        .insert({
+          name: newMainCatName.trim(),
+          restaurant_id: currentRestId,
+          sort_order: maxOrder + 1
+        })
+      if (error) throw error
+      setNewMainCatName('')
+      showToast('Main category added')
+      loadMainCategories()
+    } catch (err) {
+      showToast('Failed to add main category', 'error')
+    }
+  }
+
+  const handleSaveMainCategoryEdit = async (id) => {
+    if (!editMainCatName.trim()) return
+    try {
+      const { error } = await supabase
+        .from('main_categories')
+        .update({ name: editMainCatName.trim() })
+        .eq('id', id)
+      if (error) throw error
+      setEditingMainCatId(null)
+      setEditMainCatName('')
+      showToast('Main category updated')
+      loadMainCategories()
+    } catch (err) {
+      showToast('Failed to update main category', 'error')
+    }
+  }
+
+  const handleDeleteMainCategory = async (id) => {
+    try {
+      await supabase
+        .from('categories')
+        .update({ main_category_id: null })
+        .eq('main_category_id', id)
+      const { error } = await supabase
+        .from('main_categories')
+        .delete()
+        .eq('id', id)
+      if (error) throw error
+      setDeleteMainCatTarget(null)
+      showToast('Main category deleted')
+      loadMainCategories()
+    } catch (err) {
+      showToast('Failed to delete main category', 'error')
+    }
+  }
+
   const updatePreference = async (key, value) => {
     const newPrefs = { ...preferences, [key]: value }
     if (key === 'orderNotifications' && !value) {
@@ -417,6 +496,8 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
         confirmPassword: ''
       })
       setPasswordErrors({})
+    } else if (modalName === 'maincategories') {
+      loadMainCategories()
     }
   }
 
@@ -425,6 +506,10 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
     setFormData({})
     setHelpTopic(null)
     setPasswordErrors({})
+    setEditingMainCatId(null)
+    setEditMainCatName('')
+    setNewMainCatName('')
+    setDeleteMainCatTarget(null)
   }
 
 const handlePasswordChange = async (e) => {
@@ -954,6 +1039,80 @@ const handlePasswordChange = async (e) => {
         </div>
       )
     }
+    if (showModal === 'maincategories') {
+      return (
+        <div className="modal-overlay" onClick={closeModal}>
+          <div className="settings-modal mc-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Main Categories</h3>
+              <button className="modal-close" onClick={closeModal}>×</button>
+            </div>
+            <div className="mc-content">
+              <div className="mc-add-row">
+                <input
+                  type="text"
+                  value={newMainCatName}
+                  onChange={e => setNewMainCatName(e.target.value)}
+                  placeholder="New main category name..."
+                  onKeyDown={e => e.key === 'Enter' && handleAddMainCategory()}
+                />
+                <button className="save-btn" onClick={handleAddMainCategory} disabled={!newMainCatName.trim()}>
+                  + Add
+                </button>
+              </div>
+              {mainCatLoading ? (
+                <div className="mc-loading"><div className="loading-spinner"></div><p>Loading...</p></div>
+              ) : mainCategories.length === 0 ? (
+                <div className="mc-empty"><p>No main categories yet. Create one above.</p></div>
+              ) : (
+                <div className="mc-list">
+                  {mainCategories.map((mc, idx) => (
+                    <div key={mc.id} className="mc-item">
+                      {editingMainCatId === mc.id ? (
+                        <div className="mc-edit-row">
+                          <input
+                            type="text"
+                            value={editMainCatName}
+                            onChange={e => setEditMainCatName(e.target.value)}
+                            onKeyDown={e => e.key === 'Enter' && handleSaveMainCategoryEdit(mc.id)}
+                            autoFocus
+                          />
+                          <button className="mc-btn mc-btn-save" onClick={() => handleSaveMainCategoryEdit(mc.id)}>Save</button>
+                          <button className="mc-btn mc-btn-cancel" onClick={() => setEditingMainCatId(null)}>Cancel</button>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="mc-item-info">
+                            <span className="mc-item-name">{mc.name}</span>
+                            <span className="mc-item-order">Order: {mc.sort_order || idx + 1}</span>
+                          </div>
+                          <div className="mc-item-actions">
+                            <button className="mc-btn mc-btn-edit" onClick={() => { setEditingMainCatId(mc.id); setEditMainCatName(mc.name) }}>Edit</button>
+                            <button className="mc-btn mc-btn-delete" onClick={() => setDeleteMainCatTarget(mc)}>Delete</button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+          {deleteMainCatTarget && (
+            <div className="mc-confirm-overlay" onClick={() => setDeleteMainCatTarget(null)}>
+              <div className="mc-confirm-box" onClick={e => e.stopPropagation()}>
+                <h4>Delete "{deleteMainCatTarget.name}"?</h4>
+                <p>Categories under this group will keep their data but lose this main category.</p>
+                <div className="modal-actions">
+                  <button className="cancel-btn" onClick={() => setDeleteMainCatTarget(null)}>Cancel</button>
+                  <button className="delete-btn" onClick={() => handleDeleteMainCategory(deleteMainCatTarget.id)}>Delete</button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )
+    }
     return null
   }
 
@@ -977,6 +1136,12 @@ const handlePasswordChange = async (e) => {
       items: [
         { icon: <IconStore size={20} />, label: 'Business Details', description: restaurant?.name || 'Configure', onClick: () => openModal('business') },
         { icon: <IconImage size={20} />, label: 'Logo', description: restaurant?.logo ? 'Set' : 'Not set', onClick: () => openModal('logo'), badge: restaurant?.logo ? 'Set' : '' }
+      ]
+    },
+    {
+      title: 'Menu Organization',
+      items: [
+        { icon: <IconFolder size={20} />, label: 'Main Categories', description: 'Menu, Hookah, Drinks', onClick: () => openModal('maincategories') }
       ]
     },
     {
