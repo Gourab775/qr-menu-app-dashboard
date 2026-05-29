@@ -130,7 +130,7 @@ export default function AddItemModal({ onSave, onClose, categories = [] }) {
         
         <form onSubmit={handleSubmit} className="modal-form">
           <div className="form-group">
-            <label>Name *</label>
+            <label>Name <span className="required-star">*</span></label>
             <input
               type="text"
               value={formData.name}
@@ -143,7 +143,7 @@ export default function AddItemModal({ onSave, onClose, categories = [] }) {
           </div>
           
           <div className="form-group">
-             <label>Description *</label>
+             <label>Description <span className="required-star">*</span></label>
             <textarea
               value={formData.description}
               onChange={e => handleChange('description', e.target.value)}
@@ -166,7 +166,7 @@ export default function AddItemModal({ onSave, onClose, categories = [] }) {
 
           {categories.length > 0 && (
             <div className="form-group">
-               <label>Category *</label>
+               <label>Category <span className="required-star">*</span></label>
               <select
                 value={formData.category_id}
                 onChange={e => handleChange('category_id', e.target.value)}
@@ -182,7 +182,7 @@ export default function AddItemModal({ onSave, onClose, categories = [] }) {
           
           <div className="form-row">
             <div className="form-group">
-              <label>Price (₹) *</label>
+              <label>Price (₹) <span className="required-star">*</span></label>
               <input
                 type="number"
                 value={formData.price}

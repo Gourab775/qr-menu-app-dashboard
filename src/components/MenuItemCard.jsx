@@ -154,7 +154,7 @@ export default function MenuItemCard({ item, onSave, onDelete, categories = [] }
           <input type="url" value={formData.image_url} onChange={e => setFormData(p => ({ ...p, image_url: e.target.value }))} placeholder="https://..." />
         </div>
         <div className="mief-row">
-          <label>Name</label>
+          <label>Name <span className="required-star">*</span></label>
           <input type="text" value={formData.name} onChange={e => {
             const value = e.target.value
             let cleaned = value.replace(/[^a-zA-Z0-9 ]/g, '')
@@ -173,7 +173,7 @@ export default function MenuItemCard({ item, onSave, onDelete, categories = [] }
           {nameError && <span className="form-error">{nameError}</span>}
         </div>
         <div className="mief-row">
-          <label>Description</label>
+          <label>Description <span className="required-star">*</span></label>
           <textarea
             value={formData.description}
             onChange={e => {
@@ -197,14 +197,14 @@ export default function MenuItemCard({ item, onSave, onDelete, categories = [] }
           {descError && <span className="form-error">{descError}</span>}
         </div>
         <div className="mief-row">
-          <label>Category</label>
+          <label>Category <span className="required-star">*</span></label>
           <select value={formData.category_id || ''} onChange={e => setFormData(p => ({ ...p, category_id: e.target.value || null }))}>
             <option value="">No Category</option>
             {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </div>
         <div className="mief-row">
-          <label>Price (₹)</label>
+          <label>Price (₹) <span className="required-star">*</span></label>
           <input type="number" value={formData.price} onChange={e => {
             const raw = e.target.value
             const strVal = String(raw)

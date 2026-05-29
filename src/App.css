@@ -1795,6 +1795,10 @@ body {
   margin-bottom: 18px;
 }
 
+.required-star {
+  color: var(--red);
+}
+
 .form-group label {
   display: block;
   font-size: 13px;
