@@ -110,13 +110,17 @@ export default function AddItemModal({ onSave, onClose, categories = [] }) {
     if (hasError) return
 
     setSaving(true)
-    await onSave({
-      ...formData,
-      name,
-      description: desc,
-      price: Number(formData.price),
-      category_id: formData.category_id
-    })
+    try {
+      await onSave({
+        ...formData,
+        name,
+        description: desc,
+        price: Number(formData.price),
+        category_id: formData.category_id
+      })
+    } catch {
+      // submission failed, silently handled by parent
+    }
     setSaving(false)
   }
 

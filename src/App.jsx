@@ -957,13 +957,10 @@ function App() {
   }
 
   const handleAddItem = async (itemData) => {
-    const name = (itemData.name || '').trim()
-    if (!name || name.length > 16 || !/^[a-zA-Z0-9]+(?: [a-zA-Z0-9]+)*$/.test(name)) return
-    const desc = (itemData.description || '').replace(/\s+/g, ' ').trim()
-    if (!desc || desc.length > 36 || !/^[a-zA-Z0-9 .,!?;:'"\-()&\/@#]+$/.test(desc)) return
-    if (!itemData.category_id) return
-    if (!itemData.price || !/^\d{1,4}$/.test(String(itemData.price))) return
     try {
+      const name = (itemData.name || '').trim()
+      const desc = (itemData.description || '').replace(/\s+/g, ' ').trim()
+      if (!name || !desc || !itemData.category_id || !itemData.price) return
       const { data, error } = await supabase
         .from('menu_items')
         .insert({
