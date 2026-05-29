@@ -179,7 +179,7 @@ export default function MenuItemCard({ item, onSave, onDelete, categories = [] }
             let error = ''
             if (strVal !== '' && digits !== strVal) {
               error = 'Only digits allowed'
-            } else if (truncated.length >= 4) {
+            } else if (truncated.length > 4) {
               error = 'Maximum 4 digits'
             }
             setPriceError(error)

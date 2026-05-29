@@ -48,7 +48,7 @@ export default function AddItemModal({ onSave, onClose, categories = [] }) {
       let error = ''
       if (value !== '' && filtered !== value) {
         error = 'Only digits allowed'
-      } else if (truncated.length >= 4) {
+      } else if (truncated.length > 4) {
         error = 'Maximum 4 digits'
       }
       setPriceError(error)
