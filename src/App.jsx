@@ -763,17 +763,15 @@ function App() {
   // [Polling disabled - auto-decline background check removed]
 
   const handleSaveItem = useCallback(async (id, updates) => {
-    if (updates.name) {
-      const name = updates.name.trim()
-      if (!name || !/^[a-zA-Z0-9]+(?: [a-zA-Z0-9]+)*$/.test(name) || name.length > 15) {
-        showToast('Item name must be 1-15 characters (letters, numbers, single spaces)', 'error')
-        return
-      }
-      if (name !== updates.name) updates.name = name
+    if (updates.name !== undefined) {
+      const name = (updates.name || '').trim()
+      if (!name || name.length > 16 || !/^[a-zA-Z0-9]+(?: [a-zA-Z0-9]+)*$/.test(name)) return
+      updates.name = name
     }
-    if (updates.description && !/^[a-zA-Z0-9]{1,35}$/.test(updates.description)) {
-      showToast('Description must be 1-35 alphanumeric characters', 'error')
-      return
+    if (updates.description !== undefined) {
+      const desc = (updates.description || '').replace(/\s+/g, ' ').trim()
+      if (desc && (desc.length > 36 || !/^[a-zA-Z0-9 .,!?;:'"\-()&\/@#]+$/.test(desc))) return
+      updates.description = desc
     }
     const prevItems = [...menuItems]
     setMenuItems(prev => prev.map(item => item.id === id ? { ...item, ...updates } : item))
@@ -959,31 +957,23 @@ function App() {
   }
 
   const handleAddItem = async (itemData) => {
-    const itemName = itemData.name.trim()
-    if (!itemName || !/^[a-zA-Z0-9]+(?: [a-zA-Z0-9]+)*$/.test(itemName) || itemName.length > 15) {
-      showToast('Item name must be 1-15 characters (letters, numbers, single spaces)', 'error')
-      return
-    }
-    itemData.name = itemName
-    if (itemData.description && !/^[a-zA-Z0-9]{1,35}$/.test(itemData.description)) {
-      showToast('Description must be 1-35 alphanumeric characters', 'error')
-      return
-    }
-    if (!/^\d{1,4}$/.test(String(itemData.price))) {
-      showToast('Price must be 1-4 digits', 'error')
-      return
-    }
+    const name = (itemData.name || '').trim()
+    if (!name || name.length > 16 || !/^[a-zA-Z0-9]+(?: [a-zA-Z0-9]+)*$/.test(name)) return
+    const desc = (itemData.description || '').replace(/\s+/g, ' ').trim()
+    if (!desc || desc.length > 36 || !/^[a-zA-Z0-9 .,!?;:'"\-()&\/@#]+$/.test(desc)) return
+    if (!itemData.category_id) return
+    if (!itemData.price || !/^\d{1,4}$/.test(String(itemData.price))) return
     try {
       const { data, error } = await supabase
         .from('menu_items')
         .insert({
-          name: itemData.name,
-          description: itemData.description,
-          price: itemData.price,
+          name,
+          description: desc,
+          price: Number(itemData.price),
           image_url: itemData.image_url,
           is_veg: itemData.is_veg,
           is_available: itemData.is_available,
-          category_id: itemData.category_id || null,
+          category_id: itemData.category_id,
           restaurant_id: restaurantId
         })
         .select()

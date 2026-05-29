@@ -28,6 +28,7 @@ export default function MenuItemCard({ item, onSave, onDelete, categories = [] }
   })
   const [saving, setSaving] = useState(false)
   const [nameError, setNameError] = useState('')
+  const [descError, setDescError] = useState('')
   const [priceError, setPriceError] = useState('')
   const [imageError, setImageError] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
@@ -42,16 +43,17 @@ export default function MenuItemCard({ item, onSave, onDelete, categories = [] }
 
   const handleSave = async () => {
     const name = formData.name.trim()
-    if (!name || !/^[a-zA-Z0-9]+(?: [a-zA-Z0-9]+)*$/.test(name) || name.length > 15) {
-      setNameError('Name must be 1-15 characters (letters, numbers, single spaces)')
+    if (!name || !/^[a-zA-Z0-9]+(?: [a-zA-Z0-9]+)*$/.test(name) || name.length > 16) {
+      setNameError('Name must be 1-16 characters (letters, numbers, single spaces)')
       return
     }
-    if (formData.description && !/^[a-zA-Z0-9]{1,35}$/.test(formData.description)) {
-      setNameError('Description must be 1-35 alphanumeric characters')
+    const desc = (formData.description || '').replace(/\s+/g, ' ').trim()
+    if (desc && (desc.length > 36 || !/^[a-zA-Z0-9 .,!?;:'"\-()&\/@#]+$/.test(desc))) {
+      setDescError('Only letters, numbers, spaces, and punctuation allowed (max 36)')
       return
     }
     setSaving(true)
-    await onSave(item.id, { ...formData, name })
+    await onSave(item.id, { ...formData, name, description: desc })
     setSaving(false)
     setEditing(false)
   }
@@ -74,6 +76,7 @@ export default function MenuItemCard({ item, onSave, onDelete, categories = [] }
       category_id: item.category_id || ''
     })
     setNameError('')
+    setDescError('')
     setPriceError('')
     setEditing(false)
   }
@@ -157,12 +160,12 @@ export default function MenuItemCard({ item, onSave, onDelete, categories = [] }
             let cleaned = value.replace(/[^a-zA-Z0-9 ]/g, '')
             let error = ''
             if (cleaned !== value) {
-              error = 'Only letters and numbers allowed'
+              error = 'Only letters, numbers, and spaces allowed'
             }
             cleaned = cleaned.replace(/\s{2,}/g, ' ').replace(/^\s+/, '')
-            const truncated = cleaned.slice(0, 15)
-            if (truncated.length >= 15) {
-              error = 'Maximum 15 characters'
+            const truncated = cleaned.slice(0, 16)
+            if (truncated.length >= 16) {
+              error = 'Maximum 16 characters'
             }
             setNameError(error)
             setFormData(p => ({ ...p, name: truncated }))
@@ -173,10 +176,25 @@ export default function MenuItemCard({ item, onSave, onDelete, categories = [] }
           <label>Description</label>
           <textarea
             value={formData.description}
-            onChange={e => setFormData(p => ({ ...p, description: e.target.value.replace(/[^a-zA-Z0-9]/g, '').slice(0, 35) }))}
+            onChange={e => {
+              const value = e.target.value
+              let cleaned = value.replace(/[^a-zA-Z0-9 .,!?;:'"\-()&\/@#\s]/g, '')
+              let error = ''
+              if (cleaned !== value) {
+                error = 'Only letters, numbers, spaces, and punctuation allowed'
+              }
+              cleaned = cleaned.replace(/\s+/g, ' ').replace(/^\s+/, '')
+              const truncated = cleaned.slice(0, 36)
+              if (truncated.length >= 36) {
+                error = 'Maximum 36 characters'
+              }
+              setDescError(error)
+              setFormData(p => ({ ...p, description: truncated }))
+            }}
             placeholder="Brief description..."
             rows="2"
           />
+          {descError && <span className="form-error">{descError}</span>}
         </div>
         <div className="mief-row">
           <label>Category</label>
@@ -218,7 +236,7 @@ export default function MenuItemCard({ item, onSave, onDelete, categories = [] }
         </div>
         <div className="mief-actions">
           <button className="mief-cancel" onClick={handleCancel}>Cancel</button>
-          <button className="mief-save" onClick={handleSave} disabled={saving || !formData.name || !!nameError || !!priceError}>
+          <button className="mief-save" onClick={handleSave} disabled={saving || !formData.name || !!nameError || !!descError || !!priceError}>
             {saving ? 'Saving...' : 'Save'}
           </button>
         </div>

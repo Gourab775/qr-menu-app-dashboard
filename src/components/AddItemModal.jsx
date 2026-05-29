@@ -14,31 +14,34 @@ export default function AddItemModal({ onSave, onClose, categories = [] }) {
   const [nameError, setNameError] = useState('')
   const [descError, setDescError] = useState('')
   const [priceError, setPriceError] = useState('')
+  const [categoryError, setCategoryError] = useState('')
 
   const handleChange = (field, value) => {
     if (field === 'name') {
       let cleaned = value.replace(/[^a-zA-Z0-9 ]/g, '')
       let error = ''
       if (cleaned !== value) {
-        error = 'Only letters and numbers allowed'
+        error = 'Only letters, numbers, and spaces allowed'
       }
       cleaned = cleaned.replace(/\s{2,}/g, ' ').replace(/^\s+/, '')
-      const truncated = cleaned.slice(0, 15)
-      if (truncated.length >= 15) {
-        error = 'Maximum 15 characters'
+      const truncated = cleaned.slice(0, 16)
+      if (truncated.length >= 16) {
+        error = 'Maximum 16 characters'
       }
       setNameError(error)
       setFormData(prev => ({ ...prev, name: truncated }))
       return
     }
     if (field === 'description') {
-      const filtered = value.replace(/[^a-zA-Z0-9]/g, '')
-      const truncated = filtered.slice(0, 35)
+      let cleaned = value.replace(/[^a-zA-Z0-9 .,!?;:'"\-()&\/@#\s]/g, '')
       let error = ''
-      if (filtered !== value) {
-        error = 'Only letters and numbers allowed'
-      } else if (truncated.length >= 35) {
-        error = 'Maximum 35 characters'
+      if (cleaned !== value) {
+        error = 'Only letters, numbers, spaces, and punctuation allowed'
+      }
+      cleaned = cleaned.replace(/\s+/g, ' ').replace(/^\s+/, '')
+      const truncated = cleaned.slice(0, 36)
+      if (truncated.length >= 36) {
+        error = 'Maximum 36 characters'
       }
       setDescError(error)
       setFormData(prev => ({ ...prev, description: truncated }))
@@ -57,32 +60,62 @@ export default function AddItemModal({ onSave, onClose, categories = [] }) {
       setFormData(prev => ({ ...prev, price: truncated }))
       return
     }
+    if (field === 'category_id') {
+      setCategoryError('')
+    }
     setFormData(prev => ({ ...prev, [field]: value }))
   }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    if (!formData.name || !formData.price) {
-      return
-    }
+    let hasError = false
+
     const name = formData.name.trim()
-    if (!name || !/^[a-zA-Z0-9]+(?: [a-zA-Z0-9]+)*$/.test(name) || name.length > 15) {
-      setNameError('Name must be 1-15 characters (letters, numbers, single spaces)')
-      return
+    if (!name) {
+      setNameError('Name is required')
+      hasError = true
+    } else if (name.length > 16) {
+      setNameError('Name must be at most 16 characters')
+      hasError = true
+    } else if (!/^[a-zA-Z0-9]+(?: [a-zA-Z0-9]+)*$/.test(name)) {
+      setNameError('Only letters, numbers, and single spaces allowed')
+      hasError = true
     }
-    if (formData.description && !/^[a-zA-Z0-9]{1,35}$/.test(formData.description)) {
-      setDescError('Description must be 1-35 alphanumeric characters')
-      return
+
+    const desc = formData.description.replace(/\s+/g, ' ').trim()
+    if (!desc) {
+      setDescError('Description is required')
+      hasError = true
+    } else if (desc.length > 36) {
+      setDescError('Description must be at most 36 characters')
+      hasError = true
+    } else if (!/^[a-zA-Z0-9 .,!?;:'"\-()&\/@#]+$/.test(desc)) {
+      setDescError('Only letters, numbers, spaces, and punctuation allowed')
+      hasError = true
     }
-    if (!/^\d{1,4}$/.test(formData.price)) {
+
+    if (!formData.category_id) {
+      setCategoryError('Please select a category')
+      hasError = true
+    }
+
+    if (!formData.price) {
+      setPriceError('Price is required')
+      hasError = true
+    } else if (!/^\d{1,4}$/.test(formData.price)) {
       setPriceError('Price must be 1-4 digits')
-      return
+      hasError = true
     }
+
+    if (hasError) return
+
     setSaving(true)
     await onSave({
       ...formData,
+      name,
+      description: desc,
       price: Number(formData.price),
-      category_id: formData.category_id || null
+      category_id: formData.category_id
     })
     setSaving(false)
   }
@@ -141,6 +174,7 @@ export default function AddItemModal({ onSave, onClose, categories = [] }) {
                   <option key={cat.id} value={cat.id}>{cat.name}</option>
                 ))}
               </select>
+              {categoryError && <span className="form-error">{categoryError}</span>}
             </div>
           )}
           
@@ -184,7 +218,7 @@ export default function AddItemModal({ onSave, onClose, categories = [] }) {
             <button type="button" className="cancel-btn" onClick={onClose}>
               Cancel
             </button>
-            <button type="submit" className="save-btn" disabled={saving || !formData.name || !formData.price || !!nameError || !!descError || !!priceError}>
+            <button type="submit" className="save-btn" disabled={saving || !formData.name || !formData.description || !formData.price || (categories.length > 0 && !formData.category_id) || !!nameError || !!descError || !!priceError || !!categoryError}>
               {saving ? 'Adding...' : 'Add Item'}
             </button>
           </div>
