@@ -72,7 +72,7 @@ export default function AddItemModal({ onSave, onClose, categories = [] }) {
 
     const name = formData.name.trim()
     if (!name) {
-      setNameError('Name is required')
+      setNameError('Item name is required')
       hasError = true
     } else if (name.length > 16) {
       setNameError('Name must be at most 16 characters')
@@ -135,20 +135,22 @@ export default function AddItemModal({ onSave, onClose, categories = [] }) {
               type="text"
               value={formData.name}
               onChange={e => handleChange('name', e.target.value)}
-              placeholder="e.g. Paneer Tikka"
+              placeholder="e.g. Chicken Burger"
               autoFocus
             />
+            <span className="form-helper">Max 16 characters</span>
             {nameError && <span className="form-error">{nameError}</span>}
           </div>
           
           <div className="form-group">
-            <label>Description</label>
+             <label>Description *</label>
             <textarea
               value={formData.description}
               onChange={e => handleChange('description', e.target.value)}
-              placeholder="Brief description..."
+              placeholder="e.g. Crispy chicken with cheese"
               rows="2"
             />
+            <span className="form-helper">Max 36 characters</span>
             {descError && <span className="form-error">{descError}</span>}
           </div>
 
@@ -164,12 +166,12 @@ export default function AddItemModal({ onSave, onClose, categories = [] }) {
 
           {categories.length > 0 && (
             <div className="form-group">
-              <label>Category</label>
+               <label>Category *</label>
               <select
                 value={formData.category_id}
                 onChange={e => handleChange('category_id', e.target.value)}
               >
-                <option value="">No Category</option>
+                <option value="">Select category</option>
                 {categories.map(cat => (
                   <option key={cat.id} value={cat.id}>{cat.name}</option>
                 ))}
@@ -185,9 +187,10 @@ export default function AddItemModal({ onSave, onClose, categories = [] }) {
                 type="number"
                 value={formData.price}
                 onChange={e => handleChange('price', e.target.value)}
-                placeholder="0"
+                placeholder="e.g. 199"
                 min="0"
               />
+              <span className="form-helper">Numbers only (Max 4 digits)</span>
               {priceError && <span className="form-error">{priceError}</span>}
             </div>
             
