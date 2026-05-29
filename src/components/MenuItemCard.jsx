@@ -27,6 +27,7 @@ export default function MenuItemCard({ item, onSave, onDelete, categories = [] }
     category_id: item.category_id || ''
   })
   const [saving, setSaving] = useState(false)
+  const [nameError, setNameError] = useState('')
   const [imageError, setImageError] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -39,6 +40,10 @@ export default function MenuItemCard({ item, onSave, onDelete, categories = [] }
   }
 
   const handleSave = async () => {
+    if (!/^[a-zA-Z0-9]{1,15}$/.test(formData.name)) {
+      setNameError('Name must be 1-15 alphanumeric characters')
+      return
+    }
     setSaving(true)
     await onSave(item.id, formData)
     setSaving(false)
@@ -62,6 +67,7 @@ export default function MenuItemCard({ item, onSave, onDelete, categories = [] }
       image_url: item.image_url || '',
       category_id: item.category_id || ''
     })
+    setNameError('')
     setEditing(false)
   }
 
@@ -139,7 +145,20 @@ export default function MenuItemCard({ item, onSave, onDelete, categories = [] }
         </div>
         <div className="mief-row">
           <label>Name</label>
-          <input type="text" value={formData.name} onChange={e => setFormData(p => ({ ...p, name: e.target.value }))} />
+          <input type="text" value={formData.name} onChange={e => {
+            const value = e.target.value
+            const filtered = value.replace(/[^a-zA-Z0-9]/g, '')
+            const truncated = filtered.slice(0, 15)
+            let error = ''
+            if (filtered !== value) {
+              error = 'Only letters and numbers allowed'
+            } else if (filtered.length > 15) {
+              error = 'Maximum 15 characters'
+            }
+            setNameError(error)
+            setFormData(p => ({ ...p, name: truncated }))
+          }} />
+          {nameError && <span className="form-error">{nameError}</span>}
         </div>
         <div className="mief-row">
           <label>Category</label>
@@ -167,7 +186,7 @@ export default function MenuItemCard({ item, onSave, onDelete, categories = [] }
         </div>
         <div className="mief-actions">
           <button className="mief-cancel" onClick={handleCancel}>Cancel</button>
-          <button className="mief-save" onClick={handleSave} disabled={saving || !formData.name}>
+          <button className="mief-save" onClick={handleSave} disabled={saving || !formData.name || !!nameError}>
             {saving ? 'Saving...' : 'Save'}
           </button>
         </div>

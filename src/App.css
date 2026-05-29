@@ -2515,6 +2515,12 @@ body {
 /* Waiter Call Page */
 .waiter-call-page {
   padding-top: 0;
+  animation: waiterFadeIn 0.25s ease-out;
+}
+
+@keyframes waiterFadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 .waiter-call-header {

@@ -11,14 +11,32 @@ export default function AddItemModal({ onSave, onClose, categories = [] }) {
     is_available: true
   })
   const [saving, setSaving] = useState(false)
+  const [nameError, setNameError] = useState('')
 
   const handleChange = (field, value) => {
+    if (field === 'name') {
+      const filtered = value.replace(/[^a-zA-Z0-9]/g, '')
+      const truncated = filtered.slice(0, 15)
+      let error = ''
+      if (filtered !== value) {
+        error = 'Only letters and numbers allowed'
+      } else if (filtered.length > 15) {
+        error = 'Maximum 15 characters'
+      }
+      setNameError(error)
+      setFormData(prev => ({ ...prev, name: truncated }))
+      return
+    }
     setFormData(prev => ({ ...prev, [field]: value }))
   }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (!formData.name || !formData.price) {
+      return
+    }
+    if (!/^[a-zA-Z0-9]{1,15}$/.test(formData.name)) {
+      setNameError('Name must be 1-15 alphanumeric characters')
       return
     }
     setSaving(true)
@@ -48,6 +66,7 @@ export default function AddItemModal({ onSave, onClose, categories = [] }) {
               placeholder="e.g. Paneer Tikka"
               autoFocus
             />
+            {nameError && <span className="form-error">{nameError}</span>}
           </div>
           
           <div className="form-group">
@@ -124,7 +143,7 @@ export default function AddItemModal({ onSave, onClose, categories = [] }) {
             <button type="button" className="cancel-btn" onClick={onClose}>
               Cancel
             </button>
-            <button type="submit" className="save-btn" disabled={saving || !formData.name || !formData.price}>
+            <button type="submit" className="save-btn" disabled={saving || !formData.name || !formData.price || !!nameError}>
               {saving ? 'Adding...' : 'Add Item'}
             </button>
           </div>

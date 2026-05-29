@@ -763,6 +763,10 @@ function App() {
   // [Polling disabled - auto-decline background check removed]
 
   const handleSaveItem = useCallback(async (id, updates) => {
+    if (updates.name && !/^[a-zA-Z0-9]{1,15}$/.test(updates.name)) {
+      showToast('Item name must be 1-15 alphanumeric characters', 'error')
+      return
+    }
     const prevItems = [...menuItems]
     setMenuItems(prev => prev.map(item => item.id === id ? { ...item, ...updates } : item))
     try {
@@ -947,6 +951,10 @@ function App() {
   }
 
   const handleAddItem = async (itemData) => {
+    if (!/^[a-zA-Z0-9]{1,15}$/.test(itemData.name)) {
+      showToast('Item name must be 1-15 alphanumeric characters', 'error')
+      return
+    }
     try {
       const { data, error } = await supabase
         .from('menu_items')
@@ -1005,7 +1013,15 @@ function App() {
           {activeTab !== 'live-orders' && waiterCalls.length > 0 && (
             <button
               className="header-waiter-bell"
-              onClick={() => { setHasNewWaiterCall(false); previousPageRef.current = activeTab; setActiveTab('waiter-call') }}
+              onClick={() => {
+                if (activeTab === 'waiter-call') {
+                  setActiveTab(previousPageRef.current)
+                } else {
+                  setHasNewWaiterCall(false)
+                  previousPageRef.current = activeTab
+                  setActiveTab('waiter-call')
+                }
+              }}
               title={`${waiterCalls.length} waiter request${waiterCalls.length !== 1 ? 's' : ''}`}
             >
               <span className="bell-icon"><IconBellRing size={20} /></span>
