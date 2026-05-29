@@ -41,12 +41,17 @@ export default function MenuItemCard({ item, onSave, onDelete, categories = [] }
   }
 
   const handleSave = async () => {
-    if (!/^[a-zA-Z0-9]{1,15}$/.test(formData.name)) {
-      setNameError('Name must be 1-15 alphanumeric characters')
+    const name = formData.name.trim()
+    if (!name || !/^[a-zA-Z0-9]+(?: [a-zA-Z0-9]+)*$/.test(name) || name.length > 15) {
+      setNameError('Name must be 1-15 characters (letters, numbers, single spaces)')
+      return
+    }
+    if (formData.description && !/^[a-zA-Z0-9]{1,35}$/.test(formData.description)) {
+      setNameError('Description must be 1-35 alphanumeric characters')
       return
     }
     setSaving(true)
-    await onSave(item.id, formData)
+    await onSave(item.id, { ...formData, name })
     setSaving(false)
     setEditing(false)
   }
@@ -149,18 +154,29 @@ export default function MenuItemCard({ item, onSave, onDelete, categories = [] }
           <label>Name</label>
           <input type="text" value={formData.name} onChange={e => {
             const value = e.target.value
-            const filtered = value.replace(/[^a-zA-Z0-9]/g, '')
-            const truncated = filtered.slice(0, 15)
+            let cleaned = value.replace(/[^a-zA-Z0-9 ]/g, '')
             let error = ''
-            if (filtered !== value) {
+            if (cleaned !== value) {
               error = 'Only letters and numbers allowed'
-            } else if (filtered.length > 15) {
+            }
+            cleaned = cleaned.replace(/\s{2,}/g, ' ').replace(/^\s+/, '')
+            const truncated = cleaned.slice(0, 15)
+            if (truncated.length >= 15) {
               error = 'Maximum 15 characters'
             }
             setNameError(error)
             setFormData(p => ({ ...p, name: truncated }))
           }} />
           {nameError && <span className="form-error">{nameError}</span>}
+        </div>
+        <div className="mief-row">
+          <label>Description</label>
+          <textarea
+            value={formData.description}
+            onChange={e => setFormData(p => ({ ...p, description: e.target.value.replace(/[^a-zA-Z0-9]/g, '').slice(0, 35) }))}
+            placeholder="Brief description..."
+            rows="2"
+          />
         </div>
         <div className="mief-row">
           <label>Category</label>

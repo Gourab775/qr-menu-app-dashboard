@@ -763,8 +763,16 @@ function App() {
   // [Polling disabled - auto-decline background check removed]
 
   const handleSaveItem = useCallback(async (id, updates) => {
-    if (updates.name && !/^[a-zA-Z0-9]{1,15}$/.test(updates.name)) {
-      showToast('Item name must be 1-15 alphanumeric characters', 'error')
+    if (updates.name) {
+      const name = updates.name.trim()
+      if (!name || !/^[a-zA-Z0-9]+(?: [a-zA-Z0-9]+)*$/.test(name) || name.length > 15) {
+        showToast('Item name must be 1-15 characters (letters, numbers, single spaces)', 'error')
+        return
+      }
+      if (name !== updates.name) updates.name = name
+    }
+    if (updates.description && !/^[a-zA-Z0-9]{1,35}$/.test(updates.description)) {
+      showToast('Description must be 1-35 alphanumeric characters', 'error')
       return
     }
     const prevItems = [...menuItems]
@@ -951,10 +959,12 @@ function App() {
   }
 
   const handleAddItem = async (itemData) => {
-    if (!/^[a-zA-Z0-9]{1,15}$/.test(itemData.name)) {
-      showToast('Item name must be 1-15 alphanumeric characters', 'error')
+    const itemName = itemData.name.trim()
+    if (!itemName || !/^[a-zA-Z0-9]+(?: [a-zA-Z0-9]+)*$/.test(itemName) || itemName.length > 15) {
+      showToast('Item name must be 1-15 characters (letters, numbers, single spaces)', 'error')
       return
     }
+    itemData.name = itemName
     if (itemData.description && !/^[a-zA-Z0-9]{1,35}$/.test(itemData.description)) {
       showToast('Description must be 1-35 alphanumeric characters', 'error')
       return

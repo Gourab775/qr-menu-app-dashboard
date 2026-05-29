@@ -17,12 +17,14 @@ export default function AddItemModal({ onSave, onClose, categories = [] }) {
 
   const handleChange = (field, value) => {
     if (field === 'name') {
-      const filtered = value.replace(/[^a-zA-Z0-9]/g, '')
-      const truncated = filtered.slice(0, 15)
+      let cleaned = value.replace(/[^a-zA-Z0-9 ]/g, '')
       let error = ''
-      if (filtered !== value) {
+      if (cleaned !== value) {
         error = 'Only letters and numbers allowed'
-      } else if (filtered.length > 15) {
+      }
+      cleaned = cleaned.replace(/\s{2,}/g, ' ').replace(/^\s+/, '')
+      const truncated = cleaned.slice(0, 15)
+      if (truncated.length >= 15) {
         error = 'Maximum 15 characters'
       }
       setNameError(error)
@@ -63,8 +65,9 @@ export default function AddItemModal({ onSave, onClose, categories = [] }) {
     if (!formData.name || !formData.price) {
       return
     }
-    if (!/^[a-zA-Z0-9]{1,15}$/.test(formData.name)) {
-      setNameError('Name must be 1-15 alphanumeric characters')
+    const name = formData.name.trim()
+    if (!name || !/^[a-zA-Z0-9]+(?: [a-zA-Z0-9]+)*$/.test(name) || name.length > 15) {
+      setNameError('Name must be 1-15 characters (letters, numbers, single spaces)')
       return
     }
     if (formData.description && !/^[a-zA-Z0-9]{1,35}$/.test(formData.description)) {
