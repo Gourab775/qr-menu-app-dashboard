@@ -1797,6 +1797,15 @@ body {
 
 .required-star {
   color: var(--red);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.mandatory-text {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 400;
+  margin-left: 2px;
 }
 
 .form-group label {
