@@ -24,9 +24,9 @@ export default function AddItemModal({ onSave, onClose, categories = [] }) {
         error = 'Only letters, numbers, and spaces allowed'
       }
       cleaned = cleaned.replace(/\s{2,}/g, ' ').replace(/^\s+/, '')
-      const truncated = cleaned.slice(0, 16)
-      if (truncated.length > 16) {
-        error = 'Maximum 16 characters'
+      const truncated = cleaned.slice(0, 22)
+      if (truncated.length > 22) {
+        error = 'Maximum 22 characters'
       }
       setNameError(error)
       setFormData(prev => ({ ...prev, name: truncated }))
@@ -39,9 +39,9 @@ export default function AddItemModal({ onSave, onClose, categories = [] }) {
         error = 'Only letters, numbers, spaces, and punctuation allowed'
       }
       cleaned = cleaned.replace(/\s+/g, ' ').replace(/^\s+/, '')
-      const truncated = cleaned.slice(0, 50)
-      if (truncated.length > 50) {
-        error = 'Maximum 50 characters'
+      const truncated = cleaned.slice(0, 60)
+      if (truncated.length > 60) {
+        error = 'Maximum 60 characters'
       }
       setDescError(error)
       setFormData(prev => ({ ...prev, description: truncated }))
@@ -74,8 +74,8 @@ export default function AddItemModal({ onSave, onClose, categories = [] }) {
     if (!name) {
       setNameError('Item name is required')
       hasError = true
-    } else if (name.length > 16) {
-      setNameError('Name must be at most 16 characters')
+    } else if (name.length > 22) {
+      setNameError('Name must be at most 22 characters')
       hasError = true
     } else if (!/^[a-zA-Z0-9]+(?: [a-zA-Z0-9]+)*$/.test(name)) {
       setNameError('Only letters, numbers, and single spaces allowed')
@@ -86,8 +86,8 @@ export default function AddItemModal({ onSave, onClose, categories = [] }) {
     if (!desc) {
       setDescError('Description is required')
       hasError = true
-    } else if (desc.length > 50) {
-      setDescError('Description must be at most 50 characters')
+    } else if (desc.length > 60) {
+      setDescError('Description must be at most 60 characters')
       hasError = true
     } else if (!/^[a-zA-Z0-9 .,!?;:'"\-()&\/@#]+$/.test(desc)) {
       setDescError('Only letters, numbers, spaces, and punctuation allowed')
@@ -142,7 +142,7 @@ export default function AddItemModal({ onSave, onClose, categories = [] }) {
               placeholder="e.g. Chicken Burger"
               autoFocus
             />
-            <span className="form-helper">Max 16 characters</span>
+            <span className="form-helper">Max 22 characters</span>
             {nameError && <span className="form-error">{nameError}</span>}
           </div>
           
@@ -154,7 +154,7 @@ export default function AddItemModal({ onSave, onClose, categories = [] }) {
               placeholder="e.g. Crispy chicken with cheese"
               rows="2"
             />
-            <span className="form-helper">Max 50 characters</span>
+            <span className="form-helper">Max 60 characters</span>
             {descError && <span className="form-error">{descError}</span>}
           </div>
 

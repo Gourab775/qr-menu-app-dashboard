@@ -765,12 +765,12 @@ function App() {
   const handleSaveItem = useCallback(async (id, updates) => {
     if (updates.name !== undefined) {
       const name = (updates.name || '').trim()
-      if (!name || name.length > 16 || !/^[a-zA-Z0-9]+(?: [a-zA-Z0-9]+)*$/.test(name)) return
+      if (!name || name.length > 22 || !/^[a-zA-Z0-9]+(?: [a-zA-Z0-9]+)*$/.test(name)) return
       updates.name = name
     }
     if (updates.description !== undefined) {
       const desc = (updates.description || '').replace(/\s+/g, ' ').trim()
-      if (desc && (desc.length > 50 || !/^[a-zA-Z0-9 .,!?;:'"\-()&\/@#]+$/.test(desc))) return
+      if (desc && (desc.length > 60 || !/^[a-zA-Z0-9 .,!?;:'"\-()&\/@#]+$/.test(desc))) return
       updates.description = desc
     }
     const prevItems = [...menuItems]
