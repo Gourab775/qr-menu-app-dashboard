@@ -30,6 +30,7 @@ export default function MenuItemCard({ item, onSave, onDelete, categories = [] }
   const [nameError, setNameError] = useState('')
   const [descError, setDescError] = useState('')
   const [priceError, setPriceError] = useState('')
+  const [categoryError, setCategoryError] = useState('')
   const [imageError, setImageError] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -42,18 +43,49 @@ export default function MenuItemCard({ item, onSave, onDelete, categories = [] }
   }
 
   const handleSave = async () => {
+    let hasError = false
+
     const name = formData.name.trim()
-    if (!name || !/^[a-zA-Z0-9]+(?: [a-zA-Z0-9]+)*$/.test(name) || name.length > 16) {
-      setNameError('Name must be 1-16 characters (letters, numbers, single spaces)')
-      return
+    if (!name) {
+      setNameError('Item name is required')
+      hasError = true
+    } else if (name.length > 16) {
+      setNameError('Name must be at most 16 characters')
+      hasError = true
+    } else if (!/^[a-zA-Z0-9]+(?: [a-zA-Z0-9]+)*$/.test(name)) {
+      setNameError('Only letters, numbers, and single spaces allowed')
+      hasError = true
     }
+
     const desc = (formData.description || '').replace(/\s+/g, ' ').trim()
-    if (desc && (desc.length > 36 || !/^[a-zA-Z0-9 .,!?;:'"\-()&\/@#]+$/.test(desc))) {
-      setDescError('Only letters, numbers, spaces, and punctuation allowed (max 36)')
-      return
+    if (!desc) {
+      setDescError('Description is required')
+      hasError = true
+    } else if (desc.length > 50) {
+      setDescError('Description must be at most 50 characters')
+      hasError = true
+    } else if (!/^[a-zA-Z0-9 .,!?;:'"\-()&\/@#]+$/.test(desc)) {
+      setDescError('Only letters, numbers, spaces, and punctuation allowed')
+      hasError = true
     }
+
+    if (!formData.category_id) {
+      setCategoryError('Please select a category')
+      hasError = true
+    }
+
+    if (!formData.price) {
+      setPriceError('Price is required')
+      hasError = true
+    } else if (!/^\d{1,4}$/.test(String(formData.price))) {
+      setPriceError('Price must be 1-4 digits')
+      hasError = true
+    }
+
+    if (hasError) return
+
     setSaving(true)
-    await onSave(item.id, { ...formData, name, description: desc })
+    await onSave(item.id, { ...formData, name, description: desc, price: Number(formData.price) })
     setSaving(false)
     setEditing(false)
   }
@@ -78,6 +110,7 @@ export default function MenuItemCard({ item, onSave, onDelete, categories = [] }
     setNameError('')
     setDescError('')
     setPriceError('')
+    setCategoryError('')
     setEditing(false)
   }
 
@@ -164,12 +197,16 @@ export default function MenuItemCard({ item, onSave, onDelete, categories = [] }
             }
             cleaned = cleaned.replace(/\s{2,}/g, ' ').replace(/^\s+/, '')
             const truncated = cleaned.slice(0, 16)
-            if (truncated.length >= 16) {
+            if (truncated.length > 16) {
               error = 'Maximum 16 characters'
             }
             setNameError(error)
             setFormData(p => ({ ...p, name: truncated }))
-          }} />
+          }}
+            placeholder="e.g. Chicken Burger"
+            autoFocus
+          />
+          <span className="form-helper">Max 16 characters</span>
           {nameError && <span className="form-error">{nameError}</span>}
         </div>
         <div className="mief-row">
@@ -184,24 +221,26 @@ export default function MenuItemCard({ item, onSave, onDelete, categories = [] }
                 error = 'Only letters, numbers, spaces, and punctuation allowed'
               }
               cleaned = cleaned.replace(/\s+/g, ' ').replace(/^\s+/, '')
-              const truncated = cleaned.slice(0, 36)
-              if (truncated.length >= 36) {
-                error = 'Maximum 36 characters'
+              const truncated = cleaned.slice(0, 50)
+              if (truncated.length > 50) {
+                error = 'Maximum 50 characters'
               }
               setDescError(error)
               setFormData(p => ({ ...p, description: truncated }))
             }}
-            placeholder="Brief description..."
+            placeholder="e.g. Crispy chicken with cheese"
             rows="2"
           />
+          <span className="form-helper">Max 50 characters</span>
           {descError && <span className="form-error">{descError}</span>}
         </div>
         <div className="mief-row">
           <label>Category {!formData.category_id && <><span className="required-star">*</span><span className="mandatory-text"> Mandatory</span></>}</label>
-          <select value={formData.category_id || ''} onChange={e => setFormData(p => ({ ...p, category_id: e.target.value || null }))}>
-            <option value="">No Category</option>
+          <select value={formData.category_id || ''} onChange={e => { setFormData(p => ({ ...p, category_id: e.target.value || null })); setCategoryError('') }}>
+            <option value="">Select category</option>
             {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
+          {categoryError && <span className="form-error">{categoryError}</span>}
         </div>
         <div className="mief-row">
           <label>Price (₹) {!formData.price && <><span className="required-star">*</span><span className="mandatory-text"> Mandatory</span></>}</label>
@@ -218,7 +257,11 @@ export default function MenuItemCard({ item, onSave, onDelete, categories = [] }
             }
             setPriceError(error)
             setFormData(p => ({ ...p, price: truncated === '' ? '' : Number(truncated) }))
-          }} min="0" />
+          }}
+            placeholder="e.g. 199"
+            min="0"
+          />
+          <span className="form-helper">Numbers only (Max 4 digits)</span>
           {priceError && <span className="form-error">{priceError}</span>}
         </div>
         <div className="mief-row">
@@ -236,7 +279,7 @@ export default function MenuItemCard({ item, onSave, onDelete, categories = [] }
         </div>
         <div className="mief-actions">
           <button className="mief-cancel" onClick={handleCancel}>Cancel</button>
-          <button className="mief-save" onClick={handleSave} disabled={saving || !formData.name || !!nameError || !!descError || !!priceError}>
+          <button className="mief-save" onClick={handleSave} disabled={saving || !formData.name || !formData.description || !formData.price || (categories.length > 0 && !formData.category_id) || !!nameError || !!descError || !!priceError || !!categoryError}>
             {saving ? 'Saving...' : 'Save'}
           </button>
         </div>

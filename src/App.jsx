@@ -770,7 +770,7 @@ function App() {
     }
     if (updates.description !== undefined) {
       const desc = (updates.description || '').replace(/\s+/g, ' ').trim()
-      if (desc && (desc.length > 36 || !/^[a-zA-Z0-9 .,!?;:'"\-()&\/@#]+$/.test(desc))) return
+      if (desc && (desc.length > 50 || !/^[a-zA-Z0-9 .,!?;:'"\-()&\/@#]+$/.test(desc))) return
       updates.description = desc
     }
     const prevItems = [...menuItems]
