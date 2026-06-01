@@ -151,15 +151,17 @@ function PopupApp() {
 
     console.log('Restaurant ID:', restaurantId)
 
+    const waiterChannelName = `waiter-live-${restaurantId}`
     supabase.getChannels().forEach(ch => {
-      if (ch.topic.includes('waiter-live')) {
+      if (ch.topic === waiterChannelName) {
         supabase.removeChannel(ch)
       }
     })
 
     let isSubscribed = true
+    console.log('[Popup WaiterCalls] Subscribing to channel:', waiterChannelName)
     const channel = supabase
-      .channel('waiter-live')
+      .channel(waiterChannelName)
       .on(
         'postgres_changes',
         {
@@ -169,7 +171,22 @@ function PopupApp() {
           filter: `restaurant_id=eq.${restaurantId}`
         },
         (payload) => {
-          console.log('[Realtime Waiter]', payload)
+          console.log('[Popup Realtime Waiter] Event received:', {
+            eventType: payload.eventType,
+            restaurantId: payload.new?.restaurant_id,
+            currentRestaurantId: restaurantId
+          })
+
+          // Cross-tenant validation
+          if (payload.new && payload.new.restaurant_id !== restaurantId) {
+            console.error('[CROSS-TENANT] PopupApp received waiter call from wrong restaurant:', {
+              eventRestaurantId: payload.new.restaurant_id,
+              currentRestaurantId: restaurantId,
+              callId: payload.new.id
+            })
+            return
+          }
+
           if (payload.eventType === 'INSERT') {
             supabase
               .from('restaurant_tables')
@@ -187,6 +204,15 @@ function PopupApp() {
             }
           }
           if (payload.eventType === 'UPDATE') {
+            // Cross-tenant validation for UPDATE
+            if (payload.new && payload.new.restaurant_id !== restaurantId) {
+              console.error('[CROSS-TENANT] PopupApp received waiter call UPDATE from wrong restaurant:', {
+                eventRestaurantId: payload.new.restaurant_id,
+                currentRestaurantId: restaurantId,
+                callId: payload.new.id
+              })
+              return
+            }
             setWaiterCalls(prev => prev.filter(x => x.id !== payload.new.id))
           }
         }
@@ -194,8 +220,11 @@ function PopupApp() {
       .subscribe()
 
     const fetchWaiterCalls = async () => {
-      console.log("Restaurant ID:", restaurantId)
-
+      if (!restaurantId) {
+        console.error('[Popup WaiterCalls] Cannot fetch: restaurant_id is missing')
+        return
+      }
+      console.log('[Popup WaiterCalls] Fetching with restaurant_id filter:', restaurantId)
       const { data, error } = await supabase
         .from("waiter_calls")
         .select(`
@@ -205,10 +234,11 @@ function PopupApp() {
             table_number
           )
         `)
+        .eq('restaurant_id', restaurantId)
         .order("created_at", { ascending: false })
 
-      console.log("[RAW WAITER]", data)
-      console.log("[ERROR]", error)
+      console.log("[Popup WaiterCalls] Raw data:", data?.length || 0, "records")
+      console.log("[Popup WaiterCalls] Error:", error)
 
       if (error) {
         if (isSubscribed) setWaiterCalls([])
@@ -248,7 +278,7 @@ function PopupApp() {
 
     try {
       console.log('[Popup] handleAccept - updating status to accepted:', { id: orderId, order_code: movedOrder?.order_code })
-      const { error } = await supabase.from('live_orders').update({ status: 'accepted' }).eq('id', orderId)
+      const { error } = await supabase.from('live_orders').update({ status: 'accepted' }).eq('id', orderId).eq('restaurant_id', restaurantId)
       if (error) throw error
       console.log('[Popup] handleAccept - success:', { id: orderId, order_code: movedOrder?.order_code })
       showToast('Order accepted')
@@ -267,7 +297,7 @@ function PopupApp() {
     if (!confirmDelete) return
     try {
       console.log('[Popup] handleDecline:', { id: orderId, order_code: orderCode })
-      const { error } = await supabase.from('live_orders').delete().eq('id', orderId)
+      const { error } = await supabase.from('live_orders').delete().eq('id', orderId).eq('restaurant_id', restaurantId)
       if (error) throw error
       setOrders(prev => prev.filter(o => o.id !== orderId))
       console.log('[Popup] handleDecline - success:', { id: orderId, order_code: orderCode })
@@ -287,7 +317,7 @@ function PopupApp() {
       return prev.filter(c => c.id !== callId)
     })
     try {
-      const { error } = await supabase.from('waiter_calls').delete().eq('id', callId)
+      const { error } = await supabase.from('waiter_calls').delete().eq('id', callId).eq('restaurant_id', restaurantId)
       if (error) throw error
       showToast('Waiter request resolved')
     } catch (err) {

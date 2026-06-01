@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
-import { supabase, RESTAURANT_ID } from '../lib/supabase'
+import { supabase } from '../lib/supabase'
 import { fetchWithTimeout } from '../lib/apiUtils'
 import ConfirmModal from '../components/ConfirmModal'
 import { IconAlertTriangle, IconFolder } from '../components/Icons'
 
-const API_TIMEOUT = 15000
+const API_TIMEOUT = 30000
 
 export default function CategoriesPage({ restaurantId }) {
   const [categories, setCategories] = useState([])
@@ -29,7 +29,7 @@ export default function CategoriesPage({ restaurantId }) {
   const mountedRef = useRef(false)
   const abortControllerRef = useRef(null)
 
-  const currentRestId = restaurantId || RESTAURANT_ID
+  const currentRestId = restaurantId
 
   const showToastMsg = (message, type = 'success') => {
     setShowToast({ message, type })
@@ -105,7 +105,7 @@ export default function CategoriesPage({ restaurantId }) {
         .from('categories')
         .insert({
           name: newCategoryName.trim(),
-          restaurant_id: RESTAURANT_ID,
+          restaurant_id: currentRestId,
           sort_order: maxSortOrder + 1,
           main_category_id: newMainCategoryId || null
         })
@@ -132,10 +132,12 @@ export default function CategoriesPage({ restaurantId }) {
         .from('menu_items')
         .update({ category_id: null })
         .eq('category_id', deleteTarget.id)
+        .eq('restaurant_id', currentRestId)
       const { error } = await supabase
         .from('categories')
         .delete()
         .eq('id', deleteTarget.id)
+        .eq('restaurant_id', currentRestId)
       if (error) throw error
       showToastMsg('Category deleted')
       setDeleteTarget(null)
@@ -176,6 +178,7 @@ export default function CategoriesPage({ restaurantId }) {
           main_category_id: editMainCategoryId || null
         })
         .eq('id', editingCategory.id)
+        .eq('restaurant_id', currentRestId)
       if (error) throw error
       showToastMsg('Category updated')
       setEditingCategory(null)

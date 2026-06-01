@@ -4,7 +4,7 @@ import { fetchWithTimeout } from '../lib/apiUtils';
 import { IconTable, IconSearch } from '../components/Icons';
 import './TablesPage.css';
 
-const API_TIMEOUT = 15000;
+const API_TIMEOUT = 30000;
 
 export default function TablesPage({ restaurantId, restaurantSlug }) {
   const BASE_URL = `${window.location.origin.replace('5175', '5173')}/${restaurantSlug || 'default'}`;
@@ -76,7 +76,7 @@ export default function TablesPage({ restaurantId, restaurantSlug }) {
       if (missingTokens.length > 0) {
         for (const table of missingTokens) {
           const token = crypto.randomUUID();
-          await supabase.from('restaurant_tables').update({ table_token: token }).eq('id', table.id);
+          await supabase.from('restaurant_tables').update({ table_token: token }).eq('id', table.id).eq('restaurant_id', restaurantId);
         }
         loadTables(signal);
         return;
@@ -166,7 +166,8 @@ export default function TablesPage({ restaurantId, restaurantSlug }) {
       const { error: err } = await supabase
         .from('restaurant_tables')
         .delete()
-        .eq('id', id);
+        .eq('id', id)
+        .eq('restaurant_id', restaurantId);
 
       if (err) throw err;
 
@@ -195,6 +196,7 @@ export default function TablesPage({ restaurantId, restaurantSlug }) {
            is_active: newStatus
         })
         .eq("id", table.id)
+        .eq('restaurant_id', restaurantId)
         .select();
 
     console.log("[SAVE DATA]", data);

@@ -21,7 +21,7 @@ import { IconStore, IconSearch, IconUtensils, IconBellRing, IconBell, IconBarCha
 import './App.css'
 import './theme.css'
 
-const API_TIMEOUT = 15000
+const API_TIMEOUT = 30000
 const CURRENT_VERSION = "2.0.0"
 
 function App() {
@@ -288,9 +288,18 @@ function App() {
     }
   }, [signOut])
 
+  // Log current restaurant context for multi-tenant isolation
+  console.log('[MultiTenant] Current restaurant session:', {
+    restaurantId,
+    userRole: userRole,
+    userId: session?.user?.id?.slice(0, 8),
+    activeTab: activeTab
+  })
+
   // Fetch restaurant name and slug when restaurantId is available
   useEffect(() => {
     if (!isLoggedIn || !restaurantId) return
+    console.log('[RestaurantInfo] Loading info for restaurant ID:', restaurantId)
     isMountedRef.current = true
 
     const controller = new AbortController()
@@ -451,11 +460,20 @@ function App() {
 
     const subscriptionActiveRef = { current: false }
 
+    console.log('[Realtime] Subscribing to live-orders channel with filter:', `restaurant_id=eq.${restaurantId}`)
+    console.log('[Realtime] Subscribing to live-orders channel:', `live-orders-${restaurantId}`)
     const channel = supabase
-      .channel('live-orders')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'live_orders' },
+      .channel(`live-orders-${restaurantId}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'live_orders', filter: `restaurant_id=eq.${restaurantId}` },
         (payload) => {
-          if (payload.new.restaurant_id !== restaurantId) return
+          if (payload.new.restaurant_id !== restaurantId) {
+            console.error('[CROSS-TENANT] INSERT event with mismatched restaurant_id:', {
+              channelRestaurantId: restaurantId,
+              eventRestaurantId: payload.new.restaurant_id,
+              orderId: payload.new.id
+            })
+            return
+          }
           const newOrderId = payload.new.id
           const rawStatus = payload.new.status
           const newStatus = rawStatus || 'pending'
@@ -482,7 +500,7 @@ function App() {
           const fetchAndAddOrder = async () => {
             const { data: freshOrder } = await supabase
               .from('live_orders').select('*, restaurant_tables(table_number)')
-              .eq('id', newOrderId).single()
+              .eq('id', newOrderId).eq('restaurant_id', restaurantId).single()
             if (!freshOrder) return
 
             let resolved = freshOrder
@@ -518,8 +536,16 @@ function App() {
           fetchAndAddOrder()
         }
       )
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'live_orders' },
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'live_orders', filter: `restaurant_id=eq.${restaurantId}` },
         (payload) => {
+          if (payload.new.restaurant_id !== restaurantId) {
+            console.error('[CROSS-TENANT] UPDATE event with mismatched restaurant_id:', {
+              channelRestaurantId: restaurantId,
+              eventRestaurantId: payload.new.restaurant_id,
+              orderId: payload.new.id
+            })
+            return
+          }
           const { id, status } = payload.new
           const oldStatus = payload.old?.status
 
@@ -555,7 +581,7 @@ function App() {
               }
               return [{ ...payload.new, restaurant_tables: null }, ...prev].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
             })
-            supabase.from('live_orders').select('*, restaurant_tables(table_number)').eq('id', id).single().then(({ data }) => {
+            supabase.from('live_orders').select('*, restaurant_tables(table_number)').eq('id', id).eq('restaurant_id', restaurantId).single().then(({ data }) => {
               if (data) {
                 setPastOrders(prev => prev.map(o => o.id === id ? { ...o, ...data } : o))
               }
@@ -565,7 +591,7 @@ function App() {
           }
         }
       )
-      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'live_orders' },
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'live_orders', filter: `restaurant_id=eq.${restaurantId}` },
         (payload) => {
           setOrders(prev => prev.filter(o => o.id !== payload.old.id))
           setPastOrders(prev => prev.filter(o => o.id !== payload.old.id))
@@ -598,15 +624,17 @@ function App() {
 
     console.log('Restaurant ID:', restaurantId)
 
+    const waiterChannelName = `waiter-live-${restaurantId}`
     supabase.getChannels().forEach(ch => {
-      if (ch.topic.includes('waiter-live')) {
+      if (ch.topic === waiterChannelName) {
         supabase.removeChannel(ch)
       }
     })
 
     let isSubscribed = true
+    console.log('[WaiterCalls] Subscribing to channel:', waiterChannelName)
     const channel = supabase
-      .channel('waiter-live')
+      .channel(waiterChannelName)
       .on(
         'postgres_changes',
         {
@@ -617,6 +645,14 @@ function App() {
         },
         (payload) => {
           console.log('[Realtime Waiter]', payload)
+          if (payload.new && payload.new.restaurant_id !== restaurantId) {
+            console.error('[CROSS-TENANT] Waiter call event with mismatched restaurant_id:', {
+              channelRestaurantId: restaurantId,
+              eventRestaurantId: payload.new.restaurant_id,
+              callId: payload.new.id
+            })
+            return
+          }
           if (payload.eventType === 'INSERT') {
             supabase
               .from('restaurant_tables')
@@ -637,6 +673,14 @@ function App() {
             }
           }
           if (payload.eventType === 'UPDATE') {
+            if (payload.new && payload.new.restaurant_id !== restaurantId) {
+              console.error('[CROSS-TENANT] Waiter call UPDATE with mismatched restaurant_id:', {
+                channelRestaurantId: restaurantId,
+                eventRestaurantId: payload.new.restaurant_id,
+                callId: payload.new.id
+              })
+              return
+            }
             setWaiterCalls(prev => prev.filter(x => x.id !== payload.new.id))
           }
         }
@@ -644,9 +688,13 @@ function App() {
       .subscribe()
 
     const fetchWaiterCalls = async () => {
+      if (!restaurantId) {
+        console.error('[WaiterCalls] Cannot fetch: restaurant_id is missing')
+        if (isSubscribed) setWaiterCallsLoading(false)
+        return
+      }
       setWaiterCallsLoading(true)
-      console.log("Restaurant ID:", restaurantId)
-
+      console.log('[WaiterCalls] Fetching with restaurant_id:', restaurantId)
       const { data, error } = await supabase
         .from("waiter_calls")
         .select(`
@@ -656,10 +704,11 @@ function App() {
             table_number
           )
         `)
+        .eq('restaurant_id', restaurantId)
         .order("created_at", { ascending: false })
 
-      console.log("[RAW WAITER]", data)
-      console.log("[ERROR]", error)
+      console.log("[WaiterCalls] Raw data:", data?.length || 0, "records")
+      console.log("[WaiterCalls] Error:", error)
 
       if (error) {
         if (isSubscribed) setWaiterCalls([])
@@ -776,20 +825,20 @@ function App() {
     const prevItems = [...menuItems]
     setMenuItems(prev => prev.map(item => item.id === id ? { ...item, ...updates } : item))
     try {
-      const { error } = await supabase.from('menu_items').update(updates).eq('id', id)
+      const { error } = await supabase.from('menu_items').update(updates).eq('id', id).eq('restaurant_id', restaurantId)
 
       if (error) throw error
     } catch (err) {
       setMenuItems(prevItems)
       showToast('Failed to update item', 'error')
     }
-  }, [menuItems, showToast])
+  }, [menuItems, showToast, restaurantId])
 
   const handleDeleteItem = useCallback(async (id) => {
     const prevItems = [...menuItems]
     setMenuItems(prev => prev.filter(item => item.id !== id))
     try {
-      const { error } = await supabase.from('menu_items').delete().eq('id', id)
+      const { error } = await supabase.from('menu_items').delete().eq('id', id).eq('restaurant_id', restaurantId)
 
       if (error) throw error
       showToast('Item deleted successfully')
@@ -797,7 +846,7 @@ function App() {
       setMenuItems(prevItems)
       showToast('Failed to delete item', 'error')
     }
-  }, [menuItems, showToast])
+  }, [menuItems, showToast, restaurantId])
 
   const filteredItems = menuItems.filter(item => {
     const matchSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -862,7 +911,7 @@ function App() {
         id: orderId,
         order_code: movedOrder?.order_code,
       })
-      const { error } = await supabase.from('live_orders').update({ status: 'accepted' }).eq('id', orderId)
+      const { error } = await supabase.from('live_orders').update({ status: 'accepted' }).eq('id', orderId).eq('restaurant_id', restaurantId)
       if (error) throw error
       console.log('[Orders] handleAccept - success:', { id: orderId, order_code: movedOrder?.order_code })
       showToast('Order accepted')
@@ -886,7 +935,7 @@ function App() {
     setPastOrders(prev => prev.filter(o => o.id !== orderId))
     try {
       console.log('[Orders] handleConfirm:', { id: orderId })
-      const { error } = await supabase.from('live_orders').update({ status: 'confirmed' }).eq('id', orderId)
+      const { error } = await supabase.from('live_orders').update({ status: 'confirmed' }).eq('id', orderId).eq('restaurant_id', restaurantId)
       if (error) throw error
       console.log('[Orders] handleConfirm - success:', { id: orderId })
       showToast('Order confirmed')
@@ -902,9 +951,8 @@ function App() {
     setPastOrders(prev => prev.filter(o => o.id !== orderId))
     try {
       console.log('[Orders] handleComplete:', { id: orderId })
-      const { error } = await supabase.from('live_orders').update({ status: 'completed' }).eq('id', orderId)
+      const { error } = await supabase.from('live_orders').update({ status: 'completed' }).eq('id', orderId).eq('restaurant_id', restaurantId)
       if (error) throw error
-      console.log('[Orders] handleComplete - success:', { id: orderId })
       showToast('Order completed')
     } catch (err) {
       console.error('[Orders] handleComplete error:', { id: orderId, message: err.message, code: err.code })
@@ -919,7 +967,7 @@ function App() {
 
     try {
       console.log('[Orders] handleDecline:', { id: orderId, order_code: orderCode })
-      const { error } = await supabase.from('live_orders').delete().eq('id', orderId)
+      const { error } = await supabase.from('live_orders').delete().eq('id', orderId).eq('restaurant_id', restaurantId)
 
       if (error) throw error
       setOrders(prev => prev.filter(o => o.id !== orderId))
@@ -940,7 +988,7 @@ function App() {
       return prev.filter(c => c.id !== callId)
     })
     try {
-      const { error } = await supabase.from('waiter_calls').delete().eq('id', callId)
+      const { error } = await supabase.from('waiter_calls').delete().eq('id', callId).eq('restaurant_id', restaurantId)
       if (error) throw error
       showToast('Waiter request resolved')
       if (previousPageRef.current) setActiveTab(previousPageRef.current)

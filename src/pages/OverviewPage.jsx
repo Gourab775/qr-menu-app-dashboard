@@ -9,7 +9,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { IconTrendingUp, IconPackage, IconShoppingBag, IconStar, IconBarChart, IconClock, IconTable } from '../components/Icons'
 import './OverviewPage.css'
 
-const API_TIMEOUT = 15000
+const API_TIMEOUT = 30000
 
 function formatCurrency(v) {
   return '\u20B9' + (v || 0).toLocaleString('en-IN')

@@ -93,13 +93,10 @@ export function AuthProvider({ children }) {
 
         if (fb?.id) {
           rid = fb.id
+          console.log('[Auth] Assigned restaurant_id from user_id match:', rid)
         } else {
-          const { data: anyFb } = await supabase
-            .from('restaurants')
-            .select('id')
-            .limit(1)
-            .maybeSingle()
-          if (anyFb?.id) rid = anyFb.id
+          console.warn('[Auth] No restaurant_id found for user. Staff must be assigned a restaurant via profiles table.')
+          // DO NOT fallback to random restaurant - this would cause cross-tenant data leak
         }
       } catch (err) {
         console.error('[Auth] Restaurant lookup error:', err)

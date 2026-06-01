@@ -108,15 +108,17 @@ function LiveOrdersPage({ restaurantId }) {
   useEffect(() => {
     if (!isLoggedIn || !restaurantId) return
 
+    const waiterChannelName = `waiter-live-${restaurantId}`
     supabase.getChannels().forEach(ch => {
-      if (ch.topic.includes('waiter-live')) {
+      if (ch.topic === waiterChannelName) {
         supabase.removeChannel(ch)
       }
     })
 
     let isSubscribed = true
+    console.log('[LiveOrders WaiterCalls] Subscribing to channel:', waiterChannelName)
     const channel = supabase
-      .channel('waiter-live')
+      .channel(waiterChannelName)
       .on(
         'postgres_changes',
         {
@@ -126,6 +128,22 @@ function LiveOrdersPage({ restaurantId }) {
           filter: `restaurant_id=eq.${restaurantId}`
         },
         (payload) => {
+          console.log('[LiveOrders Realtime Waiter] Event received:', {
+            eventType: payload.eventType,
+            restaurantId: payload.new?.restaurant_id,
+            currentRestaurantId: restaurantId
+          })
+
+          // Cross-tenant validation
+          if (payload.new && payload.new.restaurant_id !== restaurantId) {
+            console.error('[CROSS-TENANT] LiveOrdersPage received waiter call from wrong restaurant:', {
+              eventRestaurantId: payload.new.restaurant_id,
+              currentRestaurantId: restaurantId,
+              callId: payload.new.id
+            })
+            return
+          }
+
           if (payload.eventType === 'INSERT') {
             supabase
               .from('restaurant_tables')
@@ -140,6 +158,14 @@ function LiveOrdersPage({ restaurantId }) {
               })
           }
           if (payload.eventType === 'UPDATE') {
+            if (payload.new && payload.new.restaurant_id !== restaurantId) {
+              console.error('[CROSS-TENANT] LiveOrdersPage received waiter call UPDATE from wrong restaurant:', {
+                eventRestaurantId: payload.new.restaurant_id,
+                currentRestaurantId: restaurantId,
+                callId: payload.new.id
+              })
+              return
+            }
             setWaiterCalls(prev => prev.filter(x => x.id !== payload.new.id))
           }
         }
@@ -147,11 +173,18 @@ function LiveOrdersPage({ restaurantId }) {
       .subscribe()
 
     const fetchWaiterCalls = async () => {
+      if (!restaurantId) {
+        console.error('[LiveOrders WaiterCalls] Cannot fetch: restaurant_id is missing')
+        return
+      }
+      console.log('[LiveOrders WaiterCalls] Fetching with restaurant_id:', restaurantId)
       const { data } = await supabase
         .from("waiter_calls")
         .select(`*, restaurant_tables!table_id(id, table_number)`)
+        .eq('restaurant_id', restaurantId)
         .order("created_at", { ascending: false })
 
+      console.log('[LiveOrders WaiterCalls] Fetched:', data?.length || 0, 'records')
       if (data && isSubscribed) setWaiterCalls(data)
     }
 
@@ -184,7 +217,7 @@ function LiveOrdersPage({ restaurantId }) {
     if (movedOrder) setPastOrders(prev => [movedOrder, ...prev])
 
     try {
-      const { error } = await supabase.from('live_orders').update({ status: 'accepted' }).eq('id', orderId)
+      const { error } = await supabase.from('live_orders').update({ status: 'accepted' }).eq('id', orderId).eq('restaurant_id', restaurantId)
       if (error) throw error
       showToast('Order accepted')
     } catch (err) {
@@ -201,7 +234,7 @@ function LiveOrdersPage({ restaurantId }) {
     const confirmDelete = window.confirm(`Decline order #${orderCode || orderId.slice(0, 8)}?\n\nThis cannot be undone.`)
     if (!confirmDelete) return
     try {
-      const { error } = await supabase.from('live_orders').delete().eq('id', orderId)
+      const { error } = await supabase.from('live_orders').delete().eq('id', orderId).eq('restaurant_id', restaurantId)
       if (error) throw error
       setOrders(prev => prev.filter(o => o.id !== orderId))
       showToast('Order declined')
@@ -220,7 +253,7 @@ function LiveOrdersPage({ restaurantId }) {
       return prev.filter(c => c.id !== callId)
     })
     try {
-      const { error } = await supabase.from('waiter_calls').delete().eq('id', callId)
+      const { error } = await supabase.from('waiter_calls').delete().eq('id', callId).eq('restaurant_id', restaurantId)
       if (error) throw error
       showToast('Waiter request resolved')
     } catch (err) {

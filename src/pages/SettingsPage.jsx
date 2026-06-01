@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { supabase, RESTAURANT_ID } from '../lib/supabase'
+import { supabase } from '../lib/supabase'
 import { fetchWithTimeout } from '../lib/apiUtils'
 import { useAuth } from '../contexts/AuthContext'
 import { IconPackage, IconBarChart, IconSettings, IconBell, IconLock, IconUtensils, IconFolder, IconCheck, IconX, IconPhone, IconMail, IconStore, IconCopy, IconLogOut, IconEye, IconEyeOff, IconStar, IconHelpCircle, IconFileText, IconTrash2, IconPalette, IconInfo, IconImage } from '../components/Icons'
 
-const API_TIMEOUT = 15000
+const API_TIMEOUT = 30000
 
 const ORDER_SOUNDS = [
   { id: 'classic-notification', name: 'Classic Notification', freq: [800, 1000], duration: 0.2 },
@@ -247,7 +247,7 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
   const mountedRef = useRef(false)
   const abortControllerRef = useRef(null)
 
-  const currentRestId = restaurantId || RESTAURANT_ID
+  const currentRestId = restaurantId
 
   const showToast = (message, type = 'success') => {
     if (onToast) {
@@ -291,7 +291,7 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
       console.error('Failed to load restaurant:', err)
       if (!signal?.aborted) {
         setRestaurant({
-          id: RESTAURANT_ID,
+          id: currentRestId,
           name: 'Your Restaurant',
           slug: '',
           address: '',
@@ -323,11 +323,12 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
   }, [loadRestaurant]);
 
   const refreshRestaurant = async () => {
+    if (!currentRestId) return
     try {
       const restaurantPromise = supabase
         .from('restaurants')
         .select('*')
-        .eq('id', RESTAURANT_ID)
+        .eq('id', currentRestId)
         .single()
       
       const { data } = await fetchWithTimeout(restaurantPromise, API_TIMEOUT)
@@ -382,6 +383,7 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
         .from('main_categories')
         .update({ name: editMainCatName.trim() })
         .eq('id', id)
+        .eq('restaurant_id', currentRestId)
       if (error) throw error
       setEditingMainCatId(null)
       setEditMainCatName('')
@@ -398,10 +400,12 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
         .from('categories')
         .update({ main_category_id: null })
         .eq('main_category_id', id)
+        .eq('restaurant_id', currentRestId)
       const { error } = await supabase
         .from('main_categories')
         .delete()
         .eq('id', id)
+        .eq('restaurant_id', currentRestId)
       if (error) throw error
       setDeleteMainCatTarget(null)
       showToast('Main category deleted')
@@ -699,7 +703,7 @@ const handlePasswordChange = async (e) => {
     try {
       const { error } = await supabase
         .from('restaurants')
-        .upsert({ id: RESTAURANT_ID, logo: logoUrl }, { onConflict: 'id' })
+        .upsert({ id: currentRestId, logo: logoUrl }, { onConflict: 'id' })
 
       if (error) throw error
       
@@ -1180,9 +1184,9 @@ const handlePasswordChange = async (e) => {
         <div className="settings-id-icon"><IconStore size={24} /></div>
         <div className="settings-id-info">
           <span className="settings-id-label">Restaurant ID</span>
-          <span className="settings-id-value">{RESTAURANT_ID.slice(0, 12)}...</span>
+          <span className="settings-id-value">{(currentRestId || '').slice(0, 12)}...</span>
         </div>
-        <button className="copy-id-btn" onClick={() => { navigator.clipboard.writeText(RESTAURANT_ID); showToast('ID copied') }}><IconCopy size={18} /></button>
+        <button className="copy-id-btn" onClick={() => { navigator.clipboard.writeText(currentRestId || ''); showToast('ID copied') }}><IconCopy size={18} /></button>
       </div>
 
       <div className="settings-sections">

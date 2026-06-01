@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { supabase, RESTAURANT_ID } from '../lib/supabase'
+import { supabase } from '../lib/supabase'
 
 const generateSlug = (text) => {
   return text
@@ -16,7 +16,7 @@ export default function FeaturedItemsPanel({ restaurantId }) {
   const [editingId, setEditingId] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
 
-  const currentRestId = restaurantId || RESTAURANT_ID
+  const currentRestId = restaurantId
 
   const showToast = (message, type = 'success') => {
     setToast({ message, type })
@@ -167,8 +167,8 @@ export default function FeaturedItemsPanel({ restaurantId }) {
   }
 
   useEffect(() => {
-    loadData()
-  }, [])
+    if (currentRestId) loadData()
+  }, [currentRestId])
 
   const filteredItems = featuredItems.filter(item => {
     if (!searchQuery) return true
