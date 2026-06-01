@@ -102,6 +102,8 @@ function App() {
   const ordersFetchFailedRef = useRef(false)
 
   const waiterPlayFnRef = useRef(null)
+  const ordersChannelRef = useRef(null)
+  const waiterChannelRef = useRef(null)
 
   const userRole = role || 'staff'
   const userFullName = profile?.full_name || profile?.email || session?.user?.email || 'User'
@@ -458,11 +460,21 @@ function App() {
       try { orderPlayFn() } catch { }
     }
 
-    const subscriptionActiveRef = { current: false }
+    if (!restaurantId) {
+      console.error('[Realtime] Missing restaurantId')
+      return
+    }
 
-    console.log('[Realtime] Subscribing to live-orders channel with filter:', `restaurant_id=eq.${restaurantId}`)
-    console.log('[Realtime] Subscribing to live-orders channel:', `live-orders-${restaurantId}`)
-    const channel = supabase
+    console.log('[Realtime] Channel Created: orders', `live-orders-${restaurantId}`)
+    console.log('[Realtime] Restaurant ID:', restaurantId)
+
+    if (ordersChannelRef.current) {
+      console.log('[Realtime] Duplicate Subscription Prevented for orders channel')
+      supabase.removeChannel(ordersChannelRef.current)
+      ordersChannelRef.current = null
+    }
+
+    const ordersChannel = supabase
       .channel(`live-orders-${restaurantId}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'live_orders', filter: `restaurant_id=eq.${restaurantId}` },
         (payload) => {
@@ -480,13 +492,7 @@ function App() {
           if (lastPlayedOrderRef.current === newOrderId) return
           lastPlayedOrderRef.current = newOrderId
 
-          console.log('[Orders] INSERT event received:', {
-            id: newOrderId,
-            status: rawStatus,
-            resolvedStatus: newStatus,
-            order_code: payload.new.order_code,
-            created_at: payload.new.created_at
-          })
+          console.log('[Realtime] Event Received: INSERT order', { id: newOrderId, status: rawStatus })
 
           if (newStatus !== 'pending') {
             console.warn('[Orders] New order inserted with non-pending status:', {
@@ -549,12 +555,7 @@ function App() {
           const { id, status } = payload.new
           const oldStatus = payload.old?.status
 
-          console.log('[Orders] UPDATE event:', {
-            id,
-            oldStatus,
-            newStatus: status,
-            order_code: payload.new.order_code || 'N/A'
-          })
+          console.log('[Realtime] Event Received: UPDATE order', { id, oldStatus, newStatus: status })
 
           if (status !== 'pending' && status !== 'accepted' && status !== 'confirmed' && status !== 'completed') {
             console.warn('[Orders] UPDATE with unknown status, ignoring:', { id, status })
@@ -593,24 +594,34 @@ function App() {
       )
       .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'live_orders', filter: `restaurant_id=eq.${restaurantId}` },
         (payload) => {
+          console.log('[Realtime] Event Received: DELETE order', { id: payload.old.id })
           setOrders(prev => prev.filter(o => o.id !== payload.old.id))
           setPastOrders(prev => prev.filter(o => o.id !== payload.old.id))
         }
       )
-      .subscribe((status) => {
+
+    try {
+      ordersChannel.subscribe((status) => {
         if (status === 'SUBSCRIBED') {
-          subscriptionActiveRef.current = true
+          console.log('[Realtime] Orders channel subscribed')
         } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-          subscriptionActiveRef.current = false
+          console.warn('[Realtime] Orders channel status:', status)
         }
       })
+      ordersChannelRef.current = ordersChannel
+    } catch (err) {
+      console.error('[Realtime] Orders subscription failed:', err)
+    }
 
     return () => {
       document.removeEventListener('click', handleGesture)
       document.removeEventListener('keydown', handleGesture)
       if (audioCtxRef.current) { try { audioCtxRef.current.close() } catch { } }
-      subscriptionActiveRef.current = false
-      supabase.removeChannel(channel)
+      if (ordersChannelRef.current) {
+        console.log('[Realtime] Channel Removed: orders')
+        supabase.removeChannel(ordersChannelRef.current)
+        ordersChannelRef.current = null
+      }
     }
   }, [isLoggedIn, restaurantId, preferences.order_notification_sound, preferences.waiter_notification_sound])
 
@@ -622,17 +633,23 @@ function App() {
   useEffect(() => {
     if (!isLoggedIn || !restaurantId) return
 
-    console.log('Restaurant ID:', restaurantId)
+    if (!restaurantId) {
+      console.error('[Realtime] Missing restaurantId')
+      return
+    }
 
     const waiterChannelName = `waiter-live-${restaurantId}`
-    supabase.getChannels().forEach(ch => {
-      if (ch.topic === waiterChannelName) {
-        supabase.removeChannel(ch)
-      }
-    })
+
+    if (waiterChannelRef.current) {
+      console.log('[Realtime] Duplicate Subscription Prevented for waiter channel')
+      supabase.removeChannel(waiterChannelRef.current)
+      waiterChannelRef.current = null
+    }
 
     let isSubscribed = true
-    console.log('[WaiterCalls] Subscribing to channel:', waiterChannelName)
+    console.log('[Realtime] Channel Created: waiter', waiterChannelName)
+    console.log('[Realtime] Restaurant ID:', restaurantId)
+
     const channel = supabase
       .channel(waiterChannelName)
       .on(
@@ -644,7 +661,7 @@ function App() {
           filter: `restaurant_id=eq.${restaurantId}`
         },
         (payload) => {
-          console.log('[Realtime Waiter]', payload)
+          console.log('[Realtime] Event Received: waiter', payload.eventType, payload.new?.id)
           if (payload.new && payload.new.restaurant_id !== restaurantId) {
             console.error('[CROSS-TENANT] Waiter call event with mismatched restaurant_id:', {
               channelRestaurantId: restaurantId,
@@ -685,7 +702,14 @@ function App() {
           }
         }
       )
-      .subscribe()
+
+    try {
+      channel.subscribe()
+      waiterChannelRef.current = channel
+      console.log('[Realtime] Waiter channel subscribed')
+    } catch (err) {
+      console.error('[Realtime] Waiter subscription failed:', err)
+    }
 
     const fetchWaiterCalls = async () => {
       if (!restaurantId) {
@@ -724,7 +748,11 @@ function App() {
 
     return () => {
       isSubscribed = false
-      supabase.removeChannel(channel)
+      if (waiterChannelRef.current) {
+        console.log('[Realtime] Channel Removed: waiter')
+        supabase.removeChannel(waiterChannelRef.current)
+        waiterChannelRef.current = null
+      }
     }
   }, [isLoggedIn, restaurantId])
 
@@ -757,21 +785,28 @@ function App() {
         }
       })
 
-    const channel = supabase
-      .channel('app-versions')
-      .on('postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'app_versions' },
-        (payload) => {
-          const record = payload.new
-          if (record.app_name === 'dashboard' && record.version !== CURRENT_VERSION) {
-            checkForUpdate(record)
+    let channel = null
+    try {
+      channel = supabase
+        .channel('app-versions')
+        .on('postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'app_versions' },
+          (payload) => {
+            const record = payload.new
+            if (record.app_name === 'dashboard' && record.version !== CURRENT_VERSION) {
+              checkForUpdate(record)
+            }
           }
-        }
-      )
-      .subscribe()
+        )
+        .subscribe()
+    } catch (err) {
+      console.error('[Realtime] App versions subscription failed:', err)
+    }
 
     return () => {
-      supabase.removeChannel(channel)
+      if (channel) {
+        supabase.removeChannel(channel)
+      }
     }
   }, [isLoggedIn])
 

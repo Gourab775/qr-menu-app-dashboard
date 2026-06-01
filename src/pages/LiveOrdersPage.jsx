@@ -26,6 +26,7 @@ function LiveOrdersPage({ restaurantId }) {
 
   const isMountedRef = useRef(true)
   const lastOrderIds = useRef(new Set())
+  const waiterChannelRef = useRef(null)
   const isLoggedIn = !!session
 
   const showToast = useCallback((message, type = 'success') => {
@@ -108,15 +109,23 @@ function LiveOrdersPage({ restaurantId }) {
   useEffect(() => {
     if (!isLoggedIn || !restaurantId) return
 
-    const waiterChannelName = `waiter-live-${restaurantId}`
-    supabase.getChannels().forEach(ch => {
-      if (ch.topic === waiterChannelName) {
-        supabase.removeChannel(ch)
-      }
-    })
+    if (!restaurantId) {
+      console.error('[Realtime] Missing restaurantId')
+      return
+    }
+
+    const waiterChannelName = `waiter-live-${restaurantId}-liveorders`
+
+    if (waiterChannelRef.current) {
+      console.log('[Realtime] Duplicate Subscription Prevented for waiter channel')
+      supabase.removeChannel(waiterChannelRef.current)
+      waiterChannelRef.current = null
+    }
 
     let isSubscribed = true
-    console.log('[LiveOrders WaiterCalls] Subscribing to channel:', waiterChannelName)
+    console.log('[Realtime] Channel Created: waiter', waiterChannelName)
+    console.log('[Realtime] Restaurant ID:', restaurantId)
+
     const channel = supabase
       .channel(waiterChannelName)
       .on(
@@ -128,11 +137,7 @@ function LiveOrdersPage({ restaurantId }) {
           filter: `restaurant_id=eq.${restaurantId}`
         },
         (payload) => {
-          console.log('[LiveOrders Realtime Waiter] Event received:', {
-            eventType: payload.eventType,
-            restaurantId: payload.new?.restaurant_id,
-            currentRestaurantId: restaurantId
-          })
+          console.log('[Realtime] Event Received: waiter', payload.eventType, payload.new?.id)
 
           // Cross-tenant validation
           if (payload.new && payload.new.restaurant_id !== restaurantId) {
@@ -170,7 +175,14 @@ function LiveOrdersPage({ restaurantId }) {
           }
         }
       )
-      .subscribe()
+
+    try {
+      channel.subscribe()
+      waiterChannelRef.current = channel
+      console.log('[Realtime] Waiter channel subscribed')
+    } catch (err) {
+      console.error('[Realtime] Waiter subscription failed:', err)
+    }
 
     const fetchWaiterCalls = async () => {
       if (!restaurantId) {
@@ -192,7 +204,11 @@ function LiveOrdersPage({ restaurantId }) {
 
     return () => {
       isSubscribed = false
-      supabase.removeChannel(channel)
+      if (waiterChannelRef.current) {
+        console.log('[Realtime] Channel Removed: waiter')
+        supabase.removeChannel(waiterChannelRef.current)
+        waiterChannelRef.current = null
+      }
     }
   }, [isLoggedIn, restaurantId])
 
