@@ -38,15 +38,11 @@ export default function CategoriesPage({ restaurantId }) {
     setTimeout(() => setShowToast(null), 3000)
   }
 
-  const loadCategories = async (signal = null, retryBasic = false) => {
+  const loadCategories = async (signal = null) => {
     if (!signal && mountedRef.current) setLoading(true)
     setError(null)
 
-    console.log('[Categories] Current Restaurant ID:', currentRestId || 'null')
-    console.log('[Categories] Restaurant ID type:', typeof currentRestId, '| value:', currentRestId)
-
     if (!currentRestId) {
-      console.warn('[Categories] Restaurant ID is null or undefined — cannot query')
       if (!signal?.aborted) {
         setLoading(false)
         setError('Restaurant ID is not available')
@@ -55,15 +51,7 @@ export default function CategoriesPage({ restaurantId }) {
     }
 
     try {
-      const columns = retryBasic
-        ? 'id, name, image, sort_order'
-        : 'id, name, image, sort_order, main_category_id, status'
-      console.log('[Categories] Query Started', {
-        table: 'categories',
-        select: columns,
-        filter: { restaurant_id: currentRestId },
-        mode: retryBasic ? 'FALLBACK' : 'FULL'
-      })
+      const columns = 'id, name, image, sort_order, main_category_id'
 
       const categoriesQuery = supabase
         .from('categories')
@@ -72,33 +60,8 @@ export default function CategoriesPage({ restaurantId }) {
         .order('sort_order', { ascending: true })
       const { data, error } = await fetchWithTimeout(categoriesQuery, API_TIMEOUT)
 
-      console.log('[Categories] Query Result:', {
-        dataCount: data?.length ?? 0,
-        error: error?.message ?? null,
-        code: error?.code ?? null,
-        details: error?.details ?? null,
-        hint: error?.hint ?? null
-      })
-
       if (signal?.aborted) return
-      if (error) {
-        console.error('[Categories] Query Error:', {
-          message: error.message,
-          code: error.code,
-          details: error.details,
-          hint: error.hint
-        })
-        throw error
-      }
-
-      if (data?.length > 0) {
-        console.log('[Categories] Cloudinary Data:', data.map(c => ({
-          id: c.id,
-          name: c.name,
-          hasImage: !!c.image,
-          imagePreview: c.image ? c.image.slice(0, 60) + '...' : null
-        })))
-      }
+      if (error) throw error
 
       setCategories(data || [])
       if (!signal?.aborted && data?.length > 0) {
@@ -126,30 +89,11 @@ export default function CategoriesPage({ restaurantId }) {
         setMainCategories(mcData)
       }
     } catch (err) {
-      const isPermissionError = err.code === 'PGRST301' || err.message?.toLowerCase().includes('permission denied')
-      const isColumnError = err.message?.toLowerCase().includes('does not exist') || err.message?.toLowerCase().includes('column')
       const isTimeout = err.name === 'AbortError' || err.message?.toLowerCase().includes('timeout')
-
-      console.error('[Categories] RLS Error / Query Failure:', {
-        name: err.name,
-        message: err.message,
-        code: err.code ?? null,
-        details: err.details ?? null,
-        hint: err.hint ?? null,
-        isPermissionError,
-        isColumnError,
-        isTimeout
-      })
 
       if (!signal?.aborted) {
         if (isTimeout) {
           setError('Request cancelled')
-        } else if (isColumnError && !retryBasic) {
-          console.warn('[Categories] Column(s) missing — retrying with basic columns only')
-          setError(null)
-          setLoading(true)
-          await loadCategories(signal, true)
-          return
         } else {
           setError(err.message || 'Failed to load categories')
         }
@@ -506,9 +450,6 @@ function CategoryCard({ category, itemCount, mainCategories = [], onEditClick, o
         <span className="category-meta">{itemCount} items</span>
         {mainCat && (
           <span className="category-main-cat">{mainCat.name}</span>
-        )}
-        {category.status && (
-          <span className={`category-status ${category.status}`}>{category.status}</span>
         )}
       </div>
       <div className="category-actions">
