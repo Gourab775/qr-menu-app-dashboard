@@ -854,15 +854,18 @@ const handlePasswordChange = async (e) => {
               <h3>Business Details</h3>
               <button className="modal-close" onClick={closeModal}>×</button>
             </div>
+            <div className="business-readonly-section">
+              <div className="readonly-field">
+                <span className="readonly-label">Restaurant Name</span>
+                <span className="readonly-value">{restaurant?.name || formData.name || '—'}</span>
+              </div>
+              <div className="readonly-field">
+                <span className="readonly-label">Restaurant Slug</span>
+                <span className="readonly-value">{restaurant?.slug || formData.slug || '—'}</span>
+                <span className="super-admin-badge">Managed by Super Admin</span>
+              </div>
+            </div>
             <form onSubmit={handleSaveRestaurant}>
-              <div className="form-group">
-                <label>Restaurant Name *</label>
-                <input type="text" value={formData.name || ''} onChange={e => setFormData({ ...formData, name: e.target.value })} placeholder="Enter restaurant name" required disabled={!isSuperAdmin} />
-              </div>
-              <div className="form-group">
-                <label>Slug (URL)</label>
-                <input type="text" value={formData.slug || ''} onChange={e => setFormData({ ...formData, slug: e.target.value.toLowerCase() })} placeholder="e.g., my-restaurant" disabled={!isSuperAdmin} />
-              </div>
               <div className="form-group">
                 <label>Address</label>
                 <textarea value={formData.address || ''} onChange={e => setFormData({ ...formData, address: e.target.value })} placeholder="Enter address" rows={2} />
