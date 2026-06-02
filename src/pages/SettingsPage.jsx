@@ -262,45 +262,68 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
     if (!signal && mountedRef.current) setLoading(true);
 
     try {
+      console.log('[Settings] Restaurant ID:', currentRestId);
+      console.log('[Settings] Query Started');
+
+      const selectedColumns = 'name, slug, contact_number, logo';
+      console.log('[Settings] Selected Columns:', selectedColumns);
+
       const restaurantPromise = supabase
         .from('restaurants')
-        .select('name, slug, address, phone, contact_number, email, logo')
+        .select(selectedColumns)
         .eq('id', currentRestId)
         .single()
 
       const { data, error } = await fetchWithTimeout(restaurantPromise, API_TIMEOUT)
 
+      console.log('[Settings] Query Response:', data);
+      if (error) console.log('[Settings] Query Error:', error);
+
       if (signal?.aborted) return;
 
-      if (error && error.code !== 'PGRST116') {
-        console.warn('Restaurant not found, using defaults')
+      if (error) {
+        if (error.code === 'PGRST116') {
+          console.warn('[Settings] Restaurant not found (no row returned), using defaults');
+          setRestaurant({
+            id: currentRestId,
+            name: 'Your Restaurant',
+            slug: '',
+            contact_number: '',
+            logo: ''
+          });
+        } else {
+          console.warn('[Settings] Missing Column or schema issue:', error.message, error.details, error.hint);
+          setRestaurant({
+            id: currentRestId,
+            name: 'Your Restaurant',
+            slug: '',
+            contact_number: '',
+            logo: ''
+          });
+        }
+        return;
       }
       
       if (data) {
+        console.log('[Settings] Restaurant Found');
         setRestaurant(data)
       } else {
         setRestaurant({
           id: currentRestId,
           name: 'Your Restaurant',
           slug: '',
-          address: '',
-          phone: '',
           contact_number: '',
-          email: '',
           logo: ''
         })
       }
     } catch (err) {
-      console.error('Failed to load restaurant:', err)
+      console.error('[Settings] Failed to load restaurant:', err)
       if (!signal?.aborted) {
         setRestaurant({
           id: currentRestId,
           name: 'Your Restaurant',
           slug: '',
-          address: '',
-          phone: '',
           contact_number: '',
-          email: '',
           logo: ''
         })
       }
@@ -330,7 +353,7 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
     try {
       const restaurantPromise = supabase
         .from('restaurants')
-        .select('name, slug, address, phone, contact_number, email, logo')
+        .select('name, slug, contact_number, logo')
         .eq('id', currentRestId)
         .single()
       
@@ -487,9 +510,7 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
       setFormData({
         name: restaurant.name || '',
         slug: restaurant.slug || '',
-        address: restaurant.address || '',
-        phone: restaurant.phone || restaurant.contact_number || '',
-        email: restaurant.email || '',
+        contact_number: restaurant.contact_number || '',
         logo: restaurant.logo || ''
       })
     } else if (modalName === 'logo' && restaurant) {
@@ -655,17 +676,14 @@ const handlePasswordChange = async (e) => {
     e.preventDefault()
     setSaving(true)
     try {
-      const { name, slug, address, phone, email, logo } = formData
+      const { name, slug, contact_number, logo } = formData
 
       if (!isSuperAdmin) {
         const { error } = await supabase
           .from('restaurants')
           .upsert({ 
             id: currentRestId, 
-            address: address?.trim() || null, 
-            phone: phone?.trim() || null,
-            contact_number: phone?.trim() || null,
-            email: email?.trim() || null,
+            contact_number: contact_number?.trim() || null,
             logo: logo?.trim() || null
           }, { onConflict: 'id' })
 
@@ -695,10 +713,7 @@ const handlePasswordChange = async (e) => {
           id: currentRestId, 
           name: name.trim(), 
           slug: slug?.trim() || null,
-          address: address?.trim() || null, 
-          phone: phone?.trim() || null,
-          contact_number: phone?.trim() || null,
-          email: email?.trim() || null,
+          contact_number: contact_number?.trim() || null,
           logo: logo?.trim() || null
         }, { onConflict: 'id' })
 
@@ -867,16 +882,8 @@ const handlePasswordChange = async (e) => {
             </div>
             <form onSubmit={handleSaveRestaurant}>
               <div className="form-group">
-                <label>Address</label>
-                <textarea value={formData.address || ''} onChange={e => setFormData({ ...formData, address: e.target.value })} placeholder="Enter address" rows={2} />
-              </div>
-              <div className="form-group">
-                <label>Phone Number</label>
-                <input type="tel" value={formData.phone || ''} onChange={e => setFormData({ ...formData, phone: e.target.value })} placeholder="Enter phone number" />
-              </div>
-              <div className="form-group">
-                <label>Email</label>
-                <input type="email" value={formData.email || ''} onChange={e => setFormData({ ...formData, email: e.target.value })} placeholder="Enter email" />
+                <label>Contact Number</label>
+                <input type="tel" value={formData.contact_number || ''} onChange={e => setFormData({ ...formData, contact_number: e.target.value })} placeholder="Enter contact number" />
               </div>
               <div className="modal-actions">
                 <button type="button" className="cancel-btn" onClick={closeModal}>Cancel</button>
