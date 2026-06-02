@@ -13,12 +13,24 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - run: npm ci
 
       - run: npm run build
+
+      - name: Deployment Diagnostics
+        id: diagnostics
+        run: |
+          echo "node_version=$(node -v)" >> $GITHUB_OUTPUT
+          echo "node_major=$(node -e "console.log(process.version.slice(1).split('.')[0])")" >> $GITHUB_OUTPUT
+          echo "npm_version=$(npm -v)" >> $GITHUB_OUTPUT
+          echo "supabase_url_status=$([ -z \"$SUPABASE_URL\" ] && echo 'MISSING' || echo 'CONFIGURED')" >> $GITHUB_OUTPUT
+          echo "supabase_key_status=$([ -z \"$SUPABASE_KEY\" ] && echo 'MISSING' || echo 'CONFIGURED')" >> $GITHUB_OUTPUT
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
 
       - name: Publish version to Supabase
         env:

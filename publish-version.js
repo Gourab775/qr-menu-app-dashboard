@@ -1,4 +1,3 @@
-import { createClient } from '@supabase/supabase-js'
 import { readFileSync } from 'fs'
 import { fileURLToPath } from 'url'
 import { dirname, resolve } from 'path'
@@ -13,27 +12,44 @@ const message = process.env.UPDATE_MESSAGE || ''
 const updateUrl = process.env.UPDATE_URL || ''
 const forceUpdate = false
 
+// --- Diagnostics ---
+console.log('=== Deployment Diagnostics ===')
+console.log(`Node version: ${process.version}`)
+console.log(`App name: ${appName}`)
+console.log(`Version to publish: ${pkg.version}`)
+console.log(`Supabase URL configured: ${!!supabaseUrl}`)
+console.log(`Supabase Key configured: ${!!supabaseKey}`)
+
 if (!supabaseUrl || !supabaseKey) {
   console.error('Missing required env vars: SUPABASE_URL, SUPABASE_KEY')
   process.exit(1)
 }
 
-const supabase = createClient(supabaseUrl, supabaseKey)
+const baseUrl = supabaseUrl.replace(/\/+$/, '')
+const endpoint = `${baseUrl}/rest/v1/app_versions`
 
-const { data, error } = await supabase
-  .from('app_versions')
-  .insert({
+const response = await fetch(endpoint, {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'apikey': supabaseKey,
+    'Authorization': `Bearer ${supabaseKey}`,
+    'Prefer': 'return=representation'
+  },
+  body: JSON.stringify({
     app_name: appName,
     version: pkg.version,
     message,
     update_url: updateUrl,
-    force_update: forceUpdate,
+    force_update: forceUpdate
   })
-  .select()
+})
 
-if (error) {
-  console.error('Failed to publish version:', error.message)
+if (!response.ok) {
+  const errBody = await response.text()
+  console.error('Failed to publish version:', response.status, response.statusText, errBody)
   process.exit(1)
 }
 
+const data = await response.json()
 console.log(`Version ${pkg.version} published successfully:`, JSON.stringify(data))
