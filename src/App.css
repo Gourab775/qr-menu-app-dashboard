@@ -3034,7 +3034,7 @@ body {
   gap: 6px;
   padding: 8px 16px;
   background: var(--orange);
-  color: #fff;
+  color: #000;
   border: none;
   border-radius: var(--radius-sm);
   font-size: 13px;
@@ -3050,7 +3050,7 @@ body {
 
 .cloudinary-clear-btn {
   font-size: 12px;
-  color: var(--red);
+  color: var(--text);
   text-decoration: none;
   padding: 4px 8px;
 }
@@ -3079,6 +3079,35 @@ body {
   object-fit: contain;
   margin-top: 8px;
   display: block;
+}
+
+.cloudinary-upload-wrap .form-error {
+  color: var(--text);
+}
+
+.settings-modal:has(.cloudinary-upload-wrap) .modal-header h3 {
+  color: var(--text);
+}
+
+.settings-modal:has(.cloudinary-upload-wrap) .form-group label {
+  color: var(--text);
+}
+
+.settings-modal:has(.cloudinary-upload-wrap) .form-group input[readonly]::placeholder {
+  color: var(--text);
+  opacity: 1;
+}
+
+.form-group:has(.cloudinary-upload-wrap) > label {
+  color: var(--text);
+}
+
+.mief-row:has(.cloudinary-upload-wrap) > label {
+  color: var(--text);
+}
+
+.featured-field:has(.cloudinary-upload-wrap) .featured-field-label {
+  color: var(--text);
 }
 
 .settings-modal .modal-actions {
@@ -3958,7 +3987,7 @@ body {
   align-items: center;
   justify-content: center;
   font-size: 13px;
-  color: var(--text-muted);
+  color: var(--text);
   background: var(--border);
 }
 
