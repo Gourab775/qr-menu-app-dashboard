@@ -2,8 +2,8 @@ import { useState, useRef } from 'react'
 import { uploadToCloudinary, validateImageFile, validateVideoFile, getOptimizedUrl } from '../services/cloudinaryService'
 
 const LABELS = {
-  logo: { title: 'Upload Logo', accept: 'image/*', validator: validateImageFile },
-  image: { title: 'Upload Image', accept: 'image/*', validator: validateImageFile },
+  logo: { title: 'Upload Logo', accept: 'image/jpeg,image/png,image/webp', validator: validateImageFile },
+  image: { title: 'Upload Image', accept: 'image/jpeg,image/png,image/webp', validator: validateImageFile },
   video: { title: 'Upload Video', accept: 'video/mp4,video/webm,video/quicktime', validator: validateVideoFile }
 }
 

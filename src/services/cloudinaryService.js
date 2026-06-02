@@ -18,8 +18,9 @@ console.log('[Cloudinary] Upload URL:', UPLOAD_URL)
 
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp']
 const ALLOWED_VIDEO_TYPES = ['video/mp4', 'video/webm', 'video/quicktime']
-const MAX_IMAGE_SIZE = 1 * 1024 * 1024
-const MAX_VIDEO_SIZE = 50 * 1024 * 1024
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024
+const MAX_VIDEO_SIZE = 5 * 1024 * 1024
+const MAX_SIZE_MB = 5
 
 const inFlightUploads = new Map()
 
@@ -37,10 +38,10 @@ function buildFolderPath(restaurantId, subfolder) {
 export function validateImageFile(file) {
   if (!file) return 'No file selected'
   if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
-    return 'Invalid image type. Allowed: JPG, JPEG, PNG, WEBP'
+    return 'Unsupported file format.'
   }
   if (file.size > MAX_IMAGE_SIZE) {
-    return `Image too large. Maximum ${MAX_IMAGE_SIZE / 1024 / 1024}MB`
+    return 'File size exceeds the 5 MB limit. Please upload a smaller file.'
   }
   return null
 }
@@ -48,25 +49,80 @@ export function validateImageFile(file) {
 export function validateVideoFile(file) {
   if (!file) return 'No file selected'
   if (!ALLOWED_VIDEO_TYPES.includes(file.type)) {
-    return 'Invalid video type. Allowed: MP4, WEBM, MOV'
+    return 'Unsupported file format.'
   }
   if (file.size > MAX_VIDEO_SIZE) {
-    return `Video too large. Maximum ${MAX_VIDEO_SIZE / 1024 / 1024}MB`
+    return 'File size exceeds the 5 MB limit. Please upload a smaller file.'
   }
   return null
 }
 
-export function uploadToCloudinary({ file, restaurantId, subfolder, onProgress }) {
+export async function compressImage(file, maxDimension = 1920, quality = 0.85) {
+  if (!file || !file.type.startsWith('image/')) return file
+
+  try {
+    const dataUrl = await new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(reader.result)
+      reader.onerror = reject
+      reader.readAsDataURL(file)
+    })
+
+    const img = new Image()
+    await new Promise((resolve, reject) => {
+      img.onload = resolve
+      img.onerror = reject
+      img.src = dataUrl
+    })
+
+    let { width, height } = img
+    if (width <= maxDimension && height <= maxDimension) {
+      const canvas = document.createElement('canvas')
+      canvas.width = width
+      canvas.height = height
+      const ctx = canvas.getContext('2d')
+      ctx.drawImage(img, 0, 0)
+      const blob = await new Promise((resolve) => canvas.toBlob(resolve, file.type, quality))
+      if (blob && blob.size < file.size) {
+        return new File([blob], file.name, { type: file.type })
+      }
+      return file
+    }
+
+    if (width > height) {
+      height = Math.round(height * (maxDimension / width))
+      width = maxDimension
+    } else {
+      width = Math.round(width * (maxDimension / height))
+      height = maxDimension
+    }
+
+    const canvas = document.createElement('canvas')
+    canvas.width = width
+    canvas.height = height
+    const ctx = canvas.getContext('2d')
+    ctx.drawImage(img, 0, 0, width, height)
+
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, file.type, quality))
+    return new File([blob], file.name, { type: file.type })
+  } catch {
+    return file
+  }
+}
+
+export async function uploadToCloudinary({ file, restaurantId, subfolder, onProgress }) {
   if (!CLOUD_NAME) {
-    return Promise.reject(new Error('Missing Cloud Name: Cloudinary cloud name is not configured'))
+    throw new Error('Missing Cloud Name: Cloudinary cloud name is not configured')
   }
   if (!UPLOAD_PRESET) {
-    return Promise.reject(new Error('Missing Upload Preset: Create an unsigned upload preset in Cloudinary dashboard and set VITE_CLOUDINARY_UPLOAD_PRESET'))
+    throw new Error('Missing Upload Preset: Create an unsigned upload preset in Cloudinary dashboard and set VITE_CLOUDINARY_UPLOAD_PRESET')
   }
 
+  const optimizedFile = file.type.startsWith('image/') ? await compressImage(file) : file
+
   const folder = buildFolderPath(restaurantId, subfolder)
-  const publicId = generatePublicId(file.name)
-  const uploadKey = `${restaurantId}/${subfolder}/${file.name}-${file.size}`
+  const publicId = generatePublicId(optimizedFile.name)
+  const uploadKey = `${restaurantId}/${subfolder}/${optimizedFile.name}-${optimizedFile.size}`
 
   if (inFlightUploads.has(uploadKey)) {
     return Promise.reject(new Error('Duplicate upload detected'))
@@ -76,10 +132,10 @@ export function uploadToCloudinary({ file, restaurantId, subfolder, onProgress }
     inFlightUploads.set(uploadKey, true)
 
     try {
-      console.log('[Cloudinary] Upload Started:', { folder, publicId, fileName: file.name })
+      console.log('[Cloudinary] Upload Started:', { folder, publicId, fileName: optimizedFile.name, size: optimizedFile.size })
 
       const formData = new FormData()
-      formData.append('file', file)
+      formData.append('file', optimizedFile)
       formData.append('folder', folder)
       formData.append('public_id', publicId)
       formData.append('upload_preset', UPLOAD_PRESET)
