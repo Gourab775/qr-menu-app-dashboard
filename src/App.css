@@ -949,7 +949,7 @@ body {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.5);
-  z-index: 50;
+  z-index: 101;
 }
 
 .sidebar {
@@ -960,7 +960,7 @@ body {
   width: 260px;
   background: var(--card);
   border-right: 1px solid var(--border);
-  z-index: 60;
+  z-index: 102;
   transform: translateX(-100%);
   transition: transform 0.3s ease;
 }
