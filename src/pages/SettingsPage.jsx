@@ -223,7 +223,8 @@ Limitation of Liability
  We are not liable for indirect or consequential damages`
 
 export default function SettingsPage({ preferences, setPreferences, onToast, restaurantId }) {
-  const { signOut } = useAuth()
+  const { signOut, role } = useAuth()
+  const isSuperAdmin = role === 'admin'
   const [restaurant, setRestaurant] = useState(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -651,6 +652,26 @@ const handlePasswordChange = async (e) => {
     setSaving(true)
     try {
       const { name, slug, address, phone, email, logo } = formData
+
+      if (!isSuperAdmin) {
+        const { error } = await supabase
+          .from('restaurants')
+          .upsert({ 
+            id: currentRestId, 
+            address: address?.trim() || null, 
+            phone: phone?.trim() || null,
+            contact_number: phone?.trim() || null,
+            email: email?.trim() || null,
+            logo: logo?.trim() || null
+          }, { onConflict: 'id' })
+
+        if (error) throw error
+        await refreshRestaurant()
+        showToast('Business details saved')
+        closeModal()
+        setSaving(false)
+        return
+      }
       
       if (!name || name.trim() === '') {
         showToast('Restaurant name is required', 'error')
@@ -730,11 +751,11 @@ const handlePasswordChange = async (e) => {
             <form onSubmit={handleSaveRestaurant}>
               <div className="form-group">
                 <label>Restaurant Name *</label>
-                <input type="text" value={formData.name || ''} onChange={e => setFormData({ ...formData, name: e.target.value })} placeholder="Enter restaurant name" required />
+                <input type="text" value={formData.name || ''} onChange={e => setFormData({ ...formData, name: e.target.value })} placeholder="Enter restaurant name" required disabled={!isSuperAdmin} />
               </div>
               <div className="form-group">
                 <label>Slug (URL)</label>
-                <input type="text" value={formData.slug || ''} onChange={e => setFormData({ ...formData, slug: e.target.value.toLowerCase() })} placeholder="e.g., my-restaurant" />
+                <input type="text" value={formData.slug || ''} onChange={e => setFormData({ ...formData, slug: e.target.value.toLowerCase() })} placeholder="e.g., my-restaurant" disabled={!isSuperAdmin} />
               </div>
               <div className="form-group">
                 <label>Address</label>

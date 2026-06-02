@@ -398,6 +398,7 @@ function App() {
     if (!isLoggedIn || !restaurantId) return
 
     const lastPlayedOrderRef = { current: null }
+    const processedEventIdsRef = { current: new Set() }
     const soundReadyRef = { current: false }
     const audioCtxRef = { current: null }
 
@@ -489,10 +490,17 @@ function App() {
           const newOrderId = payload.new.id
           const rawStatus = payload.new.status
           const newStatus = rawStatus || 'pending'
+
+          if (processedEventIdsRef.current.has(newOrderId)) {
+            console.log('[Order Sound] Duplicate Event Prevented', { id: newOrderId })
+            return
+          }
+          processedEventIdsRef.current.add(newOrderId)
           if (lastPlayedOrderRef.current === newOrderId) return
           lastPlayedOrderRef.current = newOrderId
 
           console.log('[Realtime] Event Received: INSERT order', { id: newOrderId, status: rawStatus })
+          console.log('[Order Sound] New Order Received', { id: newOrderId })
 
           if (newStatus !== 'pending') {
             console.warn('[Orders] New order inserted with non-pending status:', {
@@ -517,7 +525,10 @@ function App() {
 
             if (newStatus === 'pending') {
               setOrders(prev => {
-                if (prev.some(o => o.id === newOrderId)) return prev.map(o => o.id === newOrderId ? { ...o, ...resolved } : o)
+                if (prev.some(o => o.id === newOrderId)) {
+                  console.log('[Order Sound] Ignored Existing Order', { id: newOrderId })
+                  return prev.map(o => o.id === newOrderId ? { ...o, ...resolved } : o)
+                }
                 playOrderSound()
                 return [resolved, ...prev].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
               })
@@ -552,6 +563,8 @@ function App() {
             })
             return
           }
+          console.log('[Order Sound] Ignored UPDATE Event', { id: payload.new.id, status: payload.new.status })
+
           const { id, status } = payload.new
           const oldStatus = payload.old?.status
 
@@ -1126,7 +1139,6 @@ function App() {
               <div className="profile-info">
                 <p className="profile-name"><strong>{userFullName}</strong></p>
                 <p className="profile-role">{userRole.charAt(0).toUpperCase() + userRole.slice(1)}</p>
-                <p className="profile-id">ID: {(profile?.id || session?.user?.id || '').slice(0, 8)}...</p>
               </div>
               <div className="profile-divider"></div>
               <button className="profile-btn" onClick={handleLogout}>Logout</button>

@@ -129,8 +129,13 @@ function PopupApp() {
       const prevIds = lastOrderIds.current
       const currIds = new Set(pending.map(o => o.id))
       const hasNewOrder = pending.some(o => !prevIds.has(o.id))
-      if (localStorage.getItem('order_sound_enabled') !== 'false' && orderPlayFn) {
-        try { orderPlayFn() } catch {}
+      if (hasNewOrder) {
+        console.log('[Order Sound] New Order Received (BroadcastChannel)', { newOrderIds: [...currIds].filter(id => !prevIds.has(id)) })
+        if (localStorage.getItem('order_sound_enabled') !== 'false' && orderPlayFn) {
+          try { orderPlayFn() } catch {}
+        }
+      } else {
+        console.log('[Order Sound] Ignored Existing Order (BroadcastChannel)')
       }
       lastOrderIds.current = currIds
 
