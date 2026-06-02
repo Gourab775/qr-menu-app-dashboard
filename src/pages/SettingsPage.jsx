@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { fetchWithTimeout } from '../lib/apiUtils'
 import { useAuth } from '../contexts/AuthContext'
+import CloudinaryUpload from '../components/CloudinaryUpload'
+import { uploadToCloudinary, deleteFromCloudinary, extractPublicId } from '../services/cloudinaryService'
 import { IconPackage, IconBarChart, IconSettings, IconBell, IconLock, IconUtensils, IconFolder, IconCheck, IconX, IconPhone, IconMail, IconStore, IconCopy, IconLogOut, IconEye, IconEyeOff, IconStar, IconHelpCircle, IconFileText, IconTrash2, IconPalette, IconInfo, IconImage } from '../components/Icons'
 
 const API_TIMEOUT = 30000
@@ -503,6 +505,8 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
       setPasswordErrors({})
     } else if (modalName === 'maincategories') {
       loadMainCategories()
+    } else if (modalName === 'bgvideo') {
+      loadBgVideo()
     }
   }
 
@@ -714,11 +718,6 @@ const handlePasswordChange = async (e) => {
   const handleSaveLogo = async (e) => {
     e.preventDefault()
     const logoUrl = formData.logo?.trim() || ''
-    
-    if (logoUrl && !/^(https?:\/\/)/.test(logoUrl)) {
-      showToast('Logo must be a valid URL', 'error')
-      return
-    }
 
     setSaving(true)
     try {
@@ -727,12 +726,65 @@ const handlePasswordChange = async (e) => {
         .upsert({ id: currentRestId, logo: logoUrl }, { onConflict: 'id' })
 
       if (error) throw error
-      
+
       await refreshRestaurant()
       showToast(logoUrl ? 'Logo saved' : 'Logo cleared')
       closeModal()
     } catch (err) {
-      showToast('Failed to save', 'error')
+      const publicId = extractPublicId(logoUrl)
+      if (publicId) deleteFromCloudinary(publicId)
+      showToast('Failed to save logo', 'error')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const loadBgVideo = async () => {
+    try {
+      const { data } = await supabase
+        .from('landing_page_settings')
+        .select('background_video_url')
+        .eq('restaurant_id', currentRestId)
+        .maybeSingle()
+      setFormData({
+        background_video_url: data?.background_video_url || ''
+      })
+    } catch (err) {
+      console.error('Failed to load background video:', err)
+      setFormData({ background_video_url: '' })
+    }
+  }
+
+  const handleSaveBgVideo = async (e) => {
+    e.preventDefault()
+    const videoUrl = formData.background_video_url?.trim() || ''
+    setSaving(true)
+    try {
+      const existing = await supabase
+        .from('landing_page_settings')
+        .select('id')
+        .eq('restaurant_id', currentRestId)
+        .maybeSingle()
+
+      if (existing.data) {
+        const { error } = await supabase
+          .from('landing_page_settings')
+          .update({ background_video_url: videoUrl || null })
+          .eq('id', existing.data.id)
+        if (error) throw error
+      } else {
+        const { error } = await supabase
+          .from('landing_page_settings')
+          .insert({ restaurant_id: currentRestId, background_video_url: videoUrl || null })
+        if (error) throw error
+      }
+
+      showToast(videoUrl ? 'Background video saved' : 'Background video cleared')
+      closeModal()
+    } catch (err) {
+      const publicId = extractPublicId(videoUrl)
+      if (publicId) deleteFromCloudinary(publicId)
+      showToast('Failed to save background video', 'error')
     } finally {
       setSaving(false)
     }
@@ -788,10 +840,43 @@ const handlePasswordChange = async (e) => {
             </div>
             <form onSubmit={handleSaveLogo}>
               <div className="form-group">
-                <label>Logo URL</label>
-                <input type="url" value={formData.logo || ''} onChange={e => setFormData({ ...formData, logo: e.target.value })} placeholder="https://example.com/logo.png" />
+                <label>Logo</label>
+                <CloudinaryUpload
+                  restaurantId={currentRestId}
+                  subfolder="res_logo"
+                  type="logo"
+                  value={formData.logo || ''}
+                  onChange={(url) => setFormData({ ...formData, logo: url })}
+                />
               </div>
-              {restaurant?.logo && <div className="logo-preview"><img src={restaurant.logo} alt="Logo preview" onError={(e) => e.target.style.display = 'none'} /></div>}
+              <div className="modal-actions">
+                <button type="button" className="cancel-btn" onClick={closeModal}>Cancel</button>
+                <button type="submit" className="save-btn" disabled={saving}>{saving ? 'Saving...' : 'Save'}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )
+    }
+    if (showModal === 'bgvideo') {
+      return (
+        <div className="modal-overlay" onClick={closeModal}>
+          <div className="settings-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Background Video</h3>
+              <button className="modal-close" onClick={closeModal}>×</button>
+            </div>
+            <form onSubmit={handleSaveBgVideo}>
+              <div className="form-group">
+                <label>Background Video (for landing page)</label>
+                <CloudinaryUpload
+                  restaurantId={currentRestId}
+                  subfolder="background video"
+                  type="video"
+                  value={formData.background_video_url || ''}
+                  onChange={(url) => setFormData({ ...formData, background_video_url: url })}
+                />
+              </div>
               <div className="modal-actions">
                 <button type="button" className="cancel-btn" onClick={closeModal}>Cancel</button>
                 <button type="submit" className="save-btn" disabled={saving}>{saving ? 'Saving...' : 'Save'}</button>
@@ -1160,7 +1245,8 @@ const handlePasswordChange = async (e) => {
       title: 'Business',
       items: [
         { icon: <IconStore size={20} />, label: 'Business Details', description: restaurant?.name || 'Configure', onClick: () => openModal('business') },
-        { icon: <IconImage size={20} />, label: 'Logo', description: restaurant?.logo ? 'Set' : 'Not set', onClick: () => openModal('logo'), badge: restaurant?.logo ? 'Set' : '' }
+        { icon: <IconImage size={20} />, label: 'Logo', description: restaurant?.logo ? 'Set' : 'Not set', onClick: () => openModal('logo'), badge: restaurant?.logo ? 'Set' : '' },
+        { icon: <IconImage size={20} />, label: 'Background Video', description: 'Landing page video', onClick: () => openModal('bgvideo') }
       ]
     },
     {

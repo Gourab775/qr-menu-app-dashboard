@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { fetchWithTimeout } from '../lib/apiUtils'
 import ConfirmModal from '../components/ConfirmModal'
+import CloudinaryUpload from '../components/CloudinaryUpload'
+import { getOptimizedUrl, extractPublicId, deleteFromCloudinary } from '../services/cloudinaryService'
 import { IconAlertTriangle, IconFolder } from '../components/Icons'
 
 const API_TIMEOUT = 30000
@@ -184,6 +186,8 @@ export default function CategoriesPage({ restaurantId }) {
       setEditingCategory(null)
       loadCategories()
     } catch (err) {
+      const publicId = extractPublicId(editImage)
+      if (publicId) deleteFromCloudinary(publicId)
       showToastMsg('Failed to update category', 'error')
     } finally {
       setSavingEdit(false)
@@ -349,12 +353,13 @@ export default function CategoriesPage({ restaurantId }) {
                 </div>
               )}
               <div className="form-group">
-                <label>Image URL (optional)</label>
-                <input
-                  type="url"
+                <label>Image</label>
+                <CloudinaryUpload
+                  restaurantId={currentRestId}
+                  subfolder="Categories"
+                  type="image"
                   value={editImage}
-                  onChange={(e) => setEditImage(e.target.value)}
-                  placeholder="https://example.com/image.jpg"
+                  onChange={(url) => setEditImage(url)}
                 />
               </div>
               <div className="form-group">
@@ -409,9 +414,10 @@ function CategoryCard({ category, itemCount, mainCategories = [], onEditClick, o
       <div className="category-image-wrapper">
         {category.image && !imageError ? (
           <img
-            src={category.image}
+            src={getOptimizedUrl(category.image)}
             alt={category.name}
             className="category-image"
+            loading="lazy"
             onError={() => setImageError(true)}
           />
         ) : (

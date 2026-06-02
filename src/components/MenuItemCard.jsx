@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import ConfirmModal from './ConfirmModal'
+import CloudinaryUpload from './CloudinaryUpload'
+import { getOptimizedUrl } from '../services/cloudinaryService'
 
 const VegIcon = () => (
   <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
@@ -15,7 +17,7 @@ const NonVegIcon = () => (
   </svg>
 )
 
-export default function MenuItemCard({ item, onSave, onDelete, categories = [] }) {
+export default function MenuItemCard({ item, onSave, onDelete, categories = [], restaurantId }) {
   const [editing, setEditing] = useState(false)
   const [formData, setFormData] = useState({
     name: item.name,
@@ -126,7 +128,7 @@ export default function MenuItemCard({ item, onSave, onDelete, categories = [] }
         <div className={`menu-item-card ${!item.is_available ? 'unavailable' : ''}`}>
           <div className="mic-image">
             {item.image_url && !imageError ? (
-              <img src={item.image_url} alt={item.name} onError={() => setImageError(true)} />
+              <img src={getOptimizedUrl(item.image_url)} alt={item.name} loading="lazy" onError={() => setImageError(true)} />
             ) : (
               <div className={`mic-initials ${item.is_veg ? 'veg' : 'nonveg'}`}>
                 {getInitials(item.name)}
@@ -183,8 +185,14 @@ export default function MenuItemCard({ item, onSave, onDelete, categories = [] }
     <div className="menu-item-card editing">
       <div className="mic-edit-form">
         <div className="mief-row">
-          <label>Image URL</label>
-          <input type="url" value={formData.image_url} onChange={e => setFormData(p => ({ ...p, image_url: e.target.value }))} placeholder="https://..." />
+          <label>Image</label>
+          <CloudinaryUpload
+            restaurantId={restaurantId}
+            subfolder="menu_items"
+            type="image"
+            value={formData.image_url}
+            onChange={(url) => setFormData(p => ({ ...p, image_url: url }))}
+          />
         </div>
         <div className="mief-row">
           <label>Name {!formData.name && <><span className="required-star">*</span><span className="mandatory-text"> Mandatory</span></>}</label>

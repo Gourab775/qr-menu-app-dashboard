@@ -3010,6 +3010,69 @@ body {
   object-fit: contain;
 }
 
+.cloudinary-upload-wrap {
+  margin-bottom: 12px;
+}
+
+.cloudinary-upload-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cloudinary-upload-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: var(--orange);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.2s;
+  white-space: nowrap;
+}
+
+.cloudinary-upload-btn:hover { opacity: 0.85; }
+
+.cloudinary-upload-btn:active { opacity: 0.7; }
+
+.cloudinary-clear-btn {
+  font-size: 12px;
+  color: var(--red);
+  text-decoration: none;
+  padding: 4px 8px;
+}
+
+.cloudinary-clear-btn:hover { text-decoration: underline; }
+
+.cloudinary-progress-bar-wrap {
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  margin-top: 8px;
+  overflow: hidden;
+}
+
+.cloudinary-progress-bar {
+  height: 100%;
+  background: var(--orange);
+  border-radius: 2px;
+  transition: width 0.2s ease;
+}
+
+.cloudinary-preview {
+  max-width: 120px;
+  max-height: 80px;
+  border-radius: var(--radius-sm);
+  object-fit: contain;
+  margin-top: 8px;
+  display: block;
+}
+
 .settings-modal .modal-actions {
   display: flex;
   gap: 12px;

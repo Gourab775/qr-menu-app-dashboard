@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
+import CloudinaryUpload from './CloudinaryUpload'
+import { getOptimizedUrl, extractPublicId, deleteFromCloudinary } from '../services/cloudinaryService'
 
 const generateSlug = (text) => {
   return text
@@ -141,6 +143,8 @@ export default function FeaturedItemsPanel({ restaurantId }) {
       setEditingId(null)
       showToast('Saved successfully')
     } catch (err) {
+      const publicId = extractPublicId(item.image_url)
+      if (publicId) deleteFromCloudinary(publicId)
       console.error('Save error:', err)
       showToast('Failed to save', 'error')
     }
@@ -256,6 +260,7 @@ export default function FeaturedItemsPanel({ restaurantId }) {
             <FeaturedItemCard
               key={item.id}
               item={item}
+              restaurantId={currentRestId}
               isEditing={editingId === item.id}
               onEdit={() => setEditingId(item.id)}
               onCancel={() => setEditingId(null)}
@@ -274,6 +279,7 @@ export default function FeaturedItemsPanel({ restaurantId }) {
 
 function FeaturedItemCard({
   item,
+  restaurantId,
   isEditing,
   onEdit,
   onCancel,
@@ -290,20 +296,20 @@ function FeaturedItemCard({
       <div className="featured-card">
         <div className="featured-card-img-wrap">
           {item.image_url ? (
-            <img src={item.image_url} alt="" className="featured-card-img" />
+            <img src={getOptimizedUrl(item.image_url)} alt="" className="featured-card-img" loading="lazy" />
           ) : (
             <div className="featured-card-img-placeholder">No Image</div>
           )}
         </div>
         <div className="featured-card-body">
           <div className="featured-field">
-            <label className="featured-field-label">Image URL</label>
-            <input
-              type="text"
-              className="featured-field-input"
-              placeholder="https://example.com/image.jpg"
+            <label className="featured-field-label">Image</label>
+            <CloudinaryUpload
+              restaurantId={restaurantId}
+              subfolder="Featured images"
+              type="image"
               value={item.image_url || ''}
-              onChange={e => onImageUrlChange(item.id, e.target.value)}
+              onChange={(url) => onImageUrlChange(item.id, url)}
             />
           </div>
           <div className="featured-field">
@@ -347,7 +353,7 @@ function FeaturedItemCard({
     <div className="featured-card">
       <div className="featured-card-img-wrap">
         {item.image_url ? (
-          <img src={item.image_url} alt={item.target || 'Featured'} className="featured-card-img" />
+          <img src={getOptimizedUrl(item.image_url)} alt={item.target || 'Featured'} className="featured-card-img" loading="lazy" />
         ) : (
           <div className="featured-card-img-placeholder">No Image</div>
         )}

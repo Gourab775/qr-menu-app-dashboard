@@ -1,6 +1,7 @@
 import { useState } from 'react'
+import CloudinaryUpload from './CloudinaryUpload'
 
-export default function AddItemModal({ onSave, onClose, categories = [] }) {
+export default function AddItemModal({ onSave, onClose, categories = [], restaurantId }) {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -159,12 +160,13 @@ export default function AddItemModal({ onSave, onClose, categories = [] }) {
           </div>
 
           <div className="form-group">
-            <label>Image URL</label>
-            <input
-              type="url"
+            <label>Image</label>
+            <CloudinaryUpload
+              restaurantId={restaurantId}
+              subfolder="menu_items"
+              type="image"
               value={formData.image_url}
-              onChange={e => handleChange('image_url', e.target.value)}
-              placeholder="https://example.com/image.jpg"
+              onChange={(url) => handleChange('image_url', url)}
             />
           </div>
 
