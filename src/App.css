@@ -990,6 +990,13 @@ body {
   padding: 4px 8px;
 }
 
+.sidebar .close-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 1;
+}
+
 .sidebar-nav {
   padding: 12px 0;
 }

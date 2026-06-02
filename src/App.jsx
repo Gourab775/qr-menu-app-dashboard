@@ -1339,10 +1339,7 @@ function Sidebar({ isOpen, onClose, activeTab, setActiveTab, onOpenOrders, waite
     <>
       {isOpen && <div className="overlay" onClick={onClose} />}
       <aside className={`sidebar ${isOpen ? 'open' : ''}`}>
-        <div className="sidebar-header">
-          <h2>Menu</h2>
-          <button className="close-btn" onClick={onClose}>×</button>
-        </div>
+        <button className="close-btn" onClick={onClose}>×</button>
         <nav className="sidebar-nav">
           <button
             className={`nav-item ${activeTab === 'analytics' ? 'active' : ''}`}
