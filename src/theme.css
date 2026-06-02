@@ -120,24 +120,9 @@ button, input, select, textarea {
 }
 
 .main-content {
-  padding: calc(64px + var(--space-3)) var(--space-2) var(--space-4) !important;
-  max-width: 1400px;
-  margin: 0 auto;
   width: 100%;
   padding-left: max(16px, env(safe-area-inset-left)) !important;
   padding-right: max(16px, env(safe-area-inset-right)) !important;
-}
-
-@media (min-width: 768px) {
-  .main-content {
-    padding: calc(72px + var(--space-4)) var(--space-3) var(--space-5) !important;
-  }
-}
-
-@media (min-width: 1800px) {
-  .main-content {
-    padding: calc(72px + var(--space-4)) var(--space-5) var(--space-5) !important;
-  }
 }
 
 /* =========================================
