@@ -44,26 +44,27 @@ export default function CategoriesPage({ restaurantId }) {
     try {
       const categoriesPromise = supabase
         .from('categories')
-        .select('*')
+        .select('id, name, image, sort_order, main_category_id, status')
         .eq('restaurant_id', currentRestId)
         .order('sort_order', { ascending: true })
       const { data, error } = await fetchWithTimeout(categoriesPromise, API_TIMEOUT)
       if (signal?.aborted) return
       if (error) throw error
       setCategories(data || [])
-      const counts = {}
-      for (const cat of data || []) {
+      if (!signal?.aborted && data?.length > 0) {
+        const catIds = data.map(c => c.id)
         const countPromise = supabase
           .from('menu_items')
-          .select('*', { count: 'exact', head: true })
-          .eq('category_id', cat.id)
-        const { count } = await fetchWithTimeout(countPromise, API_TIMEOUT)
-        if (!signal?.aborted) {
-          counts[cat.id] = count || 0
+          .select('category_id')
+          .in('category_id', catIds)
+        const { data: countData } = await fetchWithTimeout(countPromise, API_TIMEOUT)
+        if (!signal?.aborted && countData) {
+          const counts = {}
+          countData.forEach(item => {
+            counts[item.category_id] = (counts[item.category_id] || 0) + 1
+          })
+          setItemCounts(counts)
         }
-      }
-      if (!signal?.aborted) {
-        setItemCounts(counts)
       }
       const mcPromise = supabase
         .from('main_categories')

@@ -339,3 +339,29 @@ update on landing\_page\_settings for EACH row
 
 execute FUNCTION update\_restaurant\_tables\_updated\_at ();
 
+-- ================
+-- PERFORMANCE INDEXES
+-- ================
+
+-- live\_orders: heavily filtered by restaurant\_id, status, created\_at
+create index if not exists idx\_live\_orders\_restaurant\_id on public.live\_orders using btree (restaurant\_id) TABLESPACE pg\_default;
+create index if not exists idx\_live\_orders\_status on public.live\_orders using btree (status) TABLESPACE pg\_default;
+create index if not exists idx\_live\_orders\_created\_at on public.live\_orders using btree (created\_at desc) TABLESPACE pg\_default;
+create index if not exists idx\_live\_orders\_restaurant\_status on public.live\_orders using btree (restaurant\_id, status) TABLESPACE pg\_default;
+
+-- menu\_items: heavily filtered by restaurant\_id, category\_id
+create index if not exists idx\_menu\_items\_restaurant\_id on public.menu\_items using btree (restaurant\_id) TABLESPACE pg\_default;
+create index if not exists idx\_menu\_items\_category\_id on public.menu\_items using btree (category\_id) TABLESPACE pg\_default;
+
+-- categories: filtered by restaurant\_id
+create index if not exists idx\_categories\_restaurant\_id on public.categories using btree (restaurant\_id) TABLESPACE pg\_default;
+
+-- waiter\_calls: filtered by restaurant\_id
+create index if not exists idx\_waiter\_calls\_restaurant\_id on public.waiter\_calls using btree (restaurant\_id) TABLESPACE pg\_default;
+
+-- restaurant\_tables: filtered by restaurant\_id
+create index if not exists idx\_restaurant\_tables\_restaurant\_id on public.restaurant\_tables using btree (restaurant\_id) TABLESPACE pg\_default;
+
+-- profiles: filtered by restaurant\_id for staff lookups
+create index if not exists idx\_profiles\_restaurant\_id on public.profiles using btree (restaurant\_id) TABLESPACE pg\_default;
+

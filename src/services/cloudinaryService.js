@@ -19,7 +19,7 @@ console.log('[Cloudinary] Upload URL:', UPLOAD_URL)
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp']
 const ALLOWED_VIDEO_TYPES = ['video/mp4', 'video/webm', 'video/quicktime']
 const MAX_IMAGE_SIZE = 1 * 1024 * 1024
-const MAX_VIDEO_SIZE = 5 * 1024 * 1024
+const MAX_VIDEO_SIZE = 50 * 1024 * 1024
 
 const inFlightUploads = new Map()
 
@@ -161,6 +161,11 @@ export async function deleteFromCloudinary(publicId, resourceType = 'image') {
 export function getOptimizedUrl(secureUrl) {
   if (!secureUrl || !secureUrl.includes('res.cloudinary.com')) return secureUrl
   return secureUrl.replace('/upload/', '/upload/f_auto,q_auto/')
+}
+
+export function getThumbnailUrl(secureUrl, width = 96) {
+  if (!secureUrl || !secureUrl.includes('res.cloudinary.com')) return secureUrl
+  return secureUrl.replace('/upload/', `/upload/f_auto,q_auto,w_${width}/`)
 }
 
 export function extractPublicId(secureUrl) {

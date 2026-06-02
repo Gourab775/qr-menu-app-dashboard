@@ -3235,12 +3235,12 @@ body {
 
 .delete-btn {
   flex: 1;
-  padding: 10px;
-  background: #ef4444;
+  padding: 14px;
+  background: var(--red);
   border: none;
-  border-radius: var(--radius-sm);
-  color: #fff;
-  font-weight: 500;
+  border-radius: 12px;
+  color: white;
+  font-weight: 600;
   cursor: pointer;
 }
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react'
+import React, { useState, useEffect, useRef, useCallback, useMemo, lazy, Suspense } from 'react'
 import { supabase } from './lib/supabase'
 import { useAuth } from './contexts/AuthContext'
 import { fetchWithTimeout, deduplicateRequest } from './lib/apiUtils'
@@ -9,18 +9,19 @@ import UpdateNotification from './components/UpdateNotification'
 import Login from './components/Login'
 import OfflineBanner from './components/OfflineBanner'
 import FeaturedItemsPanel from './components/FeaturedItemsPanel'
-import CategoriesPage from './pages/CategoriesPage'
-import OverviewPage from './pages/OverviewPage'
-import SettingsPage from './pages/SettingsPage'
-import TablesPage from './pages/TablesPage'
-import PastOrdersPage from './pages/PastOrdersPage'
-import LiveOrdersPage from './pages/LiveOrdersPage'
 import { formatDateTime, formatOrderDateTime } from './utils/formatDateTime'
 import * as orderStore from './services/orderStore'
 import { extractPublicId, deleteFromCloudinary } from './services/cloudinaryService'
 import { IconStore, IconSearch, IconUtensils, IconBellRing, IconBell, IconBarChart, IconFolder, IconTarget, IconClipboard, IconTable, IconSettings } from './components/Icons'
 import './App.css'
 import './theme.css'
+
+const CategoriesPage = lazy(() => import('./pages/CategoriesPage'))
+const OverviewPage = lazy(() => import('./pages/OverviewPage'))
+const SettingsPage = lazy(() => import('./pages/SettingsPage'))
+const TablesPage = lazy(() => import('./pages/TablesPage'))
+const PastOrdersPage = lazy(() => import('./pages/PastOrdersPage'))
+const LiveOrdersPage = lazy(() => import('./pages/LiveOrdersPage'))
 
 const API_TIMEOUT = 30000
 const CURRENT_VERSION = "2.0.0"
@@ -299,38 +300,7 @@ function App() {
     activeTab: activeTab
   })
 
-  // Fetch restaurant name and slug when restaurantId is available
-  useEffect(() => {
-    if (!isLoggedIn || !restaurantId) return
-    console.log('[RestaurantInfo] Loading info for restaurant ID:', restaurantId)
-    isMountedRef.current = true
-
-    const controller = new AbortController()
-
-    const fetchRestaurantInfo = async () => {
-      try {
-        const { data } = await fetchWithTimeout(
-          supabase.from('restaurants').select('name, slug').eq('id', restaurantId).maybeSingle(),
-          API_TIMEOUT
-        )
-        if (!isMountedRef.current || controller.signal.aborted) return
-        if (data) {
-          setRestaurantName(data.name || '')
-          setRestaurantSlug(data.slug || '')
-        }
-      } catch (err) {
-        console.error('[RestaurantInfo] Error:', err)
-      }
-    }
-
-    fetchRestaurantInfo()
-
-    return () => {
-      isMountedRef.current = false
-      controller.abort()
-    }
-  }, [isLoggedIn, restaurantId])
-
+  // Fetch all initial data in parallel when restaurantId is available
   useEffect(() => {
     if (!isLoggedIn || !restaurantId) return
     isMountedRef.current = true
@@ -339,28 +309,43 @@ function App() {
     abortControllerRef.current = controller
 
     const doLoad = async () => {
+      setMenuLoading(true)
       try {
-        const catPromise = supabase.from('categories').select('id, name, image, sort_order').eq('restaurant_id', restaurantId).order('sort_order', { ascending: true })
-        const { data: catData } = await fetchWithTimeout(catPromise, API_TIMEOUT)
-        if (!isMountedRef.current || controller.signal.aborted) return
-        if (catData) setCategories(catData || [])
+        const [restResult, catResult] = await Promise.all([
+          fetchWithTimeout(
+            supabase.from('restaurants').select('name, slug').eq('id', restaurantId).maybeSingle(),
+            API_TIMEOUT
+          ),
+          fetchWithTimeout(
+            supabase.from('categories').select('id, name, image, sort_order').eq('restaurant_id', restaurantId).order('sort_order', { ascending: true }),
+            API_TIMEOUT
+          )
+        ])
 
-        setMenuLoading(true)
-        try {
-          const menuPromise = supabase.from('menu_items').select('id, name, price, description, is_veg, is_available, category_id, image_url').eq('restaurant_id', restaurantId).order('name', { ascending: true })
-          const { data: itemData, error: itemErr } = await fetchWithTimeout(menuPromise, API_TIMEOUT)
-          if (!isMountedRef.current || controller.signal.aborted) return
-          if (itemErr) {
-            console.error('[Menu] Load error:', itemErr)
-            setToast({ message: 'Failed to load menu items', type: 'error' })
-          } else {
-            setMenuItems(itemData || [])
-          }
-        } finally {
-          setMenuLoading(false)
+        if (!isMountedRef.current || controller.signal.aborted) return
+
+        if (restResult?.data) {
+          setRestaurantName(restResult.data.name || '')
+          setRestaurantSlug(restResult.data.slug || '')
+        }
+
+        if (catResult?.data) {
+          setCategories(catResult.data || [])
+        }
+
+        const menuPromise = supabase.from('menu_items').select('id, name, price, description, is_veg, is_available, category_id, image_url').eq('restaurant_id', restaurantId).order('name', { ascending: true })
+        const { data: itemData, error: itemErr } = await fetchWithTimeout(menuPromise, API_TIMEOUT)
+        if (!isMountedRef.current || controller.signal.aborted) return
+        if (itemErr) {
+          console.error('[Menu] Load error:', itemErr)
+          setToast({ message: 'Failed to load menu items', type: 'error' })
+        } else {
+          setMenuItems(itemData || [])
         }
       } catch (err) {
         console.error('[DataLoad] Error:', err)
+      } finally {
+        setMenuLoading(false)
       }
     }
 
@@ -904,12 +889,12 @@ function App() {
     }
   }, [menuItems, showToast, restaurantId])
 
-  const filteredItems = menuItems.filter(item => {
+  const filteredItems = useMemo(() => menuItems.filter(item => {
     const matchSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase())
     const matchFilter = filterType === 'all' || (filterType === 'veg' && item.is_veg) || (filterType === 'nonveg' && !item.is_veg)
     const matchCategory = categoryFilter === 'all' || item.category_id === categoryFilter
     return matchSearch && matchFilter && matchCategory
-  })
+  }), [menuItems, searchQuery, filterType, categoryFilter])
 
   if (!isLoggedIn) return <Login />
 
@@ -1158,6 +1143,7 @@ function App() {
       </header>
 
       <main className="main-content">
+        <Suspense fallback={<div className="loading-state"><div className="loading-spinner"></div><p>Loading...</p></div>}>
         {activeTab === 'analytics' && <OverviewPage restaurantId={restaurantId} />}
 
         {activeTab === 'menu_items' && (
@@ -1317,6 +1303,7 @@ function App() {
         )}
 
         {activeTab === 'past-orders' && <PastOrdersPage pastOrders={pastOrders} loading={loading} onToast={showToast} />}
+        </Suspense>
       </main>
 
       <Sidebar isOpen={sidebarOpen} onClose={closeSidebar} activeTab={activeTab} setActiveTab={setActiveTab} onOpenOrders={openOrdersPopup} waiterCalls={waiterCalls} hasUnseenOrders={hasUnseenOrders} hasPendingOrders={orders.length > 0} />

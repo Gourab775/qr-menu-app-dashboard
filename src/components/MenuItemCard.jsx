@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useState, memo } from 'react'
 import ConfirmModal from './ConfirmModal'
 import CloudinaryUpload from './CloudinaryUpload'
-import { getOptimizedUrl } from '../services/cloudinaryService'
+import { getOptimizedUrl, getThumbnailUrl } from '../services/cloudinaryService'
 
 const VegIcon = () => (
   <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
@@ -17,7 +17,7 @@ const NonVegIcon = () => (
   </svg>
 )
 
-export default function MenuItemCard({ item, onSave, onDelete, categories = [], restaurantId }) {
+const MenuItemCard = memo(function MenuItemCard({ item, onSave, onDelete, categories = [], restaurantId }) {
   const [editing, setEditing] = useState(false)
   const [formData, setFormData] = useState({
     name: item.name,
@@ -128,7 +128,7 @@ export default function MenuItemCard({ item, onSave, onDelete, categories = [], 
         <div className={`menu-item-card ${!item.is_available ? 'unavailable' : ''}`}>
           <div className="mic-image">
             {item.image_url && !imageError ? (
-              <img src={getOptimizedUrl(item.image_url)} alt={item.name} loading="lazy" onError={() => setImageError(true)} />
+              <img src={getThumbnailUrl(item.image_url, 96)} alt={item.name} loading="lazy" onError={() => setImageError(true)} />
             ) : (
               <div className={`mic-initials ${item.is_veg ? 'veg' : 'nonveg'}`}>
                 {getInitials(item.name)}
@@ -294,4 +294,6 @@ export default function MenuItemCard({ item, onSave, onDelete, categories = [], 
       </div>
     </div>
   )
-}
+})
+
+export default MenuItemCard

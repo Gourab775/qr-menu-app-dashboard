@@ -264,7 +264,7 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
     try {
       const restaurantPromise = supabase
         .from('restaurants')
-        .select('*')
+        .select('name, slug, address, phone, contact_number, email, logo')
         .eq('id', currentRestId)
         .single()
 
@@ -330,7 +330,7 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
     try {
       const restaurantPromise = supabase
         .from('restaurants')
-        .select('*')
+        .select('name, slug, address, phone, contact_number, email, logo')
         .eq('id', currentRestId)
         .single()
       
@@ -790,6 +790,60 @@ const handlePasswordChange = async (e) => {
     }
   }
 
+  const videoSaveInProgressRef = useRef(false)
+
+  const handleSaveBgVideoPreSubmit = async (videoUrl) => {
+    if (!videoUrl || videoSaveInProgressRef.current) return
+    videoSaveInProgressRef.current = true
+    try {
+      const existing = await supabase
+        .from('landing_page_settings')
+        .select('id')
+        .eq('restaurant_id', currentRestId)
+        .maybeSingle()
+      if (existing.data) {
+        await supabase
+          .from('landing_page_settings')
+          .update({ background_video_url: videoUrl })
+          .eq('id', existing.data.id)
+      } else {
+        await supabase
+          .from('landing_page_settings')
+          .insert({ restaurant_id: currentRestId, background_video_url: videoUrl })
+      }
+      showToast('Background video saved')
+    } catch (err) {
+      const publicId = extractPublicId(videoUrl)
+      if (publicId) deleteFromCloudinary(publicId)
+      showToast('Failed to save background video', 'error')
+    } finally {
+      videoSaveInProgressRef.current = false
+    }
+  }
+
+  const handleClearBgVideo = async () => {
+    const oldUrl = formData.background_video_url
+    setFormData({ ...formData, background_video_url: '' })
+    try {
+      const existing = await supabase
+        .from('landing_page_settings')
+        .select('id')
+        .eq('restaurant_id', currentRestId)
+        .maybeSingle()
+      if (existing.data) {
+        await supabase
+          .from('landing_page_settings')
+          .update({ background_video_url: null })
+          .eq('id', existing.data.id)
+      }
+      const publicId = extractPublicId(oldUrl)
+      if (publicId) deleteFromCloudinary(publicId)
+      showToast('Background video removed')
+    } catch (err) {
+      showToast('Failed to remove background video', 'error')
+    }
+  }
+
   const renderModal = () => {
     if (!showModal) return null
     if (showModal === 'business') {
@@ -874,12 +928,48 @@ const handlePasswordChange = async (e) => {
                   subfolder="background video"
                   type="video"
                   value={formData.background_video_url || ''}
-                  onChange={(url) => setFormData({ ...formData, background_video_url: url })}
+                  onChange={(url) => {
+                    setFormData({ ...formData, background_video_url: url })
+                    if (url) {
+                      handleSaveBgVideoPreSubmit(url)
+                    }
+                  }}
+                  onUploadEnd={() => {
+                    if (formData.background_video_url) {
+                      handleSaveBgVideoPreSubmit(formData.background_video_url)
+                    }
+                  }}
+                />
+              </div>
+              {formData.background_video_url && (
+                <div className="form-group">
+                  <label>Preview</label>
+                  <video
+                    src={formData.background_video_url}
+                    className="cloudinary-preview"
+                    muted
+                    playsInline
+                    controls
+                    preload="metadata"
+                    style={{ width: '100%', borderRadius: '8px', maxHeight: '200px' }}
+                  />
+                </div>
+              )}
+              <div className="form-group" style={{ marginTop: '8px' }}>
+                <label>Video URL</label>
+                <input
+                  type="text"
+                  value={formData.background_video_url || ''}
+                  readOnly
+                  placeholder="Upload a video above"
+                  style={{ fontSize: '12px', wordBreak: 'break-all' }}
                 />
               </div>
               <div className="modal-actions">
-                <button type="button" className="cancel-btn" onClick={closeModal}>Cancel</button>
-                <button type="submit" className="save-btn" disabled={saving}>{saving ? 'Saving...' : 'Save'}</button>
+                {formData.background_video_url && (
+                  <button type="button" className="delete-btn" onClick={handleClearBgVideo}>Remove Video</button>
+                )}
+                <button type="button" className="cancel-btn" onClick={closeModal}>Done</button>
               </div>
             </form>
           </div>

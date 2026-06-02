@@ -112,7 +112,7 @@ export default function OverviewPage({ restaurantId }) {
       const fetchFn = async () => {
         const ordersPromise = supabase
           .from('live_orders')
-          .select('*')
+          .select('id, restaurant_id, total_price, status, items, created_at, table_id')
           .eq('restaurant_id', restaurantId)
           .gte('created_at', start)
           .lte('created_at', end)
