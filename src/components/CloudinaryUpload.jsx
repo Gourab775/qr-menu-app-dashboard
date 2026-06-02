@@ -40,7 +40,9 @@ export default function CloudinaryUpload({ restaurantId, subfolder, value, onCha
       onChange(result.secure_url, result.public_id)
       setProgress(100)
     } catch (err) {
-      setError(err.message || 'Upload failed')
+      const msg = err.message || 'Upload failed'
+      console.error('[Cloudinary] Component Error:', msg)
+      setError(msg)
     } finally {
       setUploading(false)
       if (onUploadEnd) onUploadEnd()

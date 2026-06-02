@@ -1,8 +1,20 @@
 const CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME
-const API_KEY = import.meta.env.VITE_CLOUDINARY_API_KEY
-const API_SECRET = import.meta.env.VITE_CLOUDINARY_API_SECRET
+const UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET
+
+console.log('[Cloudinary] Cloud Name:', CLOUD_NAME)
+console.log('[Cloudinary] Upload Preset:', UPLOAD_PRESET)
+
+if (!CLOUD_NAME) {
+  throw new Error('Missing Cloud Name: VITE_CLOUDINARY_CLOUD_NAME environment variable is not set. Check your .env file and restart the dev server.')
+}
+
+if (!UPLOAD_PRESET) {
+  throw new Error('Missing Upload Preset: VITE_CLOUDINARY_UPLOAD_PRESET environment variable is not set. Create an unsigned upload preset in Cloudinary dashboard.')
+}
 
 const UPLOAD_URL = `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/auto/upload`
+
+console.log('[Cloudinary] Upload URL:', UPLOAD_URL)
 
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp']
 const ALLOWED_VIDEO_TYPES = ['video/mp4', 'video/webm', 'video/quicktime']
@@ -18,22 +30,8 @@ function generatePublicId(originalName) {
   return `${base}_${unique}`
 }
 
-async function sha1(message) {
-  const msgBuffer = new TextEncoder().encode(message)
-  const hashBuffer = await crypto.subtle.digest('SHA-1', msgBuffer)
-  const hashArray = Array.from(new Uint8Array(hashBuffer))
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
-}
-
 function buildFolderPath(restaurantId, subfolder) {
   return `restaurants/${restaurantId}/${subfolder}`
-}
-
-async function generateSignature(paramsToSign) {
-  const keys = Object.keys(paramsToSign).sort()
-  const paramStr = keys.map(k => `${k}=${paramsToSign[k]}`).join('&')
-  const strToSign = paramStr + API_SECRET
-  return sha1(strToSign)
 }
 
 export function validateImageFile(file) {
@@ -59,6 +57,13 @@ export function validateVideoFile(file) {
 }
 
 export function uploadToCloudinary({ file, restaurantId, subfolder, onProgress }) {
+  if (!CLOUD_NAME) {
+    return Promise.reject(new Error('Missing Cloud Name: Cloudinary cloud name is not configured'))
+  }
+  if (!UPLOAD_PRESET) {
+    return Promise.reject(new Error('Missing Upload Preset: Create an unsigned upload preset in Cloudinary dashboard and set VITE_CLOUDINARY_UPLOAD_PRESET'))
+  }
+
   const folder = buildFolderPath(restaurantId, subfolder)
   const publicId = generatePublicId(file.name)
   const uploadKey = `${restaurantId}/${subfolder}/${file.name}-${file.size}`
@@ -67,21 +72,17 @@ export function uploadToCloudinary({ file, restaurantId, subfolder, onProgress }
     return Promise.reject(new Error('Duplicate upload detected'))
   }
 
-  return new Promise(async (resolve, reject) => {
+  return new Promise((resolve, reject) => {
     inFlightUploads.set(uploadKey, true)
 
     try {
-      const timestamp = Math.floor(Date.now() / 1000)
-      const params = { folder, public_id: publicId, timestamp }
-      const signature = await generateSignature(params)
+      console.log('[Cloudinary] Upload Started:', { folder, publicId, fileName: file.name })
 
       const formData = new FormData()
       formData.append('file', file)
       formData.append('folder', folder)
       formData.append('public_id', publicId)
-      formData.append('timestamp', timestamp)
-      formData.append('api_key', API_KEY)
-      formData.append('signature', signature)
+      formData.append('upload_preset', UPLOAD_PRESET)
 
       const xhr = new XMLHttpRequest()
 
@@ -96,6 +97,7 @@ export function uploadToCloudinary({ file, restaurantId, subfolder, onProgress }
         if (xhr.status >= 200 && xhr.status < 300) {
           try {
             const result = JSON.parse(xhr.responseText)
+            console.log('[Cloudinary] Upload Success:', { secure_url: result.secure_url, public_id: result.public_id })
             resolve({
               secure_url: result.secure_url,
               public_id: result.public_id
@@ -107,14 +109,23 @@ export function uploadToCloudinary({ file, restaurantId, subfolder, onProgress }
           let errMsg = 'Upload failed'
           try {
             const err = JSON.parse(xhr.responseText)
-            errMsg = err.error?.message || errMsg
+            const cloudMsg = err.error?.message || ''
+            if (xhr.status === 401 || cloudMsg.includes('cloud_name is disabled') || cloudMsg.includes('Invalid')) {
+              errMsg = `Unauthorized Upload: ${cloudMsg || 'Invalid Cloudinary credentials. Verify cloud_name and upload preset.'}`
+            } else if (cloudMsg.includes('Upload preset')) {
+              errMsg = `Invalid Upload Preset: ${cloudMsg}`
+            } else {
+              errMsg = cloudMsg || `Upload failed (HTTP ${xhr.status})`
+            }
           } catch {}
+          console.error('[Cloudinary] Upload Failed:', errMsg)
           reject(new Error(errMsg))
         }
       })
 
       xhr.addEventListener('error', () => {
         inFlightUploads.delete(uploadKey)
+        console.error('[Cloudinary] Upload Failed: Network error')
         reject(new Error('Network error during upload'))
       })
 
@@ -127,26 +138,19 @@ export function uploadToCloudinary({ file, restaurantId, subfolder, onProgress }
       xhr.send(formData)
     } catch (err) {
       inFlightUploads.delete(uploadKey)
+      console.error('[Cloudinary] Upload Failed:', err.message)
       reject(err)
     }
   })
 }
 
 export async function deleteFromCloudinary(publicId, resourceType = 'image') {
-  const timestamp = Math.floor(Date.now() / 1000)
-  const params = { public_id: publicId, timestamp }
-  const signature = await generateSignature(params)
-
-  const formData = new FormData()
-  formData.append('public_id', publicId)
-  formData.append('timestamp', timestamp)
-  formData.append('api_key', API_KEY)
-  formData.append('signature', signature)
-
+  if (!publicId) return false
   try {
     const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/${resourceType}/destroy`, {
       method: 'POST',
-      body: formData
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ public_id: publicId })
     })
     return res.ok
   } catch {
