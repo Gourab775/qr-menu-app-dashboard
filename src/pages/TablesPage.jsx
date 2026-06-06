@@ -70,8 +70,6 @@ export default function TablesPage({ restaurantId, restaurantSlug }) {
         throw err;
       }
 
-      console.log("[Fetched Tables]", data);
-
       const missingTokens = (data || []).filter(t => !t.table_token);
       if (missingTokens.length > 0) {
         for (const table of missingTokens) {
@@ -187,8 +185,6 @@ export default function TablesPage({ restaurantId, restaurantSlug }) {
 
     const newStatus = !table.is_active;
 
-    console.log("[Saving Status]", newStatus);
-
     const { data, error } =
       await supabase
         .from("restaurant_tables")
@@ -198,9 +194,6 @@ export default function TablesPage({ restaurantId, restaurantSlug }) {
         .eq("id", table.id)
         .eq('restaurant_id', restaurantId)
         .select();
-
-    console.log("[SAVE DATA]", data);
-    console.log("[SAVE ERROR]", error);
 
     if (error) {
       setError('Failed to update table.');
@@ -341,9 +334,6 @@ export default function TablesPage({ restaurantId, restaurantSlug }) {
   };
 
   const openEdit = (table) => {
-    console.log("[Current Table]", table);
-    console.log("[Status Before]", table.is_active);
-    console.log("[Status After]", !table.is_active);
     setEditingId(table.id);
     setEditValue(table.table_number);
     setEditActive(table.is_active);

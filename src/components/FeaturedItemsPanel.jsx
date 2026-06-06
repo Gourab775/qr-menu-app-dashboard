@@ -44,7 +44,6 @@ export default function FeaturedItemsPanel({ restaurantId }) {
         .order('display_order', { ascending: true })
 
       if (featuredError) {
-        console.error('Featured items error:', featuredError.message)
         throw featuredError
       }
 
@@ -55,7 +54,6 @@ export default function FeaturedItemsPanel({ restaurantId }) {
 
       setFeaturedItems(itemsWithState)
     } catch (err) {
-      console.error('Load data error:', err)
       setError(err.message)
       showToast('Failed to load data', 'error')
     } finally {
@@ -87,7 +85,7 @@ export default function FeaturedItemsPanel({ restaurantId }) {
       setEditingId(newItem.id)
       showToast('New featured item added')
     } catch (err) {
-      console.error('Add item error:', err)
+      console.error('Add item error:', err.message)
       showToast('Failed to add item', 'error')
     }
   }
@@ -143,7 +141,7 @@ export default function FeaturedItemsPanel({ restaurantId }) {
       setEditingId(null)
       showToast('Saved successfully')
     } catch (err) {
-      console.error('Save error:', err)
+      console.error('Save error:', err.message)
       showToast('Failed to save', 'error')
     }
   }
@@ -163,7 +161,7 @@ export default function FeaturedItemsPanel({ restaurantId }) {
       if (editingId === itemId) setEditingId(null)
       showToast('Item removed from featured')
     } catch (err) {
-      console.error('Delete error:', err)
+      console.error('Delete error:', err.message)
       showToast('Failed to remove', 'error')
     }
   }

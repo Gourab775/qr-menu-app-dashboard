@@ -132,7 +132,6 @@ function App() {
       try {
         const baseSelect = 'id, restaurant_id, total_price, status, items, created_at, order_code, table_id, note, restaurant_tables(table_number)'
 
-        console.log('[Orders] Querying live_orders:', { restaurantId, pendingStatus: 'pending', acceptedStatus: 'accepted', select: baseSelect })
         const [liveResult, pastResult] = await Promise.all([
           fetchWithTimeout(
             supabase.from('live_orders').select(baseSelect).eq('restaurant_id', restaurantId).eq('status', 'pending').order('created_at', { ascending: false }).limit(200),
@@ -143,8 +142,6 @@ function App() {
             API_TIMEOUT
           )
         ])
-        console.log('[Orders] Query results:', { pendingCount: liveResult.data?.length || 0, pendingError: liveResult.error?.message || null, acceptedCount: pastResult.data?.length || 0, acceptedError: pastResult.error?.message || null })
-
         if (signal?.aborted) return { aborted: true }
 
         const liveError = liveResult.error && liveResult.error.code !== 'PGRST116' ? liveResult.error : null
@@ -161,12 +158,6 @@ function App() {
         const pastData = pastResult.data || []
         const allOrders = [...liveData, ...pastData]
 
-        console.log('[Orders] loadOrders result:', {
-          pendingCount: liveData.length,
-          acceptedCount: pastData.length,
-          pendingStatuses: [...new Set(liveData.map(o => o.status))],
-          acceptedStatuses: [...new Set(pastData.map(o => o.status))]
-        })
         const unresolvedIds = [...new Set(allOrders.filter(o => o.table_id && !o.restaurant_tables?.table_number).map(o => o.table_id))]
 
         if (unresolvedIds.length > 0) {
@@ -291,14 +282,6 @@ function App() {
       logoutRef.current = false
     }
   }, [signOut])
-
-  // Log current restaurant context for multi-tenant isolation
-  console.log('[MultiTenant] Current restaurant session:', {
-    restaurantId,
-    userRole: userRole,
-    userId: session?.user?.id?.slice(0, 8),
-    activeTab: activeTab
-  })
 
   // Fetch all initial data in parallel when restaurantId is available
   useEffect(() => {
@@ -448,15 +431,10 @@ function App() {
     }
 
     if (!restaurantId) {
-      console.error('[Realtime] Missing restaurantId')
       return
     }
 
-    console.log('[Realtime] Channel Created: orders', `live-orders-${restaurantId}`)
-    console.log('[Realtime] Restaurant ID:', restaurantId)
-
     if (ordersChannelRef.current) {
-      console.log('[Realtime] Duplicate Subscription Prevented for orders channel')
       supabase.removeChannel(ordersChannelRef.current)
       ordersChannelRef.current = null
     }
@@ -478,24 +456,11 @@ function App() {
           const newStatus = rawStatus || 'pending'
 
           if (processedEventIdsRef.current.has(newOrderId)) {
-            console.log('[Order Sound] Duplicate Event Prevented', { id: newOrderId })
             return
           }
           processedEventIdsRef.current.add(newOrderId)
           if (lastPlayedOrderRef.current === newOrderId) return
           lastPlayedOrderRef.current = newOrderId
-
-          console.log('[Realtime] Event Received: INSERT order', { id: newOrderId, status: rawStatus })
-          console.log('[Order Sound] New Order Received', { id: newOrderId })
-
-          if (newStatus !== 'pending') {
-            console.warn('[Orders] New order inserted with non-pending status:', {
-              id: newOrderId,
-              status: rawStatus,
-              expected: 'pending',
-              order_code: payload.new.order_code
-            })
-          }
 
           const fetchAndAddOrder = async () => {
             const { data: freshOrder } = await supabase
@@ -512,7 +477,6 @@ function App() {
             if (newStatus === 'pending') {
               setOrders(prev => {
                 if (prev.some(o => o.id === newOrderId)) {
-                  console.log('[Order Sound] Ignored Existing Order', { id: newOrderId })
                   return prev.map(o => o.id === newOrderId ? { ...o, ...resolved } : o)
                 }
                 playOrderSound()
@@ -527,9 +491,6 @@ function App() {
                 return [resolved, ...prev].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
               })
             } else {
-              console.warn('[Orders] INSERT with unrecognized status, defaulting to pending routing:', {
-                id: newOrderId, status: newStatus
-              })
               setOrders(prev => {
                 if (prev.some(o => o.id === newOrderId)) return prev
                 return [resolved, ...prev].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
@@ -549,20 +510,11 @@ function App() {
             })
             return
           }
-          console.log('[Order Sound] Ignored UPDATE Event', { id: payload.new.id, status: payload.new.status })
-
           const { id, status } = payload.new
           const oldStatus = payload.old?.status
 
-          console.log('[Realtime] Event Received: UPDATE order', { id, oldStatus, newStatus: status })
-
           if (status !== 'pending' && status !== 'accepted' && status !== 'confirmed' && status !== 'completed') {
-            console.warn('[Orders] UPDATE with unknown status, ignoring:', { id, status })
             return
-          }
-
-          if (oldStatus === status) {
-            console.log('[Orders] UPDATE with same status, no transition:', { id, status })
           }
 
           setOrders(prev => {
@@ -593,20 +545,13 @@ function App() {
       )
       .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'live_orders', filter: `restaurant_id=eq.${restaurantId}` },
         (payload) => {
-          console.log('[Realtime] Event Received: DELETE order', { id: payload.old.id })
           setOrders(prev => prev.filter(o => o.id !== payload.old.id))
           setPastOrders(prev => prev.filter(o => o.id !== payload.old.id))
         }
       )
 
     try {
-      ordersChannel.subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          console.log('[Realtime] Orders channel subscribed')
-        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-          console.warn('[Realtime] Orders channel status:', status)
-        }
-      })
+      ordersChannel.subscribe()
       ordersChannelRef.current = ordersChannel
     } catch (err) {
       console.error('[Realtime] Orders subscription failed:', err)
@@ -617,7 +562,6 @@ function App() {
       document.removeEventListener('keydown', handleGesture)
       if (audioCtxRef.current) { try { audioCtxRef.current.close() } catch { } }
       if (ordersChannelRef.current) {
-        console.log('[Realtime] Channel Removed: orders')
         supabase.removeChannel(ordersChannelRef.current)
         ordersChannelRef.current = null
       }
@@ -632,22 +576,14 @@ function App() {
   useEffect(() => {
     if (!isLoggedIn || !restaurantId) return
 
-    if (!restaurantId) {
-      console.error('[Realtime] Missing restaurantId')
-      return
-    }
-
     const waiterChannelName = `waiter-live-${restaurantId}`
 
     if (waiterChannelRef.current) {
-      console.log('[Realtime] Duplicate Subscription Prevented for waiter channel')
       supabase.removeChannel(waiterChannelRef.current)
       waiterChannelRef.current = null
     }
 
     let isSubscribed = true
-    console.log('[Realtime] Channel Created: waiter', waiterChannelName)
-    console.log('[Realtime] Restaurant ID:', restaurantId)
 
     const channel = supabase
       .channel(waiterChannelName)
@@ -660,7 +596,6 @@ function App() {
           filter: `restaurant_id=eq.${restaurantId}`
         },
         (payload) => {
-          console.log('[Realtime] Event Received: waiter', payload.eventType, payload.new?.id)
           if (payload.new && payload.new.restaurant_id !== restaurantId) {
             console.error('[CROSS-TENANT] Waiter call event with mismatched restaurant_id:', {
               channelRestaurantId: restaurantId,
@@ -705,19 +640,16 @@ function App() {
     try {
       channel.subscribe()
       waiterChannelRef.current = channel
-      console.log('[Realtime] Waiter channel subscribed')
     } catch (err) {
       console.error('[Realtime] Waiter subscription failed:', err)
     }
 
     const fetchWaiterCalls = async () => {
       if (!restaurantId) {
-        console.error('[WaiterCalls] Cannot fetch: restaurant_id is missing')
         if (isSubscribed) setWaiterCallsLoading(false)
         return
       }
       setWaiterCallsLoading(true)
-      console.log('[WaiterCalls] Fetching with restaurant_id:', restaurantId)
       const { data, error } = await supabase
         .from("waiter_calls")
         .select(`
@@ -729,9 +661,6 @@ function App() {
         `)
         .eq('restaurant_id', restaurantId)
         .order("created_at", { ascending: false })
-
-      console.log("[WaiterCalls] Raw data:", data?.length || 0, "records")
-      console.log("[WaiterCalls] Error:", error)
 
       if (error) {
         if (isSubscribed) setWaiterCalls([])
@@ -748,24 +677,15 @@ function App() {
     return () => {
       isSubscribed = false
       if (waiterChannelRef.current) {
-        console.log('[Realtime] Channel Removed: waiter')
         supabase.removeChannel(waiterChannelRef.current)
         waiterChannelRef.current = null
       }
     }
   }, [isLoggedIn, restaurantId])
 
-  // App version update checker + realtime listener
+  // App version update checker — one-time query only, no realtime subscription
   useEffect(() => {
     if (!isLoggedIn) return
-
-    const checkForUpdate = (record) => {
-      if (!record || record.app_name !== 'dashboard') return
-      const shownKey = `update_${record.version}`
-      if (updateNotificationShownRef.current === shownKey) return
-      updateNotificationShownRef.current = shownKey
-      setUpdateNotification(record)
-    }
 
     supabase
       .from('app_versions')
@@ -780,33 +700,12 @@ function App() {
           return
         }
         if (data && data.version !== CURRENT_VERSION) {
-          checkForUpdate(data)
+          const shownKey = `update_${data.version}`
+          if (updateNotificationShownRef.current === shownKey) return
+          updateNotificationShownRef.current = shownKey
+          setUpdateNotification(data)
         }
       })
-
-    let channel = null
-    try {
-      channel = supabase
-        .channel('app-versions')
-        .on('postgres_changes',
-          { event: 'INSERT', schema: 'public', table: 'app_versions' },
-          (payload) => {
-            const record = payload.new
-            if (record.app_name === 'dashboard' && record.version !== CURRENT_VERSION) {
-              checkForUpdate(record)
-            }
-          }
-        )
-        .subscribe()
-    } catch (err) {
-      console.error('[Realtime] App versions subscription failed:', err)
-    }
-
-    return () => {
-      if (channel) {
-        supabase.removeChannel(channel)
-      }
-    }
   }, [isLoggedIn])
 
   const handleUpdateNow = useCallback((updateUrl) => {
@@ -931,23 +830,12 @@ function App() {
       return prev.filter(o => o.id !== orderId)
     })
     if (movedOrder) {
-      console.log('[Orders] Accepting order:', {
-        id: orderId,
-        order_code: movedOrder.order_code,
-        fromStatus: movedOrder.status,
-        toStatus: 'accepted'
-      })
       setPastOrders(prev => [movedOrder, ...prev])
     }
 
     try {
-      console.log('[Orders] handleAccept - updating status to accepted:', {
-        id: orderId,
-        order_code: movedOrder?.order_code,
-      })
       const { error } = await supabase.from('live_orders').update({ status: 'accepted' }).eq('id', orderId).eq('restaurant_id', restaurantId)
       if (error) throw error
-      console.log('[Orders] handleAccept - success:', { id: orderId, order_code: movedOrder?.order_code })
       showToast('Order accepted')
     } catch (err) {
       console.error('[Orders] handleAccept error:', {
@@ -968,10 +856,8 @@ function App() {
     const prevOrders = [...pastOrders]
     setPastOrders(prev => prev.filter(o => o.id !== orderId))
     try {
-      console.log('[Orders] handleConfirm:', { id: orderId })
       const { error } = await supabase.from('live_orders').update({ status: 'confirmed' }).eq('id', orderId).eq('restaurant_id', restaurantId)
       if (error) throw error
-      console.log('[Orders] handleConfirm - success:', { id: orderId })
       showToast('Order confirmed')
     } catch (err) {
       console.error('[Orders] handleConfirm error:', { id: orderId, message: err.message, code: err.code })
@@ -984,7 +870,6 @@ function App() {
     const prevOrders = [...pastOrders]
     setPastOrders(prev => prev.filter(o => o.id !== orderId))
     try {
-      console.log('[Orders] handleComplete:', { id: orderId })
       const { error } = await supabase.from('live_orders').update({ status: 'completed' }).eq('id', orderId).eq('restaurant_id', restaurantId)
       if (error) throw error
       showToast('Order completed')
@@ -1000,12 +885,10 @@ function App() {
     if (!confirmDelete) return
 
     try {
-      console.log('[Orders] handleDecline:', { id: orderId, order_code: orderCode })
       const { error } = await supabase.from('live_orders').delete().eq('id', orderId).eq('restaurant_id', restaurantId)
 
       if (error) throw error
       setOrders(prev => prev.filter(o => o.id !== orderId))
-      console.log('[Orders] handleDecline - success:', { id: orderId, order_code: orderCode })
       showToast('Order declined')
     } catch (err) {
       console.error('[Orders] handleDecline error:', { id: orderId, message: err.message, code: err.code })

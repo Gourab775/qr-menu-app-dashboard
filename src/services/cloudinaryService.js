@@ -1,8 +1,7 @@
 const CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME
 const UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET
 
-console.log('[Cloudinary] Cloud Name:', CLOUD_NAME)
-console.log('[Cloudinary] Upload Preset:', UPLOAD_PRESET)
+
 
 if (!CLOUD_NAME) {
   throw new Error('Missing Cloud Name: VITE_CLOUDINARY_CLOUD_NAME environment variable is not set. Check your .env file and restart the dev server.')
@@ -13,8 +12,6 @@ if (!UPLOAD_PRESET) {
 }
 
 const UPLOAD_URL = `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/auto/upload`
-
-console.log('[Cloudinary] Upload URL:', UPLOAD_URL)
 
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp']
 const ALLOWED_VIDEO_TYPES = ['video/mp4', 'video/webm', 'video/quicktime']

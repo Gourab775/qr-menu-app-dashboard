@@ -67,7 +67,6 @@ export function useDataFetch(fetchFn, options = {}) {
       if (result.error) {
         if (retryCountRef.current < retry && !controller.signal.aborted) {
           retryCountRef.current++
-          console.log(`[useDataFetch] Retrying (${retryCountRef.current}/${retry})...`)
           setTimeout(() => executeFetch(true), 1000 * retryCountRef.current)
           return
         }
@@ -93,11 +92,10 @@ export function useDataFetch(fetchFn, options = {}) {
       clearTimeout(timeoutId)
 
       if (err.name === 'AbortError' || err.message === 'Request timeout') {
-        console.log('[useDataFetch] Request cancelled/timeout')
         return
       }
 
-      console.error('[useDataFetch] Error:', err)
+      console.error('[useDataFetch] Error:', err.message)
 
       if (retryCountRef.current < retry && !controller.signal.aborted) {
         retryCountRef.current++

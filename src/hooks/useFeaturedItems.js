@@ -13,8 +13,6 @@ export const useFeaturedItems = (restaurantId) => {
     }
 
     const fetchFeaturedItems = async () => {
-      console.log('Fetching featured items for:', restaurantId)
-
       const { data, error } = await supabase
         .from('featured_items')
         .select('*')
@@ -23,11 +21,9 @@ export const useFeaturedItems = (restaurantId) => {
         .order('display_order', { ascending: true })
 
       if (error) {
-        console.error('Featured items error:', error.message)
         setError(error.message)
         setFeaturedItems([])
       } else {
-        console.log('Featured items:', data)
         setFeaturedItems(data || [])
         setError(null)
       }
@@ -39,31 +35,19 @@ export const useFeaturedItems = (restaurantId) => {
   }, [restaurantId])
 
   const handleFeaturedClick = (item) => {
-    if (!item.redirect_url) {
-      console.log('No redirect URL set for this item')
-      return
-    }
-
-    console.log('Featured item clicked:', item.redirect_url)
+    if (!item.redirect_url) return
 
     if (item.redirect_url.startsWith('#')) {
       const targetId = item.redirect_url.substring(1)
-      console.log('Looking for element:', targetId)
-
       const el = document.getElementById(targetId) || document.querySelector(item.redirect_url)
 
       if (el) {
         const offset = 80
         const top = el.getBoundingClientRect().top + window.scrollY - offset
-
-        console.log('Scrolling to:', top)
-
         window.scrollTo({
           top,
           behavior: 'smooth'
         })
-      } else {
-        console.warn('Element not found:', targetId)
       }
     }
   }

@@ -256,11 +256,7 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
     if (!signal && mountedRef.current) setLoading(true);
 
     try {
-      console.log('[Settings] Restaurant ID:', currentRestId);
-      console.log('[Settings] Query Started');
-
       const selectedColumns = 'name, slug, contact_number, logo';
-      console.log('[Settings] Selected Columns:', selectedColumns);
 
       const restaurantPromise = supabase
         .from('restaurants')
@@ -270,14 +266,10 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
 
       const { data, error } = await fetchWithTimeout(restaurantPromise, API_TIMEOUT)
 
-      console.log('[Settings] Query Response:', data);
-      if (error) console.log('[Settings] Query Error:', error);
-
       if (signal?.aborted) return;
 
       if (error) {
         if (error.code === 'PGRST116') {
-          console.warn('[Settings] Restaurant not found (no row returned), using defaults');
           setRestaurant({
             id: currentRestId,
             name: 'Your Restaurant',
@@ -286,7 +278,6 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
             logo: ''
           });
         } else {
-          console.warn('[Settings] Missing Column or schema issue:', error.message, error.details, error.hint);
           setRestaurant({
             id: currentRestId,
             name: 'Your Restaurant',
@@ -299,7 +290,6 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
       }
       
       if (data) {
-        console.log('[Settings] Restaurant Found');
         setRestaurant(data)
       } else {
         setRestaurant({
@@ -311,7 +301,6 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
         })
       }
     } catch (err) {
-      console.error('[Settings] Failed to load restaurant:', err)
       if (!signal?.aborted) {
         setRestaurant({
           id: currentRestId,
@@ -356,7 +345,7 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
         setRestaurant(data)
       }
     } catch (err) {
-      console.error('Failed to refresh restaurant:', err);
+      console.error('Failed to refresh restaurant:', err.message);
     }
   }
 
@@ -370,7 +359,7 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
         .order('sort_order', { ascending: true })
       if (data) setMainCategories(data)
     } catch (err) {
-      console.error('Failed to load main categories:', err)
+      console.error('Failed to load main categories:', err.message)
     } finally {
       setMainCatLoading(false)
     }
@@ -527,9 +516,9 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
         localStorage.removeItem('dashboard_preferences')
         localStorage.removeItem('dashboard_keepLoggedIn')
         await signOut()
-      } catch (err) {
-        console.error('Logout error:', err)
-      }
+    } catch (err) {
+      console.error('Logout error:', err.message)
+    }
     }
   }
 
@@ -599,7 +588,7 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
       showToast('Business details saved')
       closeModal()
     } catch (err) {
-      console.error('[Settings] Save restaurant error:', err)
+      console.error('[Settings] Save restaurant error:', err.message)
       showToast('Failed to save: ' + (err.message || 'Unknown error'), 'error')
     } finally {
       setSaving(false)
@@ -628,7 +617,7 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
       showToast(logoUrl ? 'Logo saved' : 'Logo cleared')
       closeModal()
     } catch (err) {
-      console.error('[Settings] Save logo error:', err)
+      console.error('[Settings] Save logo error:', err.message)
       showToast('Failed to save logo: ' + (err.message || 'Unknown error'), 'error')
     } finally {
       setSaving(false)
@@ -646,7 +635,6 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
         background_video_url: data?.background_video_url || ''
       })
     } catch (err) {
-      console.error('Failed to load background video:', err)
       setFormData({ background_video_url: '' })
     }
   }
@@ -679,7 +667,7 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
       showToast(videoUrl ? 'Background video saved' : 'Background video cleared')
       closeModal()
     } catch (err) {
-      console.error('[Settings] Save bg video error:', err)
+      console.error('[Settings] Save bg video error:', err.message)
       showToast('Failed to save background video', 'error')
     } finally {
       setSaving(false)
@@ -709,7 +697,7 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
       }
       showToast('Background video saved')
     } catch (err) {
-      console.error('[Settings] Pre-save bg video error:', err)
+      console.error('[Settings] Pre-save bg video error:', err.message)
       showToast('Failed to save background video', 'error')
     } finally {
       videoSaveInProgressRef.current = false
@@ -733,7 +721,7 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
       }
       showToast('Background video removed')
     } catch (err) {
-      console.error('[Settings] Clear bg video error:', err)
+      console.error('[Settings] Clear bg video error:', err.message)
       showToast('Failed to remove background video', 'error')
     }
   }
