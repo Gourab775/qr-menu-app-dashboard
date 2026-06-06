@@ -20,7 +20,7 @@ const WAITER_SOUNDS = [
 ]
 
 function PopupApp() {
-  const { session, profile, loading: authLoading, initialized, restaurantId } = useAuth()
+  const { session, profile, loading: authLoading, initialized, restaurantId, userDataLoading } = useAuth()
   const [orders, setOrders] = useState(() => orderStore.getPending())
   const [pastOrders, setPastOrders] = useState(() => orderStore.getPast())
   const [waiterCalls, setWaiterCalls] = useState([])
@@ -467,7 +467,7 @@ function PopupApp() {
     )
   }
 
-  if (authLoading || !initialized) {
+  if (authLoading || !initialized || userDataLoading) {
     return (
       <div className="popup-shell">
         <div className="popup-center-message">

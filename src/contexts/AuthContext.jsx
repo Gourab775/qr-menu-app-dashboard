@@ -13,6 +13,7 @@ export function AuthProvider({ children }) {
   const [restaurantId, setRestaurantId] = useState(null)
   const [loading, setLoading] = useState(true)
   const [initialized, setInitialized] = useState(false)
+  const [userDataLoading, setUserDataLoading] = useState(false)
 
   const profileCacheRef = useRef(new Map())
   const isFetchingProfileRef = useRef(false)
@@ -116,6 +117,7 @@ export function AuthProvider({ children }) {
     setProfile(null)
     setRole('staff')
     setRestaurantId(null)
+    setUserDataLoading(false)
   }
 
   // ─── One-time initialization ───
@@ -155,9 +157,14 @@ export function AuthProvider({ children }) {
           }
 
           if (event === 'SIGNED_IN' && newSession?.user) {
+            setUserDataLoading(true)
             setSession(newSession)
-            if (userDataLoadedForRef.current !== newSession.user.id) {
-              await _loadUserData(newSession.user.id)
+            try {
+              if (userDataLoadedForRef.current !== newSession.user.id) {
+                await _loadUserData(newSession.user.id)
+              }
+            } finally {
+              if (mountedRef.current) setUserDataLoading(false)
             }
             return
           }
@@ -211,9 +218,14 @@ export function AuthProvider({ children }) {
     if (error) throw error
     if (!data?.session) throw new Error('No session created')
 
+    setUserDataLoading(true)
     setSession(data.session)
     userDataLoadedForRef.current = null
-    await _loadUserData(data.user.id)
+    try {
+      await _loadUserData(data.user.id)
+    } finally {
+      if (mountedRef.current) setUserDataLoading(false)
+    }
     return data
   }, [])
 
@@ -245,6 +257,7 @@ export function AuthProvider({ children }) {
     loading,
     initialized,
     isAuthenticated: !!session,
+    userDataLoading,
     signIn,
     signOut,
     refreshProfile,

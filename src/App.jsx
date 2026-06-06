@@ -27,7 +27,7 @@ const API_TIMEOUT = 30000
 const CURRENT_VERSION = "2.0.0"
 
 function App() {
-  const { session, profile, loading: authLoading, initialized, signOut, role, restaurantId } = useAuth()
+  const { session, profile, loading: authLoading, initialized, signOut, role, restaurantId, userDataLoading } = useAuth()
   const [restaurantSlug, setRestaurantSlug] = useState('')
   const [restaurantName, setRestaurantName] = useState('')
   const [orders, setOrders] = useState([])
@@ -898,7 +898,7 @@ function App() {
 
   if (!isLoggedIn) return <Login />
 
-  if (authLoading || !initialized) {
+  if (authLoading || !initialized || userDataLoading) {
     return (
       <div className="app">
         <div className="login-page">
