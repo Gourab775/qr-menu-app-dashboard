@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase'
 import { fetchWithTimeout } from '../lib/apiUtils'
 import { useAuth } from '../contexts/AuthContext'
 import CloudinaryUpload from '../components/CloudinaryUpload'
-import { uploadToCloudinary, deleteFromCloudinary, extractPublicId } from '../services/cloudinaryService'
+
 import { IconPackage, IconBarChart, IconSettings, IconBell, IconLock, IconUtensils, IconFolder, IconCheck, IconX, IconPhone, IconMail, IconStore, IconCopy, IconLogOut, IconStar, IconHelpCircle, IconFileText, IconPalette, IconInfo, IconImage } from '../components/Icons'
 
 const API_TIMEOUT = 30000
@@ -225,7 +225,7 @@ Limitation of Liability
  We are not liable for indirect or consequential damages`
 
 export default function SettingsPage({ preferences, setPreferences, onToast, restaurantId }) {
-  const { signOut, role } = useAuth()
+  const { signOut, role, session } = useAuth()
   const isSuperAdmin = role === 'admin'
   const [restaurant, setRestaurant] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -544,56 +544,62 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
 
   const handleSaveRestaurant = async (e) => {
     e.preventDefault()
+    if (saving || !currentRestId) return
     setSaving(true)
     try {
       const { name, slug, contact_number, logo } = formData
 
       if (!isSuperAdmin) {
-        const { error } = await supabase
+        const { data: updated, error } = await supabase
           .from('restaurants')
-          .upsert({ 
-            id: currentRestId, 
+          .update({ 
             contact_number: contact_number?.trim() || null,
             logo: logo?.trim() || null
-          }, { onConflict: 'id' })
+          })
+          .eq('id', currentRestId)
+          .select('id')
 
         if (error) throw error
+        if (!updated || updated.length === 0) {
+          throw new Error('Restaurant record not found. Contact support.')
+        }
         await refreshRestaurant()
         showToast('Business details saved')
         closeModal()
-        setSaving(false)
         return
       }
       
       if (!name || name.trim() === '') {
         showToast('Restaurant name is required', 'error')
-        setSaving(false)
         return
       }
 
       if (slug && !validateSlug(slug)) {
         showToast('Invalid slug. Use lowercase letters, numbers, and hyphens only', 'error')
-        setSaving(false)
         return
       }
 
-      const { error } = await supabase
+      const { data: updated, error } = await supabase
         .from('restaurants')
-        .upsert({ 
-          id: currentRestId, 
+        .update({ 
           name: name.trim(), 
           slug: slug?.trim() || null,
           contact_number: contact_number?.trim() || null,
           logo: logo?.trim() || null
-        }, { onConflict: 'id' })
+        })
+        .eq('id', currentRestId)
+        .select('id')
 
       if (error) throw error
+      if (!updated || updated.length === 0) {
+        throw new Error('Restaurant record not found. Contact support.')
+      }
       
       await refreshRestaurant()
       showToast('Business details saved')
       closeModal()
     } catch (err) {
-      console.error('Save error:', err)
+      console.error('[Settings] Save restaurant error:', err)
       showToast('Failed to save: ' + (err.message || 'Unknown error'), 'error')
     } finally {
       setSaving(false)
@@ -602,23 +608,28 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
 
   const handleSaveLogo = async (e) => {
     e.preventDefault()
+    if (saving || !currentRestId) return
     const logoUrl = formData.logo?.trim() || ''
 
     setSaving(true)
     try {
-      const { error } = await supabase
+      const { data: updated, error } = await supabase
         .from('restaurants')
-        .upsert({ id: currentRestId, logo: logoUrl }, { onConflict: 'id' })
+        .update({ logo: logoUrl || null })
+        .eq('id', currentRestId)
+        .select('id')
 
       if (error) throw error
+      if (!updated || updated.length === 0) {
+        throw new Error('Restaurant record not found. Contact support.')
+      }
 
       await refreshRestaurant()
       showToast(logoUrl ? 'Logo saved' : 'Logo cleared')
       closeModal()
     } catch (err) {
-      const publicId = extractPublicId(logoUrl)
-      if (publicId) deleteFromCloudinary(publicId)
-      showToast('Failed to save logo', 'error')
+      console.error('[Settings] Save logo error:', err)
+      showToast('Failed to save logo: ' + (err.message || 'Unknown error'), 'error')
     } finally {
       setSaving(false)
     }
@@ -642,6 +653,7 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
 
   const handleSaveBgVideo = async (e) => {
     e.preventDefault()
+    if (saving || !currentRestId) return
     const videoUrl = formData.background_video_url?.trim() || ''
     setSaving(true)
     try {
@@ -667,8 +679,7 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
       showToast(videoUrl ? 'Background video saved' : 'Background video cleared')
       closeModal()
     } catch (err) {
-      const publicId = extractPublicId(videoUrl)
-      if (publicId) deleteFromCloudinary(publicId)
+      console.error('[Settings] Save bg video error:', err)
       showToast('Failed to save background video', 'error')
     } finally {
       setSaving(false)
@@ -678,7 +689,7 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
   const videoSaveInProgressRef = useRef(false)
 
   const handleSaveBgVideoPreSubmit = async (videoUrl) => {
-    if (!videoUrl || videoSaveInProgressRef.current) return
+    if (!videoUrl || videoSaveInProgressRef.current || !currentRestId) return
     videoSaveInProgressRef.current = true
     try {
       const existing = await supabase
@@ -698,8 +709,7 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
       }
       showToast('Background video saved')
     } catch (err) {
-      const publicId = extractPublicId(videoUrl)
-      if (publicId) deleteFromCloudinary(publicId)
+      console.error('[Settings] Pre-save bg video error:', err)
       showToast('Failed to save background video', 'error')
     } finally {
       videoSaveInProgressRef.current = false
@@ -707,7 +717,7 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
   }
 
   const handleClearBgVideo = async () => {
-    const oldUrl = formData.background_video_url
+    if (!currentRestId) return
     setFormData({ ...formData, background_video_url: '' })
     try {
       const existing = await supabase
@@ -721,10 +731,9 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
           .update({ background_video_url: null })
           .eq('id', existing.data.id)
       }
-      const publicId = extractPublicId(oldUrl)
-      if (publicId) deleteFromCloudinary(publicId)
       showToast('Background video removed')
     } catch (err) {
+      console.error('[Settings] Clear bg video error:', err)
       showToast('Failed to remove background video', 'error')
     }
   }

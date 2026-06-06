@@ -201,20 +201,6 @@ export async function uploadToCloudinary({ file, restaurantId, subfolder, onProg
   })
 }
 
-export async function deleteFromCloudinary(publicId, resourceType = 'image') {
-  if (!publicId) return false
-  try {
-    const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/${resourceType}/destroy`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ public_id: publicId })
-    })
-    return res.ok
-  } catch {
-    return false
-  }
-}
-
 export function getOptimizedUrl(secureUrl) {
   if (!secureUrl || !secureUrl.includes('res.cloudinary.com')) return secureUrl
   return secureUrl.replace('/upload/', '/upload/f_auto,q_auto/')
@@ -225,18 +211,4 @@ export function getThumbnailUrl(secureUrl, width = 96) {
   return secureUrl.replace('/upload/', `/upload/f_auto,q_auto,w_${width}/`)
 }
 
-export function extractPublicId(secureUrl) {
-  if (!secureUrl || !secureUrl.includes('res.cloudinary.com')) return null
-  try {
-    const url = new URL(secureUrl)
-    const pathParts = url.pathname.split('/')
-    const uploadIndex = pathParts.indexOf('upload')
-    if (uploadIndex === -1 || uploadIndex + 2 >= pathParts.length) return null
-    const versionAndPath = pathParts.slice(uploadIndex + 2)
-    const withoutVersion = versionAndPath[0]?.startsWith('v') ? versionAndPath.slice(1) : versionAndPath
-    const fullPath = withoutVersion.join('/')
-    return fullPath.replace(/\.[^/.]+$/, '')
-  } catch {
-    return null
-  }
-}
+

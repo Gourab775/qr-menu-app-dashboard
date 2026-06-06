@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase'
 import { fetchWithTimeout } from '../lib/apiUtils'
 import ConfirmModal from '../components/ConfirmModal'
 import CloudinaryUpload from '../components/CloudinaryUpload'
-import { getOptimizedUrl, extractPublicId, deleteFromCloudinary } from '../services/cloudinaryService'
+import { getOptimizedUrl } from '../services/cloudinaryService'
 import { IconAlertTriangle, IconFolder } from '../components/Icons'
 
 const API_TIMEOUT = 30000
@@ -205,8 +205,6 @@ export default function CategoriesPage({ restaurantId }) {
       setEditingCategory(null)
       loadCategories()
     } catch (err) {
-      const publicId = extractPublicId(editImage)
-      if (publicId) deleteFromCloudinary(publicId)
       showToastMsg('Failed to update category', 'error')
     } finally {
       setSavingEdit(false)

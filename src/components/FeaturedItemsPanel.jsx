@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import CloudinaryUpload from './CloudinaryUpload'
-import { getOptimizedUrl, extractPublicId, deleteFromCloudinary } from '../services/cloudinaryService'
+import { getOptimizedUrl } from '../services/cloudinaryService'
 
 const generateSlug = (text) => {
   return text
@@ -143,8 +143,6 @@ export default function FeaturedItemsPanel({ restaurantId }) {
       setEditingId(null)
       showToast('Saved successfully')
     } catch (err) {
-      const publicId = extractPublicId(item.image_url)
-      if (publicId) deleteFromCloudinary(publicId)
       console.error('Save error:', err)
       showToast('Failed to save', 'error')
     }

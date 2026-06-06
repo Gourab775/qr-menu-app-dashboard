@@ -11,7 +11,7 @@ import OfflineBanner from './components/OfflineBanner'
 import FeaturedItemsPanel from './components/FeaturedItemsPanel'
 import { formatDateTime, formatOrderDateTime } from './utils/formatDateTime'
 import * as orderStore from './services/orderStore'
-import { extractPublicId, deleteFromCloudinary } from './services/cloudinaryService'
+
 import { IconStore, IconSearch, IconUtensils, IconBellRing, IconBell, IconBarChart, IconFolder, IconTarget, IconClipboard, IconTable, IconSettings } from './components/Icons'
 import './App.css'
 import './theme.css'
@@ -857,19 +857,12 @@ function App() {
       updates.description = desc
     }
     const prevItems = [...menuItems]
-    const oldItem = menuItems.find(i => i.id === id)
     setMenuItems(prev => prev.map(item => item.id === id ? { ...item, ...updates } : item))
     try {
       const { error } = await supabase.from('menu_items').update(updates).eq('id', id).eq('restaurant_id', restaurantId)
 
       if (error) throw error
     } catch (err) {
-      const newImageUrl = updates.image_url
-      const oldImageUrl = oldItem?.image_url
-      if (newImageUrl && newImageUrl !== oldImageUrl) {
-        const publicId = extractPublicId(newImageUrl)
-        if (publicId) deleteFromCloudinary(publicId)
-      }
       setMenuItems(prevItems)
       showToast('Failed to update item', 'error')
     }
@@ -1071,8 +1064,6 @@ function App() {
       setShowAddModal(false)
       showToast('Item added successfully')
     } catch (err) {
-      const publicId = extractPublicId(itemData.image_url)
-      if (publicId) deleteFromCloudinary(publicId)
       showToast('Failed to add item', 'error')
     }
   }
