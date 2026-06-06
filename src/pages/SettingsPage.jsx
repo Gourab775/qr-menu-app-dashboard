@@ -366,13 +366,13 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
   }
 
   const handleAddMainCategory = async () => {
-    if (!newMainCatName.trim()) return
+    if (typeof newMainCatName !== 'string' || !newMainCatName.trim()) return
     const maxOrder = mainCategories.reduce((max, c) => Math.max(max, c.sort_order || 0), 0)
     try {
       const { error } = await supabase
         .from('main_categories')
         .insert({
-          name: newMainCatName.trim(),
+          name: typeof newMainCatName === 'string' ? newMainCatName.trim() : newMainCatName,
           restaurant_id: currentRestId,
           sort_order: maxOrder + 1
         })
@@ -386,11 +386,11 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
   }
 
   const handleSaveMainCategoryEdit = async (id) => {
-    if (!editMainCatName.trim()) return
+    if (typeof editMainCatName !== 'string' || !editMainCatName.trim()) return
     try {
       const { error } = await supabase
         .from('main_categories')
-        .update({ name: editMainCatName.trim() })
+        .update({ name: typeof editMainCatName === 'string' ? editMainCatName.trim() : editMainCatName })
         .eq('id', id)
         .eq('restaurant_id', currentRestId)
       if (error) throw error
@@ -527,7 +527,7 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
   }
 
   const validateSlug = (slug) => {
-    if (!slug || slug.trim() === '') return true
+    if (typeof slug !== 'string' || slug.trim() === '') return true
     return /^[a-z0-9-]+$/.test(slug.trim())
   }
 
@@ -538,12 +538,25 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
     try {
       const { name, slug, contact_number, logo } = formData
 
+      const safeTrim = (v) => typeof v === 'string' ? v.trim() : v
+
+      const noChanges = (
+        restaurant &&
+        safeTrim(contact_number) === safeTrim(restaurant.contact_number) &&
+        safeTrim(logo) === safeTrim(restaurant.logo)
+      )
+      if (noChanges) {
+        showToast('Business details saved')
+        closeModal()
+        return
+      }
+
       if (!isSuperAdmin) {
         const { data: updated, error } = await supabase
           .from('restaurants')
           .update({ 
-            contact_number: contact_number?.trim() || null,
-            logo: logo?.trim() || null
+            contact_number: safeTrim(contact_number) || null,
+            logo: safeTrim(logo) || null
           })
           .eq('id', currentRestId)
           .select('id')
@@ -558,7 +571,7 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
         return
       }
       
-      if (!name || name.trim() === '') {
+      if (typeof name !== 'string' || name.trim() === '') {
         showToast('Restaurant name is required', 'error')
         return
       }
@@ -572,9 +585,9 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
         .from('restaurants')
         .update({ 
           name: name.trim(), 
-          slug: slug?.trim() || null,
-          contact_number: contact_number?.trim() || null,
-          logo: logo?.trim() || null
+          slug: typeof slug === 'string' ? slug.trim() : slug,
+          contact_number: safeTrim(contact_number) || null,
+          logo: safeTrim(logo) || null
         })
         .eq('id', currentRestId)
         .select('id')
@@ -598,7 +611,8 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
   const handleSaveLogo = async (e) => {
     e.preventDefault()
     if (saving || !currentRestId) return
-    const logoUrl = formData.logo?.trim() || ''
+    const safeTrim = (v) => typeof v === 'string' ? v.trim() : v
+    const logoUrl = safeTrim(formData.logo) || ''
 
     setSaving(true)
     try {
@@ -642,7 +656,7 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
   const handleSaveBgVideo = async (e) => {
     e.preventDefault()
     if (saving || !currentRestId) return
-    const videoUrl = formData.background_video_url?.trim() || ''
+    const videoUrl = typeof formData.background_video_url === 'string' ? formData.background_video_url.trim() : ''
     setSaving(true)
     try {
       const existing = await supabase
@@ -1034,7 +1048,7 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
                   placeholder="New main category name..."
                   onKeyDown={e => e.key === 'Enter' && handleAddMainCategory()}
                 />
-                <button className="save-btn" onClick={handleAddMainCategory} disabled={!newMainCatName.trim()}>
+                <button className="save-btn" onClick={handleAddMainCategory} disabled={typeof newMainCatName !== 'string' || !newMainCatName.trim()}>
                   + Add
                 </button>
               </div>
