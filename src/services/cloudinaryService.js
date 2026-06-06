@@ -104,7 +104,8 @@ export async function compressImage(file, maxDimension = 1920, quality = 0.85) {
     ctx.drawImage(img, 0, 0, width, height)
 
     const blob = await new Promise((resolve) => canvas.toBlob(resolve, file.type, quality))
-    return new File([blob], file.name, { type: file.type })
+    if (blob) return new File([blob], file.name, { type: file.type })
+    return file
   } catch {
     return file
   }

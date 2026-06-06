@@ -4,7 +4,7 @@ import { fetchWithTimeout } from '../lib/apiUtils'
 import { useAuth } from '../contexts/AuthContext'
 import CloudinaryUpload from '../components/CloudinaryUpload'
 import { uploadToCloudinary, deleteFromCloudinary, extractPublicId } from '../services/cloudinaryService'
-import { IconPackage, IconBarChart, IconSettings, IconBell, IconLock, IconUtensils, IconFolder, IconCheck, IconX, IconPhone, IconMail, IconStore, IconCopy, IconLogOut, IconEye, IconEyeOff, IconStar, IconHelpCircle, IconFileText, IconTrash2, IconPalette, IconInfo, IconImage } from '../components/Icons'
+import { IconPackage, IconBarChart, IconSettings, IconBell, IconLock, IconUtensils, IconFolder, IconCheck, IconX, IconPhone, IconMail, IconStore, IconCopy, IconLogOut, IconStar, IconHelpCircle, IconFileText, IconPalette, IconInfo, IconImage } from '../components/Icons'
 
 const API_TIMEOUT = 30000
 
@@ -120,7 +120,7 @@ const HELP_RESPONSES = {
       { q: 'What is the default password?', a: 'The default password is: 1234' },
 
       { q: 'Session expired repeatedly?', a: 'Clear browser cache and ensure cookies are enabled.' },
-      { q: 'Can I change my password?', a: 'Yes, go to Settings > Change Password to update your password.' }
+      { q: 'Can I change my password?', a: 'Contact support to update your password.' }
     ]
   },
   menu: {
@@ -233,12 +233,6 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
   const [showModal, setShowModal] = useState(null)
   const [formData, setFormData] = useState({})
   const [helpTopic, setHelpTopic] = useState(null)
-  const [passwordErrors, setPasswordErrors] = useState({})
-  const [showPasswords, setShowPasswords] = useState({
-    current: false,
-    new: false,
-    confirm: false
-  })
 
   const [mainCategories, setMainCategories] = useState([])
   const [mainCatLoading, setMainCatLoading] = useState(false)
@@ -495,13 +489,6 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
     }
   }
 
-  const clearLocalData = () => {
-    if (window.confirm('This will clear all local data. Continue?')) {
-      localStorage.clear()
-      showToast('Local data cleared')
-    }
-  }
-
   const openModal = (modalName) => {
     setShowModal(modalName)
     setHelpTopic(null)
@@ -517,13 +504,6 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
       setFormData({
         logo: restaurant.logo || ''
       })
-    } else if (modalName === 'changepassword') {
-      setFormData({
-        currentPassword: '',
-        newPassword: '',
-        confirmPassword: ''
-      })
-      setPasswordErrors({})
     } else if (modalName === 'maincategories') {
       loadMainCategories()
     } else if (modalName === 'bgvideo') {
@@ -535,120 +515,10 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
     setShowModal(null)
     setFormData({})
     setHelpTopic(null)
-    setPasswordErrors({})
     setEditingMainCatId(null)
     setEditMainCatName('')
     setNewMainCatName('')
     setDeleteMainCatTarget(null)
-  }
-
-const handlePasswordChange = async (e) => {
-    e.preventDefault()
-    const { currentPassword, newPassword, confirmPassword } = formData
-    const errors = {}
-
-    if (!currentPassword || currentPassword.trim() === '') {
-      errors.currentPassword = 'Current password is required'
-    }
-    if (!newPassword || newPassword.trim() === '') {
-      errors.newPassword = 'New password is required'
-    } else if (newPassword.length < 6) {
-      errors.newPassword = 'Password must be at least 6 characters'
-    }
-    if (!confirmPassword || confirmPassword.trim() === '') {
-      errors.confirmPassword = 'Please confirm your password'
-    } else if (newPassword !== confirmPassword) {
-      errors.confirmPassword = 'Passwords do not match'
-    }
-
-    if (Object.keys(errors).length > 0) {
-      setPasswordErrors(errors)
-      return
-    }
-
-    setSaving(true)
-    setPasswordErrors({})
-
-    try {
-      console.log('[Password Change] Verifying Supabase session...')
-      
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-      
-      if (sessionError) {
-        console.warn('[Password Change] Session check error:', sessionError.message)
-      }
-       
-      if (!session) {
-        showToast('Session expired. Please login again.', 'error')
-        handleLogout(true)
-        return
-      }
-
-      console.log('[Password Change] Session verified, user:', session.user?.email)
-      console.log('[Password Change] Updating password via Supabase...')
-      
-      const userEmail = session.user?.email
-      
-      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-        email: userEmail,
-        password: currentPassword
-      })
-
-      console.log('[Password Change] Re-auth response:', { 
-        user: signInData?.user?.email, 
-        hasSession: !!signInData?.session,
-        error: signInError?.message 
-      })
-
-      if (signInError) {
-        console.error('[Password Change] Re-authentication failed:', signInError.message)
-        setPasswordErrors({ currentPassword: 'Current password is incorrect' })
-        setSaving(false)
-        return
-      }
-      
-      console.log('[Password Change] Updating password via Supabase updateUser...')
-      
-      const { data: updateData, error: updateError } = await supabase.auth.updateUser({ 
-        password: newPassword 
-      })
-
-      console.log('[Password Change] Update response:', { 
-        user: updateData?.user?.email, 
-        updated: !!updateData?.user,
-        error: updateError?.message 
-      })
-
-      if (updateError) {
-        console.error('[Password Change] Supabase update failed:', updateError.message)
-        setPasswordErrors({ general: 'Failed to update password: ' + updateError.message })
-        setSaving(false)
-        return
-      }
-      
-      console.log('[Password Change] Password updated in Supabase successfully!')
-      
-      showToast('Password updated successfully')
-      closeModal()
-      setFormData({})
-      
-      console.log('[Password Change] Step 3: Signing out from Supabase...')
-
-      await signOut()
-      console.log('[Password Change] Signed out from Supabase')
-
-      localStorage.removeItem('dashboard_preferences')
-      localStorage.removeItem('dashboard_keepLoggedIn')
-
-      showToast('Password updated. Please login with new password.')
-      closeModal()
-      
-    } catch (err) {
-      console.error('[Password Change] Error:', err)
-      setPasswordErrors({ general: 'An unexpected error occurred' })
-    } finally {
-      setSaving(false)
-    }
   }
 
   const handleLogout = async (forceLogout = false) => {
@@ -877,7 +747,6 @@ const handlePasswordChange = async (e) => {
               <div className="readonly-field">
                 <span className="readonly-label">Restaurant Slug</span>
                 <span className="readonly-value">{restaurant?.slug || formData.slug || '—'}</span>
-                <span className="super-admin-badge">Managed by Super Admin</span>
               </div>
             </div>
             <form onSubmit={handleSaveRestaurant}>
@@ -965,16 +834,6 @@ const handlePasswordChange = async (e) => {
                   />
                 </div>
               )}
-              <div className="form-group" style={{ marginTop: '8px' }}>
-                <label>Video URL</label>
-                <input
-                  type="text"
-                  value={formData.background_video_url || ''}
-                  readOnly
-                  placeholder="Upload a video above"
-                  style={{ fontSize: '12px', wordBreak: 'break-all' }}
-                />
-              </div>
               <div className="modal-actions">
                 {formData.background_video_url && (
                   <button type="button" className="delete-btn" onClick={handleClearBgVideo}>Remove Video</button>
@@ -1101,94 +960,6 @@ const handlePasswordChange = async (e) => {
                 </>
               )}
             </div>
-          </div>
-        </div>
-      )
-    }
-    if (showModal === 'changepassword') {
-      return (
-        <div className="modal-overlay" onClick={closeModal}>
-          <div className="settings-modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>Change Password</h3>
-              <button className="modal-close" onClick={closeModal}>×</button>
-            </div>
-            <form onSubmit={handlePasswordChange}>
-              <div className="form-group">
-                <label>Current Password</label>
-                <div className="password-input-wrapper">
-                  <input 
-                    type={showPasswords.current ? 'text' : 'password'} 
-                    value={formData.currentPassword || ''} 
-                    onChange={e => setFormData({ ...formData, currentPassword: e.target.value })} 
-                    placeholder="Enter current password"
-                    className={passwordErrors.currentPassword ? 'error' : ''}
-                    autoComplete="current-password"
-                  />
-                  <button 
-                    type="button" 
-                    className="password-toggle"
-                    onClick={() => setShowPasswords(prev => ({ ...prev, current: !prev.current }))}
-                  >
-                    {showPasswords.current ? <IconEye size={18} /> : <IconEyeOff size={18} />}
-                  </button>
-                </div>
-                {passwordErrors.currentPassword && <span className="form-error">{passwordErrors.currentPassword}</span>}
-              </div>
-              <div className="form-group">
-                <label>New Password</label>
-                <div className="password-input-wrapper">
-                  <input 
-                    type={showPasswords.new ? 'text' : 'password'} 
-                    value={formData.newPassword || ''} 
-                    onChange={e => setFormData({ ...formData, newPassword: e.target.value })} 
-                    placeholder="Enter new password (min 6 characters)"
-                    className={passwordErrors.newPassword ? 'error' : ''}
-                    autoComplete="new-password"
-                  />
-                  <button 
-                    type="button" 
-                    className="password-toggle"
-                    onClick={() => setShowPasswords(prev => ({ ...prev, new: !prev.new }))}
-                  >
-                    {showPasswords.new ? <IconEye size={18} /> : <IconEyeOff size={18} />}
-                  </button>
-                </div>
-                {passwordErrors.newPassword && <span className="form-error">{passwordErrors.newPassword}</span>}
-              </div>
-              <div className="form-group">
-                <label>Confirm Password</label>
-                <div className="password-input-wrapper">
-                  <input 
-                    type={showPasswords.confirm ? 'text' : 'password'} 
-                    value={formData.confirmPassword || ''} 
-                    onChange={e => setFormData({ ...formData, confirmPassword: e.target.value })} 
-                    placeholder="Confirm new password"
-                    className={passwordErrors.confirmPassword ? 'error' : ''}
-                    autoComplete="new-password"
-                  />
-                  <button 
-                    type="button" 
-                    className="password-toggle"
-                    onClick={() => setShowPasswords(prev => ({ ...prev, confirm: !prev.confirm }))}
-                  >
-                    {showPasswords.confirm ? <IconEye size={18} /> : <IconEyeOff size={18} />}
-                  </button>
-                </div>
-                {passwordErrors.confirmPassword && <span className="form-error">{passwordErrors.confirmPassword}</span>}
-              </div>
-              {passwordErrors.general && (
-                <div className="form-group">
-                  <span className="form-error">{passwordErrors.general}</span>
-                </div>
-              )}
-              <div className="modal-actions">
-                <button type="button" className="cancel-btn" onClick={closeModal}>Cancel</button>
-                <button type="submit" className="save-btn" disabled={saving}>
-                  {saving ? 'Verifying...' : 'Update Password'}
-                </button>
-              </div>
-            </form>
           </div>
         </div>
       )
@@ -1365,10 +1136,8 @@ const handlePasswordChange = async (e) => {
     {
       title: 'Privacy & Security',
       items: [
-        { icon: <IconLock size={20} />, label: 'Change Password', description: 'Update your password', onClick: () => openModal('changepassword') },
         { icon: <IconFileText size={20} />, label: 'Privacy Policy', description: 'Data handling', onClick: () => openModal('privacy') },
-        { icon: <IconFileText size={20} />, label: 'Terms of Service', description: 'Usage terms', onClick: () => openModal('terms') },
-        { icon: <IconTrash2 size={20} />, label: 'Clear Data', description: 'Reset local data', onClick: clearLocalData }
+        { icon: <IconFileText size={20} />, label: 'Terms of Service', description: 'Usage terms', onClick: () => openModal('terms') }
       ]
     },
     {
