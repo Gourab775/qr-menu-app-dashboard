@@ -578,6 +578,11 @@ function PopupApp() {
                           <div className="popup-card-header-left">
                             <span className="popup-order-id">#{orderCode}</span>
                             <span className="popup-table-badge">Table {tableNum || '\u2014'}</span>
+                            {safeOrder.order_type && (
+                              <span className={`popup-order-type-badge ${safeOrder.order_type}`}>
+                                {safeOrder.order_type === 'dine_in' ? 'Dine-In' : 'Takeout'}
+                              </span>
+                            )}
                           </div>
                           <span className="popup-order-date">
                             {safeOrder.created_at ? formatOrderDateTime(safeOrder.created_at) : ''}
@@ -676,6 +681,11 @@ function PopupApp() {
                           <div className="popup-card-header-left">
                             <span className="popup-order-id">#{orderCode}</span>
                             {tableNum && <span className="popup-table-badge">Table {tableNum}</span>}
+                            {order.order_type && (
+                              <span className={`popup-order-type-badge ${order.order_type}`}>
+                                {order.order_type === 'dine_in' ? 'Dine-In' : 'Takeout'}
+                              </span>
+                            )}
                           </div>
                           <span className="popup-order-date">
                             {order.created_at ? formatOrderDateTime(order.created_at) : ''}

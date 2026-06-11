@@ -130,7 +130,7 @@ function App() {
 
     const executeLoad = async () => {
       try {
-        const baseSelect = 'id, restaurant_id, total_price, status, items, created_at, order_code, table_id, note, restaurant_tables(table_number)'
+        const baseSelect = 'id, restaurant_id, total_price, status, items, created_at, order_code, table_id, note, order_type, restaurant_tables(table_number)'
 
         const [liveResult, pastResult] = await Promise.all([
           fetchWithTimeout(
