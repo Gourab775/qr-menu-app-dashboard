@@ -135,7 +135,7 @@ function PastOrdersPage({ pastOrders, loading, onToast, hideFilters }) {
                     {tableNum && <span className="po-table-tag">Table {tableNum}</span>}
                     {order.order_type && (
                       <span className={`po-order-type-tag ${order.order_type}`}>
-                        {order.order_type === 'dine_in' ? 'Dine-In' : 'Takeout'}
+                        {order.order_type === 'dine_in' ? 'Dine-In' : 'Takeaway'}
                       </span>
                     )}
                   </div>
@@ -179,7 +179,7 @@ function PastOrdersPage({ pastOrders, loading, onToast, hideFilters }) {
                     {order.order_type && (
                       <div className="po-detail-note">
                         <span className="po-note-label">Order Type: </span>
-                        <span className="po-note-text">{order.order_type === 'dine_in' ? 'Dine-In' : 'Takeout'}</span>
+                        <span className="po-note-text">{order.order_type === 'dine_in' ? 'Dine-In' : 'Takeaway'}</span>
                       </div>
                     )}
                   </div>

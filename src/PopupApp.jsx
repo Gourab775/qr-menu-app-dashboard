@@ -580,7 +580,7 @@ function PopupApp() {
                             <span className="popup-table-badge">Table {tableNum || '\u2014'}</span>
                             {safeOrder.order_type && (
                               <span className={`popup-order-type-badge ${safeOrder.order_type}`}>
-                                {safeOrder.order_type === 'dine_in' ? 'Dine-In' : 'Takeout'}
+                                {safeOrder.order_type === 'dine_in' ? 'Dine-In' : 'Takeaway'}
                               </span>
                             )}
                           </div>
@@ -683,7 +683,7 @@ function PopupApp() {
                             {tableNum && <span className="popup-table-badge">Table {tableNum}</span>}
                             {order.order_type && (
                               <span className={`popup-order-type-badge ${order.order_type}`}>
-                                {order.order_type === 'dine_in' ? 'Dine-In' : 'Takeout'}
+                                {order.order_type === 'dine_in' ? 'Dine-In' : 'Takeaway'}
                               </span>
                             )}
                           </div>
