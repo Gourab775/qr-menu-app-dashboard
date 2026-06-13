@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo, lazy, Suspens
 import { supabase } from './lib/supabase'
 import { useAuth } from './contexts/AuthContext'
 import { fetchWithTimeout, deduplicateRequest } from './lib/apiUtils'
+import { deleteMenuItemImage } from './services/supabaseStorageService'
 import MenuItemCard from './components/MenuItemCard'
 import AddItemModal from './components/AddItemModal'
 import Toast from './components/Toast'
@@ -755,9 +756,18 @@ function App() {
       if (desc && (desc.length > 60 || !/^[a-zA-Z0-9 .,!?;:'"\-()&\/@#]+$/.test(desc))) return
       updates.description = desc
     }
+    const oldItem = menuItems.find(item => item.id === id)
+    const oldImageUrl = oldItem?.image_url
     const prevItems = [...menuItems]
     setMenuItems(prev => prev.map(item => item.id === id ? { ...item, ...updates } : item))
     try {
+      if (updates.image_url !== undefined && oldImageUrl && updates.image_url !== oldImageUrl) {
+        try {
+          await deleteMenuItemImage(oldImageUrl)
+        } catch (deleteErr) {
+          console.error('[App] Failed to delete old menu item image:', deleteErr.message)
+        }
+      }
       const { error } = await supabase.from('menu_items').update(updates).eq('id', id).eq('restaurant_id', restaurantId)
 
       if (error) throw error
@@ -768,9 +778,17 @@ function App() {
   }, [menuItems, showToast, restaurantId])
 
   const handleDeleteItem = useCallback(async (id) => {
+    const item = menuItems.find(i => i.id === id)
     const prevItems = [...menuItems]
     setMenuItems(prev => prev.filter(item => item.id !== id))
     try {
+      if (item?.image_url) {
+        try {
+          await deleteMenuItemImage(item.image_url)
+        } catch (deleteErr) {
+          console.error('[App] Failed to delete menu item image:', deleteErr.message)
+        }
+      }
       const { error } = await supabase.from('menu_items').delete().eq('id', id).eq('restaurant_id', restaurantId)
 
       if (error) throw error

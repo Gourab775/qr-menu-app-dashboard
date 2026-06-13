@@ -1,7 +1,7 @@
 import { useState, memo } from 'react'
 import ConfirmModal from './ConfirmModal'
-import CloudinaryUpload from './CloudinaryUpload'
-import { getOptimizedUrl, getThumbnailUrl } from '../services/cloudinaryService'
+import MenuItemImageUpload from './MenuItemImageUpload'
+import { getThumbnailUrl } from '../services/cloudinaryService'
 
 const VegIcon = () => (
   <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
@@ -186,10 +186,8 @@ const MenuItemCard = memo(function MenuItemCard({ item, onSave, onDelete, catego
       <div className="mic-edit-form">
         <div className="mief-row">
           <label>Image</label>
-          <CloudinaryUpload
+          <MenuItemImageUpload
             restaurantId={restaurantId}
-            subfolder="menu_items"
-            type="image"
             value={formData.image_url}
             onChange={(url) => setFormData(p => ({ ...p, image_url: url }))}
           />
