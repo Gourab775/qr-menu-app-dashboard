@@ -2,15 +2,16 @@ import { useState, useRef } from 'react'
 import { uploadMenuItemImage } from '../services/supabaseStorageService'
 
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp']
-const MAX_SIZE = 5 * 1024 * 1024
+const MAX_SOURCE_SIZE = 100 * 1024
 
 function validateFile(file) {
   if (!file) return 'No file selected'
   if (!ALLOWED_TYPES.includes(file.type)) {
     return 'Unsupported file format. Please upload JPEG, PNG, or WebP images.'
   }
-  if (file.size > MAX_SIZE) {
-    return 'File size exceeds the 5 MB limit. Please upload a smaller file.'
+  if (file.size > MAX_SOURCE_SIZE) {
+    const kb = (file.size / 1024).toFixed(1)
+    return `Image is ${kb} KB. Maximum allowed is 100 KB. Please upload a smaller file.`
   }
   return null
 }

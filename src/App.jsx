@@ -943,7 +943,12 @@ function App() {
     try {
       const name = (itemData.name || '').trim()
       const desc = (itemData.description || '').replace(/\s+/g, ' ').trim()
-      if (!name || !desc || !itemData.category_id || !itemData.price) return
+      if (!name || !desc || !itemData.category_id || !itemData.price) {
+        console.error('[Menu] Add item validation failed:', { name, desc, category_id: itemData.category_id, price: itemData.price })
+        showToast('Missing required fields', 'error')
+        return
+      }
+      console.log('[Menu] Inserting item:', { name, price: itemData.price, image_url: itemData.image_url ? '(present)' : '(empty)', category_id: itemData.category_id, restaurantId })
       const { data, error } = await supabase
         .from('menu_items')
         .insert({
@@ -956,15 +961,35 @@ function App() {
           category_id: itemData.category_id,
           restaurant_id: restaurantId
         })
-        .select()
+        .select('id, name, price, description, is_veg, is_available, category_id, image_url')
         .single()
 
-      if (error) throw error
+      if (error) {
+        console.error('[Menu] Insert error:', error)
+        throw error
+      }
 
+      if (!data) {
+        console.error('[Menu] Insert succeeded but no data returned (RLS or server issue)')
+        // Item IS in DB — re-fetch all items to reconcile
+        const { data: refreshed, error: refetchError } = await supabase
+          .from('menu_items')
+          .select('id, name, price, description, is_veg, is_available, category_id, image_url')
+          .eq('restaurant_id', restaurantId)
+          .order('name', { ascending: true })
+        if (refetchError) throw refetchError
+        setMenuItems(refreshed || [])
+        setShowAddModal(false)
+        showToast('Item added successfully')
+        return
+      }
+
+      console.log('[Menu] Insert success, item returned:', { id: data.id, name: data.name })
       setMenuItems(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)))
       setShowAddModal(false)
       showToast('Item added successfully')
     } catch (err) {
+      console.error('[Menu] Add item failed:', err.message)
       showToast('Failed to add item', 'error')
     }
   }
