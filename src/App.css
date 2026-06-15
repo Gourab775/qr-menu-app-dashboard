@@ -4310,3 +4310,79 @@ body {
   color: var(--orange);
   font-weight: 500;
 }
+
+/* Waiter call request type & status */
+.waiter-call-request-type {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--orange);
+}
+
+.waiter-call-status {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* Sort order buttons for waiter request types management */
+.mc-btn-up,
+.mc-btn-down {
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+  line-height: 1;
+}
+
+.mc-btn-up:hover:not(:disabled),
+.mc-btn-down:hover:not(:disabled) {
+  background: rgba(99, 102, 241, 0.1);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.mc-btn-up:disabled,
+.mc-btn-down:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.mc-btn-active {
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  background: rgba(34, 197, 94, 0.12);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  color: #22c55e;
+}
+
+.mc-btn-active:hover {
+  background: rgba(34, 197, 94, 0.2);
+  border-color: #22c55e;
+}
+
+.mc-btn-inactive {
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+}
+
+.mc-btn-inactive:hover {
+  background: rgba(34, 197, 94, 0.08);
+  border-color: rgba(34, 197, 94, 0.3);
+  color: #22c55e;
+}

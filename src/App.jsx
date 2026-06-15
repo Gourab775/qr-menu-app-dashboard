@@ -1189,7 +1189,9 @@ function App() {
               <div className="waiter-call-list">
                 {waiterCalls.map(call => {
                   const tableNum = call.table_number || (call.restaurant_tables?.table_number) || call.table_id?.slice(0, 8) || '—'
-                  const note = call.note || null
+                  const requestType = call.request_type_name || null
+                  const customMsg = call.custom_message || null
+                  const status = call.status || 'pending'
                   return (
                     <div key={call.id} className="waiter-call-card">
                       <div className="waiter-call-card-top">
@@ -1197,7 +1199,9 @@ function App() {
                           <span className="waiter-call-table-icon"><IconBell size={20} /></span>
                           <div className="waiter-call-card-info">
                             <span className="waiter-call-table-number">Table {tableNum}</span>
-                            {note && <span className="waiter-call-note">{note}</span>}
+                            {requestType && <span className="waiter-call-request-type">Request: {requestType}</span>}
+                            {customMsg && <span className="waiter-call-note">{customMsg}</span>}
+                            <span className="waiter-call-status">{status === 'pending' ? 'Waiting' : status}</span>
                           </div>
                         </div>
                         <span className="waiter-call-time">{call.created_at ? formatOrderDateTime(call.created_at) : ''}</span>

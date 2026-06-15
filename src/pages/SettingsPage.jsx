@@ -241,6 +241,13 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
   const [editMainCatName, setEditMainCatName] = useState('')
   const [deleteMainCatTarget, setDeleteMainCatTarget] = useState(null)
 
+  const [waiterRequestTypes, setWaiterRequestTypes] = useState([])
+  const [wrtLoading, setWrtLoading] = useState(false)
+  const [newWrtName, setNewWrtName] = useState('')
+  const [editingWrtId, setEditingWrtId] = useState(null)
+  const [editWrtName, setEditWrtName] = useState('')
+  const [deleteWrtTarget, setDeleteWrtTarget] = useState(null)
+
   const mountedRef = useRef(false)
   const abortControllerRef = useRef(null)
 
@@ -424,6 +431,158 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
     }
   }
 
+  const loadWaiterRequestTypes = async () => {
+    setWrtLoading(true)
+    try {
+      const { data } = await supabase
+        .from('waiter_request_types')
+        .select('*')
+        .eq('restaurant_id', currentRestId)
+        .order('sort_order', { ascending: true })
+      if (data) setWaiterRequestTypes(data)
+    } catch (err) {
+      console.error('Failed to load waiter request types:', err.message)
+    } finally {
+      setWrtLoading(false)
+    }
+  }
+
+  const handleAddWaiterRequestType = async () => {
+    if (typeof newWrtName !== 'string' || !newWrtName.trim()) return
+    const maxOrder = waiterRequestTypes.reduce((max, t) => Math.max(max, t.sort_order || 0), 0)
+    const optimistic = {
+      id: 'temp-' + Date.now(),
+      name: newWrtName.trim(),
+      restaurant_id: currentRestId,
+      is_active: true,
+      sort_order: maxOrder + 1,
+      created_at: new Date().toISOString()
+    }
+    setWaiterRequestTypes(prev => [...prev, optimistic])
+    setNewWrtName('')
+    try {
+      const { data, error } = await supabase
+        .from('waiter_request_types')
+        .insert({
+          name: newWrtName.trim(),
+          restaurant_id: currentRestId,
+          sort_order: maxOrder + 1
+        })
+        .select()
+        .single()
+      if (error) throw error
+      if (data) {
+        setWaiterRequestTypes(prev => prev.map(t => t.id === optimistic.id ? data : t))
+      }
+      showToast('Request type added')
+    } catch (err) {
+      setWaiterRequestTypes(prev => prev.filter(t => t.id !== optimistic.id))
+      showToast('Failed to add request type', 'error')
+    }
+  }
+
+  const handleSaveWaiterRequestTypeEdit = async (id) => {
+    if (typeof editWrtName !== 'string' || !editWrtName.trim()) return
+    const prevName = waiterRequestTypes.find(t => t.id === id)?.name || ''
+    setWaiterRequestTypes(prev => prev.map(t => t.id === id ? { ...t, name: editWrtName.trim() } : t))
+    setEditingWrtId(null)
+    setEditWrtName('')
+    try {
+      const { error } = await supabase
+        .from('waiter_request_types')
+        .update({ name: editWrtName.trim() })
+        .eq('id', id)
+        .eq('restaurant_id', currentRestId)
+      if (error) throw error
+      showToast('Request type updated')
+    } catch (err) {
+      setWaiterRequestTypes(prev => prev.map(t => t.id === id ? { ...t, name: prevName } : t))
+      showToast('Failed to update request type', 'error')
+    }
+  }
+
+  const handleToggleWaiterRequestType = async (id, currentActive) => {
+    setWaiterRequestTypes(prev => prev.map(t => t.id === id ? { ...t, is_active: !currentActive } : t))
+    try {
+      const { error } = await supabase
+        .from('waiter_request_types')
+        .update({ is_active: !currentActive })
+        .eq('id', id)
+        .eq('restaurant_id', currentRestId)
+      if (error) throw error
+      showToast(!currentActive ? 'Request type enabled' : 'Request type disabled')
+    } catch (err) {
+      setWaiterRequestTypes(prev => prev.map(t => t.id === id ? { ...t, is_active: currentActive } : t))
+      showToast('Failed to update request type', 'error')
+    }
+  }
+
+  const handleDeleteWaiterRequestType = async (id) => {
+    const prev = waiterRequestTypes.find(t => t.id === id)
+    setWaiterRequestTypes(prev => prev.filter(t => t.id !== id))
+    setDeleteWrtTarget(null)
+    try {
+      const { error } = await supabase
+        .from('waiter_request_types')
+        .delete()
+        .eq('id', id)
+        .eq('restaurant_id', currentRestId)
+      if (error) throw error
+      showToast('Request type deleted')
+    } catch (err) {
+      if (prev) setWaiterRequestTypes(prev => [...prev, prev])
+      showToast('Failed to delete request type', 'error')
+    }
+  }
+
+  const handleMoveWrtUp = async (index) => {
+    if (index <= 0) return
+    const items = [...waiterRequestTypes]
+    const temp = items[index]
+    items[index] = { ...items[index - 1], sort_order: items[index].sort_order }
+    items[index - 1] = { ...temp, sort_order: items[index - 1].sort_order }
+    setWaiterRequestTypes(items)
+    try {
+      await supabase
+        .from('waiter_request_types')
+        .update({ sort_order: items[index].sort_order })
+        .eq('id', items[index].id)
+        .eq('restaurant_id', currentRestId)
+      await supabase
+        .from('waiter_request_types')
+        .update({ sort_order: items[index - 1].sort_order })
+        .eq('id', items[index - 1].id)
+        .eq('restaurant_id', currentRestId)
+    } catch (err) {
+      loadWaiterRequestTypes()
+      showToast('Failed to reorder', 'error')
+    }
+  }
+
+  const handleMoveWrtDown = async (index) => {
+    if (index >= waiterRequestTypes.length - 1) return
+    const items = [...waiterRequestTypes]
+    const temp = items[index]
+    items[index] = { ...items[index + 1], sort_order: items[index].sort_order }
+    items[index + 1] = { ...temp, sort_order: items[index + 1].sort_order }
+    setWaiterRequestTypes(items)
+    try {
+      await supabase
+        .from('waiter_request_types')
+        .update({ sort_order: items[index].sort_order })
+        .eq('id', items[index].id)
+        .eq('restaurant_id', currentRestId)
+      await supabase
+        .from('waiter_request_types')
+        .update({ sort_order: items[index + 1].sort_order })
+        .eq('id', items[index + 1].id)
+        .eq('restaurant_id', currentRestId)
+    } catch (err) {
+      loadWaiterRequestTypes()
+      showToast('Failed to reorder', 'error')
+    }
+  }
+
   const updatePreference = async (key, value) => {
     const newPrefs = { ...preferences, [key]: value }
     if (key === 'orderNotifications' && !value) {
@@ -495,6 +654,8 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
       })
     } else if (modalName === 'maincategories') {
       loadMainCategories()
+    } else if (modalName === 'waiterrequesttypes') {
+      loadWaiterRequestTypes()
     } else if (modalName === 'bgvideo') {
       loadBgVideo()
     }
@@ -508,6 +669,10 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
     setEditMainCatName('')
     setNewMainCatName('')
     setDeleteMainCatTarget(null)
+    setEditingWrtId(null)
+    setEditWrtName('')
+    setNewWrtName('')
+    setDeleteWrtTarget(null)
   }
 
   const handleLogout = async (forceLogout = false) => {
@@ -1105,6 +1270,89 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
         </div>
       )
     }
+    if (showModal === 'waiterrequesttypes') {
+      return (
+        <div className="modal-overlay" onClick={closeModal}>
+          <div className="settings-modal mc-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Waiter Request Types</h3>
+              <button className="modal-close" onClick={closeModal}>×</button>
+            </div>
+            <div className="mc-content">
+              <div className="mc-add-row">
+                <input
+                  type="text"
+                  value={newWrtName}
+                  onChange={e => setNewWrtName(e.target.value)}
+                  placeholder="New request type name..."
+                  onKeyDown={e => e.key === 'Enter' && handleAddWaiterRequestType()}
+                />
+                <button className="save-btn" onClick={handleAddWaiterRequestType} disabled={typeof newWrtName !== 'string' || !newWrtName.trim()}>
+                  + Add
+                </button>
+              </div>
+              {wrtLoading ? (
+                <div className="mc-loading"><div className="loading-spinner"></div><p>Loading...</p></div>
+              ) : waiterRequestTypes.length === 0 ? (
+                <div className="mc-empty"><p>No request types yet. Create one above.</p></div>
+              ) : (
+                <div className="mc-list">
+                  {waiterRequestTypes.map((wrt, idx) => (
+                    <div key={wrt.id} className="mc-item">
+                      {editingWrtId === wrt.id ? (
+                        <div className="mc-edit-row">
+                          <input
+                            type="text"
+                            value={editWrtName}
+                            onChange={e => setEditWrtName(e.target.value)}
+                            onKeyDown={e => e.key === 'Enter' && handleSaveWaiterRequestTypeEdit(wrt.id)}
+                            autoFocus
+                          />
+                          <button className="mc-btn mc-btn-save" onClick={() => handleSaveWaiterRequestTypeEdit(wrt.id)}>Save</button>
+                          <button className="mc-btn mc-btn-cancel" onClick={() => setEditingWrtId(null)}>Cancel</button>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="mc-item-info">
+                            <span className="mc-item-name">{wrt.name}</span>
+                            <span className="mc-item-order">Order: {wrt.sort_order || idx + 1}</span>
+                          </div>
+                          <div className="mc-item-actions">
+                            <button
+                              className={`mc-btn ${wrt.is_active ? 'mc-btn-active' : 'mc-btn-inactive'}`}
+                              onClick={() => handleToggleWaiterRequestType(wrt.id, wrt.is_active)}
+                              title={wrt.is_active ? 'Click to disable' : 'Click to enable'}
+                            >
+                              {wrt.is_active ? '✓' : '○'}
+                            </button>
+                            <button className="mc-btn mc-btn-edit" onClick={() => { setEditingWrtId(wrt.id); setEditWrtName(wrt.name) }}>Edit</button>
+                            <button className="mc-btn mc-btn-up" onClick={() => handleMoveWrtUp(idx)} disabled={idx === 0}>↑</button>
+                            <button className="mc-btn mc-btn-down" onClick={() => handleMoveWrtDown(idx)} disabled={idx >= waiterRequestTypes.length - 1}>↓</button>
+                            <button className="mc-btn mc-btn-delete" onClick={() => setDeleteWrtTarget(wrt)}>Delete</button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+          {deleteWrtTarget && (
+            <div className="mc-confirm-overlay" onClick={() => setDeleteWrtTarget(null)}>
+              <div className="mc-confirm-box" onClick={e => e.stopPropagation()}>
+                <h4>Delete "{deleteWrtTarget.name}"?</h4>
+                <p>This action cannot be undone. Existing waiter calls using this type will keep their data.</p>
+                <div className="modal-actions">
+                  <button className="cancel-btn" onClick={() => setDeleteWrtTarget(null)}>Cancel</button>
+                  <button className="delete-btn" onClick={() => handleDeleteWaiterRequestType(deleteWrtTarget.id)}>Delete</button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )
+    }
     return null
   }
 
@@ -1134,7 +1382,8 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
     {
       title: 'Menu Organization',
       items: [
-        { icon: <IconFolder size={20} />, label: 'Main Categories', description: 'Menu, Hookah, Drinks', onClick: () => openModal('maincategories') }
+        { icon: <IconFolder size={20} />, label: 'Main Categories', description: 'Menu, Hookah, Drinks', onClick: () => openModal('maincategories') },
+        { icon: <IconBell size={20} />, label: 'Waiter Request Types', description: 'Manage waiter options', onClick: () => openModal('waiterrequesttypes') }
       ]
     },
     {

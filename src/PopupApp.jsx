@@ -636,7 +636,10 @@ function PopupApp() {
                 <div className="popup-orders-list">
                   {waiterCalls.map(call => {
                     const tableNum = call.table_number || call.restaurant_tables?.table_number || call.table_id?.slice(0, 8) || '\u2014'
+                    const requestType = call.request_type_name || null
+                    const customMsg = call.custom_message || null
                     const orderCode = call.order_code || null
+                    const status = call.status || 'pending'
                     return (
                       <div key={call.id} className="popup-order-card">
                         <div className="popup-card-header">
@@ -647,6 +650,11 @@ function PopupApp() {
                           <span className="popup-order-date">
                             {call.created_at ? formatOrderDateTime(call.created_at) : ''}
                           </span>
+                        </div>
+                        <div style={{ padding: '4px 16px 8px', fontSize: 12, color: '#a1a1aa', lineHeight: 1.6 }}>
+                          {requestType && <div>Request: <strong style={{ color: '#fbbf24' }}>{requestType}</strong></div>}
+                          {customMsg && <div style={{ fontStyle: 'italic', color: '#888', marginTop: 2 }}>"{customMsg}"</div>}
+                          <div style={{ marginTop: 2, color: status === 'pending' ? '#f59e0b' : '#22c55e' }}>{status === 'pending' ? 'Waiting' : status}</div>
                         </div>
                         <div className="popup-card-footer" style={{ borderTop: '1px solid rgba(255,255,255,0.04)', paddingTop: 8 }}>
                           <button className="popup-accept-btn" onClick={() => handleResolveWaiter(call.id)}>Resolve</button>
