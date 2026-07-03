@@ -11,6 +11,7 @@ export function AuthProvider({ children }) {
   const [profile, setProfile] = useState(null)
   const [role, setRole] = useState('staff')
   const [restaurantId, setRestaurantId] = useState(null)
+  const [plan, setPlan] = useState(null)
   const [loading, setLoading] = useState(true)
   const [initialized, setInitialized] = useState(false)
   const [userDataLoading, setUserDataLoading] = useState(false)
@@ -106,6 +107,25 @@ export function AuthProvider({ children }) {
 
     if (!mountedRef.current) return
     setRestaurantId(rid)
+
+    if (rid) {
+      try {
+        const { data: restData } = await supabase
+          .from('restaurants')
+          .select('plan')
+          .eq('id', rid)
+          .maybeSingle()
+        if (restData?.plan) {
+          setPlan(restData.plan)
+        } else {
+          setPlan('plus')
+        }
+      } catch {
+        setPlan('plus')
+      }
+    } else {
+      setPlan(null)
+    }
   }
 
   const _clearUserData = () => {
@@ -117,6 +137,7 @@ export function AuthProvider({ children }) {
     setProfile(null)
     setRole('staff')
     setRestaurantId(null)
+    setPlan(null)
     setUserDataLoading(false)
   }
 
@@ -254,6 +275,7 @@ export function AuthProvider({ children }) {
     profile,
     role,
     restaurantId,
+    plan,
     loading,
     initialized,
     isAuthenticated: !!session,
