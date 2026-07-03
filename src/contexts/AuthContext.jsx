@@ -110,17 +110,24 @@ export function AuthProvider({ children }) {
 
     if (rid) {
       try {
-        const { data: restData } = await supabase
+        const { data: restData, error: planErr } = await supabase
           .from('restaurants')
           .select('plan')
           .eq('id', rid)
           .maybeSingle()
-        if (restData?.plan) {
-          setPlan(restData.plan)
+        if (planErr) {
+          console.error('[Auth] Plan fetch error:', planErr)
+          setPlan('plus')
+        } else if (restData?.plan) {
+          const trimmedPlan = String(restData.plan).trim().toLowerCase()
+          console.log('[Auth] Plan set to:', trimmedPlan)
+          setPlan(trimmedPlan)
         } else {
+          console.warn('[Auth] No plan found for restaurant, defaulting to plus')
           setPlan('plus')
         }
-      } catch {
+      } catch (err) {
+        console.error('[Auth] Plan fetch exception:', err)
         setPlan('plus')
       }
     } else {

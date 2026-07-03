@@ -32,7 +32,7 @@ export const PLAN_LABELS = {
 }
 
 export function getPlanFeatures(plan) {
-  const p = (plan || 'plus').toLowerCase()
+  const p = (plan || 'plus').toLowerCase().trim()
   return PLANS[p]?.features || PLANS.plus.features
 }
 
@@ -41,6 +41,6 @@ export function hasFeature(plan, feature) {
 }
 
 export function getDefaultTab(plan) {
-  const p = (plan || 'plus').toLowerCase()
+  const p = (plan || 'plus').toLowerCase().trim()
   return PLANS[p]?.defaultTab || PLANS.plus.defaultTab
 }

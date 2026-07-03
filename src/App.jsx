@@ -120,7 +120,7 @@ function App() {
   const userRole = role || 'staff'
   const userFullName = profile?.full_name || profile?.email || session?.user?.email || 'User'
   const isLoggedIn = !!session
-  const currentPlan = plan || 'plus'
+  const currentPlan = (plan || 'plus').toLowerCase().trim()
   const safeTab = activeTab && hasFeature(currentPlan, activeTab) ? activeTab : getDefaultTab(currentPlan)
 
   const showToast = useCallback((message, type = 'success') => {
