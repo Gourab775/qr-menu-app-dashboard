@@ -88,6 +88,7 @@ function LiveOrdersPage({ restaurantId }) {
 
       const prevIds = lastOrderIds.current
       const currIds = new Set(pending.map(o => o.id))
+      const hasNewOrder = pending.some(o => !prevIds.has(o.id))
       if (hasNewOrder) {
         if (localStorage.getItem('order_sound_enabled') !== 'false' && playFn) {
           try { playFn() } catch {}
