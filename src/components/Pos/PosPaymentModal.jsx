@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { IconCheck } from '../../components/Icons'
+import { IconCheck, IconSplit } from '../../components/Icons'
 
 function formatCurrency(v) {
   return '\u20B9' + (Math.round(v) || 0).toLocaleString('en-IN')
@@ -11,34 +11,43 @@ const PAY_METHODS = [
   { id: 'card', label: 'Card', icon: '💳' },
 ]
 
-export default function PosPaymentModal({ cartItems, onClose, onComplete }) {
+export default function PosPaymentModal({ cartItems, serviceChargePct = 0, onClose, onComplete, processing }) {
   const [method, setMethod] = useState('cash')
   const [amountTendered, setAmountTendered] = useState('')
   const [customerName, setCustomerName] = useState('')
-  const [processing, setProcessing] = useState(false)
   const [error, setError] = useState(null)
 
-  const { subtotal, itemDiscountTotal, billDiscountAmount, taxAmount, grandTotal } = useMemo(() => {
+  const { subtotal, itemDiscountTotal, billDiscountAmount, taxAmount, serviceChargeAmount, grandTotal } = useMemo(() => {
     const sub = cartItems.reduce((s, i) => s + i.price * i.quantity, 0)
     const itemDisc = cartItems.reduce((s, i) => s + i.price * i.quantity * (i.discount || 0) / 100, 0)
     const taxable = sub - itemDisc
     const tax = Math.round(taxable * 0.05)
+    const sc = serviceChargePct > 0 ? Math.round(taxable * (serviceChargePct / 100)) : 0
     return {
       subtotal: sub,
       itemDiscountTotal: itemDisc,
       billDiscountAmount: 0,
       taxAmount: tax,
-      grandTotal: Math.max(0, taxable + tax),
+      serviceChargeAmount: sc,
+      grandTotal: Math.max(0, taxable + tax + sc),
     }
-  }, [cartItems])
+  }, [cartItems, serviceChargePct])
 
   const tendered = Number(amountTendered) || 0
   const change = method === 'cash' ? Math.max(0, tendered - grandTotal) : 0
   const canConfirm = grandTotal > 0 && (method !== 'cash' || tendered >= grandTotal)
 
+  const quickAmounts = useMemo(() => {
+    const amounts = [grandTotal]
+    const roundedUp = Math.ceil(grandTotal / 100) * 100
+    if (roundedUp > grandTotal) amounts.push(roundedUp)
+    amounts.push(grandTotal + 100)
+    amounts.push(grandTotal + 500)
+    return amounts
+  }, [grandTotal])
+
   const handleConfirm = async () => {
     if (!canConfirm || processing) return
-    setProcessing(true)
     setError(null)
     try {
       await onComplete({
@@ -51,13 +60,14 @@ export default function PosPaymentModal({ cartItems, onClose, onComplete }) {
         itemDiscountTotal,
         taxRate: 5,
         taxAmount,
+        serviceChargeRate: serviceChargePct,
+        serviceChargeAmount,
         amountTendered: method === 'cash' ? tendered : grandTotal,
         change,
         customerName: customerName.trim() || 'Walk-in',
       })
     } catch (err) {
       setError(err.message || 'Payment failed')
-      setProcessing(false)
     }
   }
 
@@ -67,7 +77,6 @@ export default function PosPaymentModal({ cartItems, onClose, onComplete }) {
         <h2>Complete Payment</h2>
         <p className="pos-pay-subtitle">Select payment method and confirm</p>
 
-        {/* Payment Methods */}
         <div className="pos-pay-methods">
           {PAY_METHODS.map(pm => (
             <button
@@ -81,13 +90,11 @@ export default function PosPaymentModal({ cartItems, onClose, onComplete }) {
           ))}
         </div>
 
-        {/* Total */}
         <div className="pos-pay-total">
           <span className="label">Grand Total</span>
           <span className="amount">{formatCurrency(grandTotal)}</span>
         </div>
 
-        {/* Cash Tendered */}
         {method === 'cash' && (
           <div className="pos-pay-tendered">
             <label>Amount Tendered</label>
@@ -99,10 +106,20 @@ export default function PosPaymentModal({ cartItems, onClose, onComplete }) {
               autoFocus
               min="0"
             />
+            <div className="pos-pay-quick-btns">
+              {quickAmounts.map(amt => (
+                <button
+                  key={amt}
+                  className={`pos-pay-quick-btn ${tendered === amt ? 'selected' : ''}`}
+                  onClick={() => setAmountTendered(String(amt))}
+                >
+                  {formatCurrency(amt)}
+                </button>
+              ))}
+            </div>
           </div>
         )}
 
-        {/* Change */}
         {method === 'cash' && change > 0 && (
           <div className="pos-pay-change">
             <span className="label">Change Due</span>
@@ -110,7 +127,6 @@ export default function PosPaymentModal({ cartItems, onClose, onComplete }) {
           </div>
         )}
 
-        {/* Customer Name (optional) */}
         <div className="pos-pay-tendered" style={{ marginBottom: 16 }}>
           <label>Customer Name (optional)</label>
           <input
@@ -122,14 +138,12 @@ export default function PosPaymentModal({ cartItems, onClose, onComplete }) {
           />
         </div>
 
-        {/* Error */}
         {error && (
           <p style={{ fontSize: 13, color: 'var(--red)', marginBottom: 12, textAlign: 'center' }}>
             {error}
           </p>
         )}
 
-        {/* Actions */}
         <div className="pos-pay-actions">
           <button className="cancel" onClick={onClose} disabled={processing}>
             Cancel

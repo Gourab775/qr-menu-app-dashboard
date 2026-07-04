@@ -1,15 +1,29 @@
 import { useState, useMemo } from 'react'
-import { IconX, IconShoppingBag } from '../../components/Icons'
+import { IconX, IconShoppingBag, IconPrinter } from '../../components/Icons'
 
 function formatCurrency(v) {
   return '\u20B9' + (Math.round(v) || 0).toLocaleString('en-IN')
 }
 
-export default function PosCart({ items, onUpdateQty, onRemoveItem, onUpdateNotes, onUpdateItemDiscount, onHoldBill, onPayment }) {
+export default function PosCart({
+  items,
+  onUpdateQty,
+  onRemoveItem,
+  onUpdateNotes,
+  onUpdateItemDiscount,
+  onHoldBill,
+  onPayment,
+  onGenerateKOT,
+  kotGenerating,
+  currentOrderId,
+  billType,
+  tokenNumber,
+  serviceChargePct,
+}) {
   const [billDiscount, setBillDiscount] = useState('')
   const [discountType, setDiscountType] = useState('flat')
 
-  const { subtotal, itemDiscountTotal, billDiscountAmount, taxableAmount, taxRate, taxAmount, grandTotal } = useMemo(() => {
+  const { subtotal, itemDiscountTotal, billDiscountAmount, taxableAmount, taxRate, taxAmount, serviceChargeAmount, grandTotal } = useMemo(() => {
     const sub = items.reduce((s, i) => s + i.price * i.quantity, 0)
     const itemDisc = items.reduce((s, i) => s + (i.price * i.quantity * (i.discount || 0) / 100), 0)
     const billDisc = !billDiscount ? 0 : discountType === 'percentage'
@@ -17,7 +31,8 @@ export default function PosCart({ items, onUpdateQty, onRemoveItem, onUpdateNote
       : Math.min(sub, Math.max(0, Number(billDiscount) || 0))
     const taxable = sub - itemDisc - billDisc
     const tax = items.length > 0 ? Math.round(taxable * 0.05) : 0
-    const total = Math.max(0, taxable + tax)
+    const sc = items.length > 0 && serviceChargePct > 0 ? Math.round(taxable * (serviceChargePct / 100)) : 0
+    const total = Math.max(0, taxable + tax + sc)
     return {
       subtotal: sub,
       itemDiscountTotal: itemDisc,
@@ -25,15 +40,19 @@ export default function PosCart({ items, onUpdateQty, onRemoveItem, onUpdateNote
       taxableAmount: taxable,
       taxRate: 5,
       taxAmount: tax,
+      serviceChargeAmount: sc,
       grandTotal: total,
     }
-  }, [items, billDiscount, discountType])
+  }, [items, billDiscount, discountType, serviceChargePct])
 
   return (
     <div className="pos-cart-panel">
       <div className="pos-cart-header">
         <h3>Current Bill</h3>
-        <span className="pos-cart-count">{items.length} item{items.length !== 1 ? 's' : ''}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {tokenNumber && <span className="pos-cart-count">#{tokenNumber}</span>}
+          <span className="pos-cart-count">{items.length} item{items.length !== 1 ? 's' : ''}</span>
+        </div>
       </div>
 
       {items.length === 0 ? (
@@ -73,6 +92,16 @@ export default function PosCart({ items, onUpdateQty, onRemoveItem, onUpdateNote
                     placeholder="Add note..."
                     value={item.notes}
                     onChange={e => onUpdateNotes(item.menu_item_id, e.target.value)}
+                  />
+                  <input
+                    type="number"
+                    className="pos-cart-item-disc"
+                    placeholder="Disc%"
+                    value={item.discount || ''}
+                    onChange={e => onUpdateItemDiscount(item.menu_item_id, e.target.value)}
+                    min="0"
+                    max="100"
+                    style={{ width: 50 }}
                   />
                 </div>
               </div>
@@ -117,6 +146,13 @@ export default function PosCart({ items, onUpdateQty, onRemoveItem, onUpdateNote
               <span className="pos-total-value">{formatCurrency(taxAmount)}</span>
             </div>
 
+            {serviceChargeAmount > 0 && (
+              <div className="pos-total-row">
+                <span className="pos-total-label">Service Charge ({serviceChargePct}%)</span>
+                <span className="pos-total-value">{formatCurrency(serviceChargeAmount)}</span>
+              </div>
+            )}
+
             <div className="pos-total-row grand">
               <span className="pos-total-label">Grand Total</span>
               <span className="pos-total-value">{formatCurrency(grandTotal)}</span>
@@ -124,8 +160,17 @@ export default function PosCart({ items, onUpdateQty, onRemoveItem, onUpdateNote
           </div>
 
           <div className="pos-cart-actions">
+            {!currentOrderId && (
+              <button
+                className="pos-cart-action-btn kot"
+                onClick={onGenerateKOT}
+                disabled={items.length === 0 || kotGenerating}
+              >
+                <IconPrinter size={14} /> {kotGenerating ? 'Generating...' : 'KOT'}
+              </button>
+            )}
             <button className="pos-cart-action-btn hold" onClick={onHoldBill}>
-              Hold Bill
+              Hold
             </button>
             <button
               className="pos-cart-action-btn pay"
