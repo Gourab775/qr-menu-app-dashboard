@@ -28,6 +28,11 @@ const LiveOrdersPage = lazy(() => import('./pages/LiveOrdersPage'))
 const API_TIMEOUT = 30000
 const CURRENT_VERSION = "2.0.0"
 
+// Maps tab names (with dashes) to feature keys (with underscores)
+function tabToFeature(tab) {
+  return ({ 'live-orders': 'live_orders', 'waiter-call': 'waiter_calls', 'past-orders': 'past_orders' })[tab] || tab
+}
+
 function App() {
   const { session, profile, loading: authLoading, initialized, signOut, role, restaurantId, plan, userDataLoading } = useAuth()
   const [restaurantSlug, setRestaurantSlug] = useState('')
@@ -96,6 +101,16 @@ function App() {
     if (activeTab === 'waiter-call') setHasNewWaiterCall(false)
     try { localStorage.setItem('dashboard_current_page', activeTab) } catch {}
   }, [activeTab])
+
+  // Redirect to default tab if current tab's feature is not available on this plan
+  useEffect(() => {
+    if (!currentPlan || !activeTab) return
+    const feature = tabToFeature(activeTab)
+    if (!hasFeature(currentPlan, feature)) {
+      const defaultTab = getDefaultTab(currentPlan)
+      setActiveTab(defaultTab)
+    }
+  }, [currentPlan])
 
   const profileRef = useRef(null)
   const abortControllerRef = useRef(null)
@@ -347,6 +362,7 @@ function App() {
 
   useEffect(() => {
     if (!isLoggedIn || !restaurantId) return
+    if (!hasFeature(currentPlan, 'live_orders')) return
 
     if (ordersLoadingRef.current) return
     ordersLoadingRef.current = true
@@ -369,6 +385,7 @@ function App() {
 
   useEffect(() => {
     if (!isLoggedIn || !restaurantId) return
+    if (!hasFeature(currentPlan, 'live_orders')) return
 
     const lastPlayedOrderRef = { current: null }
     const processedEventIdsRef = { current: new Set() }
@@ -1055,6 +1072,11 @@ function App() {
               <div className="profile-info">
                 <p className="profile-name"><strong>{userFullName}</strong></p>
                 <p className="profile-role">{userRole.charAt(0).toUpperCase() + userRole.slice(1)}</p>
+                <p className="profile-plan">
+                  <span className={`plan-badge plan-badge--${currentPlan}`}>
+                    {currentPlan === 'basic' ? 'Basic Plan' : 'Plus Plan'}
+                  </span>
+                </p>
               </div>
               <div className="profile-divider"></div>
               <button className="profile-btn" onClick={handleLogout}>Logout</button>
@@ -1065,7 +1087,19 @@ function App() {
 
       <main className="main-content">
         <Suspense fallback={<div className="loading-state"><div className="loading-spinner"></div><p>Loading...</p></div>}>
-        {activeTab === 'analytics' && <OverviewPage restaurantId={restaurantId} />}
+        {activeTab && !hasFeature(currentPlan, tabToFeature(activeTab)) && (
+          <div className="restricted-page">
+            <div className="restricted-content">
+              <div className="restricted-icon"><IconLock size={48} /></div>
+              <h2>Feature Not Available</h2>
+              <p>This feature is not available on your current plan. Upgrade to Plus to access it.</p>
+              {activeTab === 'analytics' && <p className="restricted-detail">Analytics, reports, and performance insights are Plus features.</p>}
+              {activeTab === 'live-orders' && <p className="restricted-detail">Online ordering and order management are Plus features.</p>}
+              {activeTab === 'past-orders' && <p className="restricted-detail">Order history and past orders are Plus features.</p>}
+            </div>
+          </div>
+        )}
+        {activeTab === 'analytics' && hasFeature(currentPlan, tabToFeature('analytics')) && <OverviewPage restaurantId={restaurantId} />}
 
         {activeTab === 'menu_items' && (
           <div className="menu-section">
@@ -1167,7 +1201,7 @@ function App() {
 
         {activeTab === 'featured' && <FeaturedItemsPanel restaurantId={restaurantId} />}
 
-        {activeTab === 'live-orders' && <LiveOrdersPage restaurantId={restaurantId} />}
+        {activeTab === 'live-orders' && hasFeature(currentPlan, tabToFeature('live-orders')) && <LiveOrdersPage restaurantId={restaurantId} />}
 
         {activeTab === 'waiter-call' && (
           <div className="waiter-call-page">
@@ -1227,7 +1261,7 @@ function App() {
           </div>
         )}
 
-        {activeTab === 'past-orders' && <PastOrdersPage pastOrders={pastOrders} loading={loading} onToast={showToast} />}
+        {activeTab === 'past-orders' && hasFeature(currentPlan, tabToFeature('past-orders')) && <PastOrdersPage pastOrders={pastOrders} loading={loading} onToast={showToast} />}
         </Suspense>
       </main>
 
@@ -1253,12 +1287,14 @@ function Sidebar({ isOpen, onClose, activeTab, setActiveTab, onOpenOrders, waite
       <aside className={`sidebar ${isOpen ? 'open' : ''}`}>
         <button className="close-btn" onClick={onClose}>×</button>
         <nav className="sidebar-nav">
-          <button
-            className={`nav-item ${activeTab === 'analytics' ? 'active' : ''}`}
-            onClick={() => { setActiveTab('analytics'); onClose(); }}
-          >
-            <IconBarChart size={18} /> Analytics
-          </button>
+          {hasFeature(plan, tabToFeature('analytics')) && (
+            <button
+              className={`nav-item ${activeTab === 'analytics' ? 'active' : ''}`}
+              onClick={() => { setActiveTab('analytics'); onClose(); }}
+            >
+              <IconBarChart size={18} /> Analytics
+            </button>
+          )}
           <button
             className={`nav-item ${activeTab === 'menu_items' ? 'active' : ''}`}
             onClick={() => { setActiveTab('menu_items'); onClose(); }}
@@ -1277,13 +1313,15 @@ function Sidebar({ isOpen, onClose, activeTab, setActiveTab, onOpenOrders, waite
           >
             <IconTarget size={18} /> Featured
           </button>
-          <button
-            className={`nav-item ${activeTab === 'live-orders' ? 'active' : ''}`}
-            onClick={() => { setActiveTab('live-orders'); onClose(); }}
-          >
-            <IconBell size={18} /> Live Orders
-            {(hasUnseenOrders || hasPendingOrders) && <span className="sidebar-badge" />}
-          </button>
+          {hasFeature(plan, tabToFeature('live-orders')) && (
+            <button
+              className={`nav-item ${activeTab === 'live-orders' ? 'active' : ''}`}
+              onClick={() => { setActiveTab('live-orders'); onClose(); }}
+            >
+              <IconBell size={18} /> Live Orders
+              {(hasUnseenOrders || hasPendingOrders) && <span className="sidebar-badge" />}
+            </button>
+          )}
           <button
             className={`nav-item ${activeTab === 'waiter-call' ? 'active' : ''}`}
             onClick={() => { setActiveTab('waiter-call'); onClose(); }}
@@ -1291,12 +1329,14 @@ function Sidebar({ isOpen, onClose, activeTab, setActiveTab, onOpenOrders, waite
             <IconBellRing size={18} /> Waiter Call
             {waiterCalls.length > 0 && <span className="sidebar-badge" />}
           </button>
-          <button
-            className={`nav-item ${activeTab === 'past-orders' ? 'active' : ''}`}
-            onClick={() => { setActiveTab('past-orders'); onClose(); }}
-          >
-            <IconClipboard size={18} /> Past Orders
-          </button>
+          {hasFeature(plan, tabToFeature('past-orders')) && (
+            <button
+              className={`nav-item ${activeTab === 'past-orders' ? 'active' : ''}`}
+              onClick={() => { setActiveTab('past-orders'); onClose(); }}
+            >
+              <IconClipboard size={18} /> Past Orders
+            </button>
+          )}
           <button
             className={`nav-item ${activeTab === 'tables' ? 'active' : ''}`}
             onClick={() => { setActiveTab('tables'); onClose(); }}
