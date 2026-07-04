@@ -102,6 +102,8 @@ function App() {
     try { localStorage.setItem('dashboard_current_page', activeTab) } catch {}
   }, [activeTab])
 
+  const currentPlan = (plan || 'plus').toLowerCase().trim()
+
   // Redirect to default tab if current tab's feature is not available on this plan
   useEffect(() => {
     if (!currentPlan || !activeTab) return
@@ -128,7 +130,6 @@ function App() {
   const userRole = role || 'staff'
   const userFullName = profile?.full_name || profile?.email || session?.user?.email || 'User'
   const isLoggedIn = !!session
-  const currentPlan = (plan || 'plus').toLowerCase().trim()
 
   const showToast = useCallback((message, type = 'success') => {
     setToast({ message, type })
