@@ -13,7 +13,7 @@ import FeaturedItemsPanel from './components/FeaturedItemsPanel'
 import { formatDateTime, formatOrderDateTime } from './utils/formatDateTime'
 import * as orderStore from './services/orderStore'
 
-import { IconStore, IconSearch, IconUtensils, IconBellRing, IconBell, IconBarChart, IconFolder, IconTarget, IconClipboard, IconTable, IconSettings, IconLock } from './components/Icons'
+import { IconStore, IconSearch, IconUtensils, IconBellRing, IconBell, IconBarChart, IconFolder, IconTarget, IconClipboard, IconTable, IconSettings, IconLock, IconShoppingBag } from './components/Icons'
 import { PLANS, getPlanFeatures, hasFeature, getDefaultTab } from './constants/plans'
 import './App.css'
 import './theme.css'
