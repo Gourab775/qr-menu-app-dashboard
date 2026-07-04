@@ -13,6 +13,7 @@ export const PLANS = {
   plus: {
     features: [
       'analytics',
+      'pos',
       'menu_items',
       'categories',
       'featured',

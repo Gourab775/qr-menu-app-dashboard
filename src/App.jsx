@@ -20,6 +20,7 @@ import './theme.css'
 
 const CategoriesPage = lazy(() => import('./pages/CategoriesPage'))
 const OverviewPage = lazy(() => import('./pages/OverviewPage'))
+const PosPage = lazy(() => import('./pages/PosPage'))
 const SettingsPage = lazy(() => import('./pages/SettingsPage'))
 const TablesPage = lazy(() => import('./pages/TablesPage'))
 const PastOrdersPage = lazy(() => import('./pages/PastOrdersPage'))
@@ -1035,6 +1036,7 @@ function App() {
         </button>
 <h2 className="header-title">
   {activeTab === 'analytics' && 'Analytics'}
+  {activeTab === 'pos' && 'POS Billing'}
   {activeTab === 'menu_items' && 'Menu Items'}
   {activeTab === 'categories' && 'Categories'}
   {activeTab === 'tables' && 'Tables'}
@@ -1095,12 +1097,15 @@ function App() {
               <h2>Feature Not Available</h2>
               <p>This feature is not available on your current plan. Upgrade to Plus to access it.</p>
               {activeTab === 'analytics' && <p className="restricted-detail">Analytics, reports, and performance insights are Plus features.</p>}
+              {activeTab === 'pos' && <p className="restricted-detail">POS billing and counter management are Plus features.</p>}
               {activeTab === 'live-orders' && <p className="restricted-detail">Online ordering and order management are Plus features.</p>}
               {activeTab === 'past-orders' && <p className="restricted-detail">Order history and past orders are Plus features.</p>}
             </div>
           </div>
         )}
         {activeTab === 'analytics' && hasFeature(currentPlan, tabToFeature('analytics')) && <OverviewPage restaurantId={restaurantId} />}
+
+        {activeTab === 'pos' && hasFeature(currentPlan, tabToFeature('pos')) && <PosPage restaurantId={restaurantId} />}
 
         {activeTab === 'menu_items' && (
           <div className="menu-section">
@@ -1294,6 +1299,14 @@ function Sidebar({ isOpen, onClose, activeTab, setActiveTab, onOpenOrders, waite
               onClick={() => { setActiveTab('analytics'); onClose(); }}
             >
               <IconBarChart size={18} /> Analytics
+            </button>
+          )}
+          {hasFeature(plan, tabToFeature('pos')) && (
+            <button
+              className={`nav-item ${activeTab === 'pos' ? 'active' : ''}`}
+              onClick={() => { setActiveTab('pos'); onClose(); }}
+            >
+              <IconShoppingBag size={18} /> POS Billing
             </button>
           )}
           <button
