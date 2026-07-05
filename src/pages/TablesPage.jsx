@@ -2,11 +2,13 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { fetchWithTimeout } from '../lib/apiUtils';
 import { IconTable, IconSearch } from '../components/Icons';
+import { useRestaurant } from '../contexts/RestaurantContext';
 import './TablesPage.css';
 
 const API_TIMEOUT = 30000;
 
 export default function TablesPage({ restaurantId, restaurantSlug }) {
+  const { restaurantConfig } = useRestaurant();
   const BASE_URL = `${window.location.origin.replace('5175', '5173')}/${restaurantSlug || 'default'}`;
   const FINAL_BASE_URL = window.location.origin.includes('localhost')
     ? BASE_URL
@@ -36,13 +38,10 @@ export default function TablesPage({ restaurantId, restaurantSlug }) {
   const abortControllerRef = useRef(null);
 
   useEffect(() => {
-    if (!restaurantId) return;
-    supabase.from('restaurants').select('logo').eq('id', restaurantId).maybeSingle()
-      .then(({ data }) => {
-        if (data?.logo) setRestaurantLogo(data.logo);
-      })
-      .catch(() => {});
-  }, [restaurantId]);
+    if (restaurantConfig?.logo) {
+      setRestaurantLogo(restaurantConfig.logo);
+    }
+  }, [restaurantConfig?.logo]);
 
   const loadTables = useCallback(async (signal = null) => {
     if (!signal && mountedRef.current) setLoading(true);

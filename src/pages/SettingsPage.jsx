@@ -4,6 +4,7 @@ import { fetchWithTimeout } from '../lib/apiUtils'
 import { useAuth } from '../contexts/AuthContext'
 import CloudinaryUpload from '../components/CloudinaryUpload'
 import { COUNTRY_CONFIGS, DEFAULT_CURRENCY, formatCurrency } from '../utils/formatCurrency'
+import { useRestaurant } from '../contexts/RestaurantContext'
 
 import { IconPackage, IconBarChart, IconSettings, IconBell, IconLock, IconUtensils, IconFolder, IconCheck, IconX, IconPhone, IconMail, IconStore, IconCopy, IconLogOut, IconStar, IconHelpCircle, IconFileText, IconPalette, IconInfo, IconImage, IconDollarSign } from '../components/Icons'
 
@@ -226,10 +227,9 @@ Limitation of Liability
  We are not liable for indirect or consequential damages`
 
 export default function SettingsPage({ preferences, setPreferences, onToast, restaurantId }) {
-  const { signOut, role, session, refreshRestaurantCurrency, restaurantCurrency } = useAuth()
+  const { signOut, role, session } = useAuth()
+  const { restaurantConfig, refreshRestaurantConfig, loading: restaurantLoading } = useRestaurant()
   const isSuperAdmin = role === 'admin'
-  const [restaurant, setRestaurant] = useState(null)
-  const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [showModal, setShowModal] = useState(null)
   const [formData, setFormData] = useState({})
@@ -260,102 +260,7 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
     }
   }
 
-  const loadRestaurant = useCallback(async (signal = null) => {
-    if (!signal && mountedRef.current) setLoading(true);
-
-    try {
-      const selectedColumns = 'name, slug, contact_number, logo, country_code, currency_code, currency_symbol, locale';
-
-      const restaurantPromise = supabase
-        .from('restaurants')
-        .select(selectedColumns)
-        .eq('id', currentRestId)
-        .single()
-
-      const { data, error } = await fetchWithTimeout(restaurantPromise, API_TIMEOUT)
-
-      if (signal?.aborted) return;
-
-      if (error) {
-        if (error.code === 'PGRST116') {
-          setRestaurant({
-            id: currentRestId,
-            name: 'Your Restaurant',
-            slug: '',
-            contact_number: '',
-            logo: ''
-          });
-        } else {
-          setRestaurant({
-            id: currentRestId,
-            name: 'Your Restaurant',
-            slug: '',
-            contact_number: '',
-            logo: ''
-          });
-        }
-        return;
-      }
-      
-      if (data) {
-        setRestaurant(data)
-      } else {
-        setRestaurant({
-          id: currentRestId,
-          name: 'Your Restaurant',
-          slug: '',
-          contact_number: '',
-          logo: ''
-        })
-      }
-    } catch (err) {
-      if (!signal?.aborted) {
-        setRestaurant({
-          id: currentRestId,
-          name: 'Your Restaurant',
-          slug: '',
-          contact_number: '',
-          logo: ''
-        })
-      }
-    } finally {
-      if (!signal?.aborted) {
-        setLoading(false);
-      }
-    }
-  }, [currentRestId])
-
-  useEffect(() => {
-    mountedRef.current = true;
-    const controller = new AbortController();
-    abortControllerRef.current = controller;
-
-    loadRestaurant(controller.signal);
-
-    return () => {
-      mountedRef.current = false;
-      controller.abort();
-      abortControllerRef.current = null;
-    };
-  }, [loadRestaurant]);
-
-  const refreshRestaurant = async () => {
-    if (!currentRestId) return
-    try {
-      const restaurantPromise = supabase
-        .from('restaurants')
-        .select('name, slug, contact_number, logo, country_code, currency_code, currency_symbol, locale')
-        .eq('id', currentRestId)
-        .single()
-      
-      const { data } = await fetchWithTimeout(restaurantPromise, API_TIMEOUT)
-      if (data) {
-        setRestaurant(data)
-      }
-    } catch (err) {
-      console.error('Failed to refresh restaurant:', err.message);
-    }
-  }
+  // Restaurant config is provided by RestaurantProvider — no local fetch needed
 
   const loadMainCategories = async () => {
     setMainCatLoading(true)
@@ -642,25 +547,21 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
     setShowModal(modalName)
     setHelpTopic(null)
     
-    if (modalName === 'business' && restaurant) {
+    if (modalName === 'business') {
       setFormData({
-        name: restaurant.name || '',
-        slug: restaurant.slug || '',
-        contact_number: restaurant.contact_number || '',
-        logo: restaurant.logo || ''
+        name: restaurantConfig?.name || '',
+        slug: restaurantConfig?.slug || '',
+        contact_number: restaurantConfig?.contact_number || '',
+        logo: restaurantConfig?.logo || ''
       })
-    } else if (modalName === 'logo' && restaurant) {
+    } else if (modalName === 'logo') {
       setFormData({
-        logo: restaurant.logo || ''
+        logo: restaurantConfig?.logo || ''
       })
-    } else if (modalName === 'maincategories') {
-      loadMainCategories()
-    } else if (modalName === 'waiterrequesttypes') {
-      loadWaiterRequestTypes()
     } else if (modalName === 'bgvideo') {
       loadBgVideo()
     } else if (modalName === 'currency') {
-      const currentCountry = restaurant?.country_code || DEFAULT_CURRENCY.country_code
+      const currentCountry = restaurantConfig?.country_code || DEFAULT_CURRENCY.country_code
       const matched = COUNTRY_CONFIGS.find(c => c.country_code === currentCountry) || COUNTRY_CONFIGS[0]
       setFormData({
         country_code: matched.country_code,
@@ -716,9 +617,9 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
       const safeTrim = (v) => typeof v === 'string' ? v.trim() : v
 
       const noChanges = (
-        restaurant &&
-        safeTrim(contact_number) === safeTrim(restaurant.contact_number) &&
-        safeTrim(logo) === safeTrim(restaurant.logo)
+        restaurantConfig &&
+                safeTrim(contact_number) === safeTrim(restaurantConfig?.contact_number) &&
+                safeTrim(logo) === safeTrim(restaurantConfig?.logo)
       )
       if (noChanges) {
         showToast('Business details saved')
@@ -740,7 +641,7 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
         if (!updated || updated.length === 0) {
           throw new Error('Restaurant record not found. Contact support.')
         }
-        await refreshRestaurant()
+        await refreshRestaurantConfig()
         showToast('Business details saved')
         closeModal()
         return
@@ -772,7 +673,7 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
         throw new Error('Restaurant record not found. Contact support.')
       }
       
-      await refreshRestaurant()
+      await refreshRestaurantConfig()
       showToast('Business details saved')
       closeModal()
     } catch (err) {
@@ -796,10 +697,7 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
 
       if (error) throw error
 
-      await refreshRestaurant()
-      if (refreshRestaurantCurrency) {
-        await refreshRestaurantCurrency()
-      }
+      await refreshRestaurantConfig()
       showToast('Currency settings saved')
       closeModal()
     } catch (err) {
@@ -829,7 +727,7 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
         throw new Error('Restaurant record not found. Contact support.')
       }
 
-      await refreshRestaurant()
+      await refreshRestaurantConfig()
       showToast(logoUrl ? 'Logo saved' : 'Logo cleared')
       closeModal()
     } catch (err) {
@@ -955,11 +853,11 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
             <div className="business-readonly-section">
               <div className="readonly-field">
                 <span className="readonly-label">Restaurant Name</span>
-                <span className="readonly-value">{restaurant?.name || formData.name || '—'}</span>
+                <span className="readonly-value">{restaurantConfig?.name || formData.name || '—'}</span>
               </div>
               <div className="readonly-field">
                 <span className="readonly-label">Restaurant Slug</span>
-                <span className="readonly-value">{restaurant?.slug || formData.slug || '—'}</span>
+                <span className="readonly-value">{restaurantConfig?.slug || formData.slug || '—'}</span>
               </div>
             </div>
             <form onSubmit={handleSaveRestaurant}>
@@ -1456,7 +1354,7 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
     return null
   }
 
-  if (loading) {
+  if (restaurantLoading) {
     return (
       <div className="settings-page">
         <div className="settings-header">
@@ -1474,15 +1372,15 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
     {
       title: 'Business',
       items: [
-        { icon: <IconStore size={20} />, label: 'Business Details', description: restaurant?.name || 'Configure', onClick: () => openModal('business') },
-        { icon: <IconImage size={20} />, label: 'Logo', description: restaurant?.logo ? 'Set' : 'Not set', onClick: () => openModal('logo'), badge: restaurant?.logo ? 'Set' : '' },
+        { icon: <IconStore size={20} />, label: 'Business Details', description: restaurantConfig?.name || 'Configure', onClick: () => openModal('business') },
+        { icon: <IconImage size={20} />, label: 'Logo', description: restaurantConfig?.logo ? 'Set' : 'Not set', onClick: () => openModal('logo'), badge: restaurantConfig?.logo ? 'Set' : '' },
         { icon: <IconImage size={20} />, label: 'Background Video', description: 'Landing page video', onClick: () => openModal('bgvideo') }
       ]
     },
     {
       title: 'Currency & Region',
       items: [
-        { icon: <IconDollarSign size={20} />, label: 'Currency & Region', description: (restaurant?.currency_code || DEFAULT_CURRENCY.currency_code) + ' \u00B7 ' + (restaurant?.currency_symbol || DEFAULT_CURRENCY.currency_symbol) + ' \u00B7 ' + (restaurant?.locale || DEFAULT_CURRENCY.locale), onClick: () => openModal('currency') }
+        { icon: <IconDollarSign size={20} />, label: 'Currency & Region', description: (restaurantConfig?.currency_code || DEFAULT_CURRENCY.currency_code) + ' \u00B7 ' + (restaurantConfig?.currency_symbol || DEFAULT_CURRENCY.currency_symbol) + ' \u00B7 ' + (restaurantConfig?.locale || DEFAULT_CURRENCY.locale), onClick: () => openModal('currency') }
       ]
     },
     {

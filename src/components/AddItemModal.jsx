@@ -1,10 +1,9 @@
 import { useState } from 'react'
 import MenuItemImageUpload from './MenuItemImageUpload'
-import { useAuth } from '../contexts/AuthContext'
-import { DEFAULT_CURRENCY } from '../utils/formatCurrency'
+import { useRestaurant } from '../contexts/RestaurantContext'
 
 export default function AddItemModal({ onSave, onClose, categories = [], restaurantId }) {
-  const { restaurantCurrency = DEFAULT_CURRENCY } = useAuth()
+  const { restaurantConfig } = useRestaurant()
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -189,7 +188,7 @@ export default function AddItemModal({ onSave, onClose, categories = [], restaur
           
           <div className="form-row">
             <div className="form-group">
-              <label>Price ({restaurantCurrency.currency_symbol}) {!formData.price && <><span className="required-star">*</span><span className="mandatory-text"> Mandatory</span></>}</label>
+              <label>Price ({restaurantConfig?.currency_symbol || '\u20B9'}) {!formData.price && <><span className="required-star">*</span><span className="mandatory-text"> Mandatory</span></>}</label>
               <input
                 type="number"
                 value={formData.price}

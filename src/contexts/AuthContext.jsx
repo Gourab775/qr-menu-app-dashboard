@@ -1,6 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
-import { DEFAULT_CURRENCY } from '../utils/formatCurrency'
 import { getPlanFeatures } from '../constants/plans'
 
 const AuthContext = createContext(null)
@@ -16,7 +15,6 @@ export function AuthProvider({ children }) {
   const [restaurant, setRestaurant] = useState(null)
   const [plan, setPlan] = useState(null)
   const [features, setFeatures] = useState([])
-  const [restaurantCurrency, setRestaurantCurrency] = useState({ ...DEFAULT_CURRENCY })
   const [loading, setLoading] = useState(true)
   const [initialized, setInitialized] = useState(false)
   const [userDataLoading, setUserDataLoading] = useState(false)
@@ -117,37 +115,28 @@ export function AuthProvider({ children }) {
       try {
         const { data: restData, error: restErr } = await supabase
           .from('restaurants')
-          .select('id, name, slug, plan, country_code, currency_code, currency_symbol, locale')
+          .select('id, name, slug, plan, country_code, currency_code, currency_symbol, locale, contact_number, logo, created_at, updated_at')
           .eq('id', rid)
           .maybeSingle()
         if (restErr) {
           console.error('[Auth] Restaurant fetch error:', restErr)
           setPlan('plus')
           setFeatures(getPlanFeatures('plus'))
-          setRestaurantCurrency({ ...DEFAULT_CURRENCY })
         } else if (restData) {
           const trimmedPlan = String(restData.plan || 'plus').trim().toLowerCase()
           console.log('[Auth] Plan set to:', trimmedPlan)
           setRestaurant(restData)
           setPlan(trimmedPlan)
           setFeatures(getPlanFeatures(trimmedPlan))
-          setRestaurantCurrency({
-            country_code: restData.country_code || DEFAULT_CURRENCY.country_code,
-            currency_code: restData.currency_code || DEFAULT_CURRENCY.currency_code,
-            currency_symbol: restData.currency_symbol || DEFAULT_CURRENCY.currency_symbol,
-            locale: restData.locale || DEFAULT_CURRENCY.locale,
-          })
         } else {
           console.warn('[Auth] No plan found for restaurant, defaulting to plus')
           setPlan('plus')
           setFeatures(getPlanFeatures('plus'))
-          setRestaurantCurrency({ ...DEFAULT_CURRENCY })
         }
       } catch (err) {
         console.error('[Auth] Plan fetch exception:', err)
         setPlan('plus')
         setFeatures(getPlanFeatures('plus'))
-        setRestaurantCurrency({ ...DEFAULT_CURRENCY })
       }
     } else {
       setPlan(null)
@@ -166,7 +155,6 @@ export function AuthProvider({ children }) {
     setRestaurant(null)
     setPlan(null)
     setFeatures([])
-    setRestaurantCurrency({ ...DEFAULT_CURRENCY })
     setUserDataLoading(false)
   }
 
@@ -299,29 +287,27 @@ export function AuthProvider({ children }) {
     return profileCacheRef.current.get(userId) || null
   }, [session?.user?.id])
 
-  const refreshRestaurantCurrency = useCallback(async () => {
+  const refreshRestaurant = useCallback(async () => {
     const rid = restaurantId
     if (!rid) return
     try {
-      const { data: restData } = await supabase
+      const { data: restData, error: restErr } = await supabase
         .from('restaurants')
-        .select('id, name, slug, plan, country_code, currency_code, currency_symbol, locale')
+        .select('id, name, slug, plan, country_code, currency_code, currency_symbol, locale, contact_number, logo, created_at, updated_at')
         .eq('id', rid)
         .maybeSingle()
+      if (restErr) {
+        console.error('[Auth] Refresh restaurant error:', restErr)
+        return
+      }
       if (restData) {
-        setRestaurant(restData)
         const trimmedPlan = String(restData.plan || 'plus').trim().toLowerCase()
+        setRestaurant(restData)
         setPlan(trimmedPlan)
         setFeatures(getPlanFeatures(trimmedPlan))
-        setRestaurantCurrency({
-          country_code: restData.country_code || DEFAULT_CURRENCY.country_code,
-          currency_code: restData.currency_code || DEFAULT_CURRENCY.currency_code,
-          currency_symbol: restData.currency_symbol || DEFAULT_CURRENCY.currency_symbol,
-          locale: restData.locale || DEFAULT_CURRENCY.locale,
-        })
       }
     } catch (err) {
-      console.error('[Auth] Refresh currency error:', err)
+      console.error('[Auth] Refresh restaurant exception:', err)
     }
   }, [restaurantId])
 
@@ -336,7 +322,6 @@ export function AuthProvider({ children }) {
     restaurant,
     plan,
     features,
-    restaurantCurrency,
     restaurantName,
     restaurantSlug,
     loading,
@@ -346,7 +331,7 @@ export function AuthProvider({ children }) {
     signIn,
     signOut,
     refreshProfile,
-    refreshRestaurantCurrency,
+    refreshRestaurant,
   }
 
   return (

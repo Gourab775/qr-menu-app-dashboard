@@ -1,6 +1,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { AuthProvider } from './contexts/AuthContext.jsx'
+import { RestaurantProvider } from './contexts/RestaurantContext.jsx'
 import App from './App.jsx'
 import PopupApp from './PopupApp.jsx'
 import { IconAlertTriangle } from './components/Icons'
@@ -86,7 +87,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <ErrorBoundary>
       <AuthProvider>
-        {isPopupMode ? <PopupApp /> : <App />}
+        <RestaurantProvider>
+          {isPopupMode ? <PopupApp /> : <App />}
+        </RestaurantProvider>
       </AuthProvider>
     </ErrorBoundary>
   </React.StrictMode>,

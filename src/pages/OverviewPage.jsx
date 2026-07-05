@@ -6,6 +6,7 @@ import {
 import { supabase } from '../lib/supabase'
 import { fetchWithTimeout, deduplicateRequest } from '../lib/apiUtils'
 import { useAuth } from '../contexts/AuthContext'
+import { useRestaurant } from '../contexts/RestaurantContext'
 import { IconTrendingUp, IconPackage, IconShoppingBag, IconStar, IconBarChart, IconClock, IconTable } from '../components/Icons'
 import { useFormatCurrency } from '../hooks/useFormatCurrency'
 import './OverviewPage.css'
@@ -48,6 +49,7 @@ function isHourlyFilter(filter) {
 
 export default function OverviewPage({ restaurantId }) {
   const { initialized, isAuthenticated } = useAuth()
+  const { restaurantConfig } = useRestaurant()
   const formatCurrency = useFormatCurrency()
   const [filter, setFilter] = useState('7days')
   const [loading, setLoading] = useState(true)
@@ -463,7 +465,7 @@ export default function OverviewPage({ restaurantId }) {
                       </linearGradient>
                     </defs>
                     <XAxis dataKey="label" stroke="var(--text-muted)" fontSize={12} tickLine={false} axisLine={false} dy={8} />
-                    <YAxis stroke="var(--text-muted)" fontSize={12} tickLine={false} axisLine={false} dx={-8} tickFormatter={(v) => `\u20B9${v}`} />
+                    <YAxis stroke="var(--text-muted)" fontSize={12} tickLine={false} axisLine={false} dx={-8} tickFormatter={(v) => `${restaurantConfig?.currency_symbol || '\u20B9'}${v}`} />
                     <Tooltip content={<CustomTooltip />} />
                     <Area type="monotone" dataKey="revenue" stroke="var(--green)" strokeWidth={2.5} fill="url(#revGrad)" name="Revenue" />
                   </AreaChart>
