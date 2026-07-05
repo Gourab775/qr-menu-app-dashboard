@@ -586,6 +586,21 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
       if (error) throw error
       showToast(!currentActive ? 'Tax enabled' : 'Tax disabled')
     } catch (err) {
+      console.log(err);
+      console.log('error.code:', err?.code);
+      console.log('error.message:', err?.message);
+      console.log('error.details:', err?.details);
+      console.log('error.hint:', err?.hint);
+
+      const payload = { is_active: !currentActive }
+      const filters = { id, restaurant_id: currentRestId }
+      const tax = taxes.find(t => t.id === id)
+      console.log('update payload:', payload);
+      console.log('filters:', filters);
+      console.log('restaurant_id:', currentRestId);
+      console.log('tax id:', id);
+      console.log('authenticated user id:', session?.user?.id);
+
       setTaxes(prev => prev.map(t => t.id === id ? { ...t, is_active: currentActive } : t))
       showToast('Failed to update tax', 'error')
     }
