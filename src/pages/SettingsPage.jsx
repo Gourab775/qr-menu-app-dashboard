@@ -506,7 +506,7 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
     const maxOrder = taxes.reduce((max, t) => Math.max(max, t.display_order || 0), 0)
     const optimistic = {
       id: 'temp-' + Date.now(),
-      name: newTaxName.trim(),
+      tax_name: newTaxName.trim(),
       tax_percentage: Math.round(pct * 100) / 100,
       tax_type: newTaxType,
       restaurant_id: currentRestId,
@@ -522,7 +522,7 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
       const { data, error } = await supabase
         .from('restaurant_taxes')
         .insert({
-          name: newTaxName.trim(),
+          tax_name: newTaxName.trim(),
           tax_percentage: Math.round(pct * 100) / 100,
           tax_type: newTaxType,
           restaurant_id: currentRestId,
@@ -548,7 +548,7 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
     const prev = taxes.find(t => t.id === id)
     const updated = {
       ...prev,
-      name: editTaxName.trim(),
+      tax_name: editTaxName.trim(),
       tax_percentage: Math.round(pct * 100) / 100,
       tax_type: editTaxType,
     }
@@ -561,7 +561,7 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
       const { error } = await supabase
         .from('restaurant_taxes')
         .update({
-          name: editTaxName.trim(),
+          tax_name: editTaxName.trim(),
           tax_percentage: Math.round(pct * 100) / 100,
           tax_type: editTaxType,
         })
@@ -1564,7 +1564,7 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
                         <>
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', width: '100%' }}>
                             <div className="mc-item-info">
-                              <span className="mc-item-name">{tax.name}</span>
+                              <span className="mc-item-name">{tax.tax_name}</span>
                               <span style={{ display: 'flex', gap: '8px', alignItems: 'center', fontSize: '12px', color: 'var(--text-muted)' }}>
                                 <span>{tax.tax_percentage}%</span>
                                 <span style={{ opacity: 0.3 }}>|</span>
@@ -1584,7 +1584,7 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', width: '100%' }}>
                             <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Order: {tax.display_order || idx + 1}</span>
                             <div className="mc-item-actions">
-                              <button className="mc-btn mc-btn-edit" onClick={() => { setEditingTaxId(tax.id); setEditTaxName(tax.name); setEditTaxPercentage(String(tax.tax_percentage)); setEditTaxType(tax.tax_type) }}>Edit</button>
+                              <button className="mc-btn mc-btn-edit" onClick={() => { setEditingTaxId(tax.id); setEditTaxName(tax.tax_name); setEditTaxPercentage(String(tax.tax_percentage)); setEditTaxType(tax.tax_type) }}>Edit</button>
                               <button className="mc-btn mc-btn-up" onClick={() => handleMoveTaxUp(idx)} disabled={idx === 0}>↑</button>
                               <button className="mc-btn mc-btn-down" onClick={() => handleMoveTaxDown(idx)} disabled={idx >= taxes.length - 1}>↓</button>
                               <button className="mc-btn mc-btn-delete" onClick={() => setDeleteTaxTarget(tax)}>Delete</button>
@@ -1601,7 +1601,7 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
           {deleteTaxTarget && (
             <div className="mc-confirm-overlay" onClick={() => setDeleteTaxTarget(null)}>
               <div className="mc-confirm-box" onClick={e => e.stopPropagation()}>
-                <h4>Delete "{deleteTaxTarget.name}"?</h4>
+                <h4>Delete "{deleteTaxTarget.tax_name}"?</h4>
                 <p>This action cannot be undone. Existing orders using this tax will keep their data.</p>
                 <div className="modal-actions">
                   <button className="cancel-btn" onClick={() => setDeleteTaxTarget(null)}>Cancel</button>
