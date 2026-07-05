@@ -1,9 +1,6 @@
 import { useState, useMemo } from 'react'
 import { IconX, IconShoppingBag, IconPrinter } from '../../components/Icons'
-
-function formatCurrency(v) {
-  return '\u20B9' + (Math.round(v) || 0).toLocaleString('en-IN')
-}
+import { useFormatCurrency } from '../../hooks/useFormatCurrency'
 
 export default function PosCart({
   items,
@@ -20,6 +17,7 @@ export default function PosCart({
   tokenNumber,
   serviceChargePct,
 }) {
+  const formatCurrency = useFormatCurrency()
   const [billDiscount, setBillDiscount] = useState('')
   const [discountType, setDiscountType] = useState('flat')
 

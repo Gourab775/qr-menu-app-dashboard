@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react'
 import { formatDate, formatTime } from '../utils/formatDateTime'
+import { useFormatCurrency } from '../hooks/useFormatCurrency'
 import './PastOrdersPage.css'
 
 const STATUS_CONFIG = {
@@ -12,6 +13,7 @@ const STATUS_CONFIG = {
 }
 
 function PastOrdersPage({ pastOrders, loading, onToast, hideFilters }) {
+  const formatCurrency = useFormatCurrency()
   const [searchQuery, setSearchQuery] = useState('')
   const [timeFilter, setTimeFilter] = useState('today')
   const [selectedDate, setSelectedDate] = useState('')
@@ -146,7 +148,7 @@ function PastOrdersPage({ pastOrders, loading, onToast, hideFilters }) {
                   </div>
                   <div className="po-card-right">
                     <span className="po-items-count">{items.length} item{items.length !== 1 ? 's' : ''}</span>
-                    <span className="po-total">₹{totalPrice.toFixed(0)}</span>
+                    <span className="po-total">{formatCurrency(totalPrice)}</span>
                     <span className="po-status" style={{ background: cfg.bg, color: cfg.color }}>{cfg.label}</span>
                     <button className="po-details-btn" onClick={() => setExpandedId(isExpanded ? null : order.id)}>
                       {isExpanded ? 'Hide' : 'View Details'}
@@ -161,7 +163,7 @@ function PastOrdersPage({ pastOrders, loading, onToast, hideFilters }) {
                           <div key={i} className="po-detail-row">
                             <span className="po-detail-name">{item.name || 'Item'}</span>
                             <span className="po-detail-qty">x{item.quantity ?? 1}</span>
-                            <span className="po-detail-price">₹{((item.price ?? 0) * (item.quantity ?? 1)).toFixed(0)}</span>
+                            <span className="po-detail-price">{formatCurrency((item.price ?? 0) * (item.quantity ?? 1))}</span>
                           </div>
                         ))}
                       </div>

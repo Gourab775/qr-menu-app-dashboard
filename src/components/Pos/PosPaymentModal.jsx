@@ -1,9 +1,6 @@
 import { useState, useMemo } from 'react'
 import { IconCheck, IconSplit } from '../../components/Icons'
-
-function formatCurrency(v) {
-  return '\u20B9' + (Math.round(v) || 0).toLocaleString('en-IN')
-}
+import { useFormatCurrency } from '../../hooks/useFormatCurrency'
 
 const PAY_METHODS = [
   { id: 'cash', label: 'Cash', icon: '💵' },
@@ -12,6 +9,7 @@ const PAY_METHODS = [
 ]
 
 export default function PosPaymentModal({ cartItems, serviceChargePct = 0, onClose, onComplete, processing }) {
+  const formatCurrency = useFormatCurrency()
   const [method, setMethod] = useState('cash')
   const [amountTendered, setAmountTendered] = useState('')
   const [customerName, setCustomerName] = useState('')

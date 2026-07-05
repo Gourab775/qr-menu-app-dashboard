@@ -3,14 +3,12 @@ import { supabase } from '../../lib/supabase'
 import { fetchWithTimeout } from '../../lib/apiUtils'
 import { IconUsers, IconSearch, IconPhone, IconClipboard } from '../Icons'
 import { formatOrderDateTime } from '../../utils/formatDateTime'
+import { useFormatCurrency } from '../../hooks/useFormatCurrency'
 
 const API_TIMEOUT = 30000
 
-function formatCurrency(v) {
-  return '\u20B9' + (Math.round(v) || 0).toLocaleString('en-IN')
-}
-
 export default function PosCustomers({ restaurantId }) {
+  const formatCurrency = useFormatCurrency()
   const [customers, setCustomers] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem(`pos_customers_${restaurantId}`) || '[]')

@@ -4,14 +4,12 @@ import { fetchWithTimeout } from '../../lib/apiUtils'
 import { IconSearch, IconShoppingBag, IconX, IconPrinter, IconCheck } from '../../components/Icons'
 import PosCart from './PosCart'
 import PosPaymentModal from './PosPaymentModal'
+import { useFormatCurrency } from '../../hooks/useFormatCurrency'
 
 const API_TIMEOUT = 30000
 
-function formatCurrency(v) {
-  return '\u20B9' + (v || 0).toLocaleString('en-IN')
-}
-
 export default function PosBilling({ restaurantId, selectedTable, onClearTable }) {
+  const formatCurrency = useFormatCurrency()
   const [categories, setCategories] = useState([])
   const [menuItems, setMenuItems] = useState([])
   const [activeCategory, setActiveCategory] = useState('all')

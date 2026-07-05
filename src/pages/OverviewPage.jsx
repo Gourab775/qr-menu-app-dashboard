@@ -7,13 +7,10 @@ import { supabase } from '../lib/supabase'
 import { fetchWithTimeout, deduplicateRequest } from '../lib/apiUtils'
 import { useAuth } from '../contexts/AuthContext'
 import { IconTrendingUp, IconPackage, IconShoppingBag, IconStar, IconBarChart, IconClock, IconTable } from '../components/Icons'
+import { useFormatCurrency } from '../hooks/useFormatCurrency'
 import './OverviewPage.css'
 
 const API_TIMEOUT = 30000
-
-function formatCurrency(v) {
-  return '\u20B9' + (v || 0).toLocaleString('en-IN')
-}
 
 function getLocalDateString(date) {
   const d = new Date(date)
@@ -51,6 +48,7 @@ function isHourlyFilter(filter) {
 
 export default function OverviewPage({ restaurantId }) {
   const { initialized, isAuthenticated } = useAuth()
+  const formatCurrency = useFormatCurrency()
   const [filter, setFilter] = useState('7days')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)

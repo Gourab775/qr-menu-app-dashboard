@@ -2,6 +2,9 @@ import { useState, memo } from 'react'
 import ConfirmModal from './ConfirmModal'
 import MenuItemImageUpload from './MenuItemImageUpload'
 import { getThumbnailUrl } from '../services/cloudinaryService'
+import { useAuth } from '../contexts/AuthContext'
+import { useFormatCurrency } from '../hooks/useFormatCurrency'
+import { DEFAULT_CURRENCY } from '../utils/formatCurrency'
 
 const VegIcon = () => (
   <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
@@ -18,6 +21,8 @@ const NonVegIcon = () => (
 )
 
 const MenuItemCard = memo(function MenuItemCard({ item, onSave, onDelete, categories = [], restaurantId }) {
+  const { restaurantCurrency = DEFAULT_CURRENCY } = useAuth()
+  const formatCurrency = useFormatCurrency()
   const [editing, setEditing] = useState(false)
   const [formData, setFormData] = useState({
     name: item.name,
@@ -141,7 +146,7 @@ const MenuItemCard = memo(function MenuItemCard({ item, onSave, onDelete, catego
           <div className="mic-body">
             <div className="mic-name">{item.name}</div>
             {categoryName && <div className="mic-category">{categoryName}</div>}
-            <div className="mic-price">₹{item.price}</div>
+            <div className="mic-price">{formatCurrency(item.price)}</div>
             <span className={`mic-status ${item.is_available ? 'available' : 'unavailable'}`}>
               {item.is_available ? 'Available' : 'Unavailable'}
             </span>
@@ -249,7 +254,7 @@ const MenuItemCard = memo(function MenuItemCard({ item, onSave, onDelete, catego
           {categoryError && <span className="form-error">{categoryError}</span>}
         </div>
         <div className="mief-row">
-          <label>Price (₹) {!formData.price && <><span className="required-star">*</span><span className="mandatory-text"> Mandatory</span></>}</label>
+          <label>Price ({restaurantCurrency.currency_symbol}) {!formData.price && <><span className="required-star">*</span><span className="mandatory-text"> Mandatory</span></>}</label>
           <input type="number" value={formData.price} onChange={e => {
             const raw = e.target.value
             const strVal = String(raw)

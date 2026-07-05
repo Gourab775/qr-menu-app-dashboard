@@ -3,8 +3,9 @@ import { supabase } from '../lib/supabase'
 import { fetchWithTimeout } from '../lib/apiUtils'
 import { useAuth } from '../contexts/AuthContext'
 import CloudinaryUpload from '../components/CloudinaryUpload'
+import { COUNTRY_CONFIGS, DEFAULT_CURRENCY, formatCurrency } from '../utils/formatCurrency'
 
-import { IconPackage, IconBarChart, IconSettings, IconBell, IconLock, IconUtensils, IconFolder, IconCheck, IconX, IconPhone, IconMail, IconStore, IconCopy, IconLogOut, IconStar, IconHelpCircle, IconFileText, IconPalette, IconInfo, IconImage } from '../components/Icons'
+import { IconPackage, IconBarChart, IconSettings, IconBell, IconLock, IconUtensils, IconFolder, IconCheck, IconX, IconPhone, IconMail, IconStore, IconCopy, IconLogOut, IconStar, IconHelpCircle, IconFileText, IconPalette, IconInfo, IconImage, IconDollarSign } from '../components/Icons'
 
 const API_TIMEOUT = 30000
 
@@ -225,7 +226,7 @@ Limitation of Liability
  We are not liable for indirect or consequential damages`
 
 export default function SettingsPage({ preferences, setPreferences, onToast, restaurantId }) {
-  const { signOut, role, session } = useAuth()
+  const { signOut, role, session, refreshRestaurantCurrency, restaurantCurrency } = useAuth()
   const isSuperAdmin = role === 'admin'
   const [restaurant, setRestaurant] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -263,7 +264,7 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
     if (!signal && mountedRef.current) setLoading(true);
 
     try {
-      const selectedColumns = 'name, slug, contact_number, logo';
+      const selectedColumns = 'name, slug, contact_number, logo, country_code, currency_code, currency_symbol, locale';
 
       const restaurantPromise = supabase
         .from('restaurants')
@@ -343,7 +344,7 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
     try {
       const restaurantPromise = supabase
         .from('restaurants')
-        .select('name, slug, contact_number, logo')
+        .select('name, slug, contact_number, logo, country_code, currency_code, currency_symbol, locale')
         .eq('id', currentRestId)
         .single()
       
@@ -658,6 +659,15 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
       loadWaiterRequestTypes()
     } else if (modalName === 'bgvideo') {
       loadBgVideo()
+    } else if (modalName === 'currency') {
+      const currentCountry = restaurant?.country_code || DEFAULT_CURRENCY.country_code
+      const matched = COUNTRY_CONFIGS.find(c => c.country_code === currentCountry) || COUNTRY_CONFIGS[0]
+      setFormData({
+        country_code: matched.country_code,
+        currency_code: matched.currency_code,
+        currency_symbol: matched.currency_symbol,
+        locale: matched.locale,
+      })
     }
   }
 
@@ -768,6 +778,33 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
     } catch (err) {
       console.error('[Settings] Save restaurant error:', err.message)
       showToast('Failed to save: ' + (err.message || 'Unknown error'), 'error')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleSaveCurrency = async (e) => {
+    e.preventDefault()
+    if (saving || !currentRestId) return
+    setSaving(true)
+    try {
+      const { country_code, currency_code, currency_symbol, locale } = formData
+      const { error } = await supabase
+        .from('restaurants')
+        .update({ country_code, currency_code, currency_symbol, locale })
+        .eq('id', currentRestId)
+
+      if (error) throw error
+
+      await refreshRestaurant()
+      if (refreshRestaurantCurrency) {
+        await refreshRestaurantCurrency()
+      }
+      showToast('Currency settings saved')
+      closeModal()
+    } catch (err) {
+      console.error('[Settings] Save currency error:', err.message)
+      showToast('Failed to save currency settings', 'error')
     } finally {
       setSaving(false)
     }
@@ -1353,6 +1390,69 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
         </div>
       )
     }
+    if (showModal === 'currency') {
+      const currentConfig = COUNTRY_CONFIGS.find(c => c.country_code === formData.country_code) || COUNTRY_CONFIGS[0]
+      return (
+        <div className="modal-overlay" onClick={closeModal}>
+          <div className="settings-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Currency & Region</h3>
+              <button className="modal-close" onClick={closeModal}>×</button>
+            </div>
+            <div className="currency-preview">
+              <span className="currency-preview-label">Example:</span>
+              <span className="currency-preview-value">
+                {formatCurrency(299, currentConfig.locale, currentConfig.currency_code)}
+              </span>
+              <span className="currency-preview-detail">
+                {currentConfig.currency_code} &middot; {currentConfig.locale}
+              </span>
+            </div>
+            <form onSubmit={handleSaveCurrency}>
+              <div className="form-group">
+                <label>Country</label>
+                <select
+                  value={formData.country_code || ''}
+                  onChange={e => {
+                    const selected = COUNTRY_CONFIGS.find(c => c.country_code === e.target.value)
+                    if (selected) {
+                      setFormData({
+                        country_code: selected.country_code,
+                        currency_code: selected.currency_code,
+                        currency_symbol: selected.currency_symbol,
+                        locale: selected.locale,
+                      })
+                    }
+                  }}
+                >
+                  {COUNTRY_CONFIGS.map(c => (
+                    <option key={c.country_code} value={c.country_code}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="currency-readonly-fields">
+                <div className="readonly-field">
+                  <span className="readonly-label">Currency Code</span>
+                  <span className="readonly-value">{formData.currency_code || '\u2014'}</span>
+                </div>
+                <div className="readonly-field">
+                  <span className="readonly-label">Currency Symbol</span>
+                  <span className="readonly-value">{formData.currency_symbol || '\u2014'}</span>
+                </div>
+                <div className="readonly-field">
+                  <span className="readonly-label">Locale</span>
+                  <span className="readonly-value">{formData.locale || '\u2014'}</span>
+                </div>
+              </div>
+              <div className="modal-actions">
+                <button type="button" className="cancel-btn" onClick={closeModal}>Cancel</button>
+                <button type="submit" className="save-btn" disabled={saving}>{saving ? 'Saving...' : 'Save Settings'}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )
+    }
     return null
   }
 
@@ -1377,6 +1477,12 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
         { icon: <IconStore size={20} />, label: 'Business Details', description: restaurant?.name || 'Configure', onClick: () => openModal('business') },
         { icon: <IconImage size={20} />, label: 'Logo', description: restaurant?.logo ? 'Set' : 'Not set', onClick: () => openModal('logo'), badge: restaurant?.logo ? 'Set' : '' },
         { icon: <IconImage size={20} />, label: 'Background Video', description: 'Landing page video', onClick: () => openModal('bgvideo') }
+      ]
+    },
+    {
+      title: 'Currency & Region',
+      items: [
+        { icon: <IconDollarSign size={20} />, label: 'Currency & Region', description: (restaurant?.currency_code || DEFAULT_CURRENCY.currency_code) + ' \u00B7 ' + (restaurant?.currency_symbol || DEFAULT_CURRENCY.currency_symbol) + ' \u00B7 ' + (restaurant?.locale || DEFAULT_CURRENCY.locale), onClick: () => openModal('currency') }
       ]
     },
     {

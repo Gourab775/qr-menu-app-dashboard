@@ -3,14 +3,12 @@ import { supabase } from '../../lib/supabase'
 import { fetchWithTimeout } from '../../lib/apiUtils'
 import { IconDollarSign, IconPlus, IconX } from '../Icons'
 import { formatOrderDateTime } from '../../utils/formatDateTime'
+import { useFormatCurrency } from '../../hooks/useFormatCurrency'
 
 const API_TIMEOUT = 30000
 
-function formatCurrency(v) {
-  return '\u20B9' + (Math.round(v) || 0).toLocaleString('en-IN')
-}
-
 export default function PosCashManagement({ restaurantId }) {
+  const formatCurrency = useFormatCurrency()
   const [shifts, setShifts] = useState([])
   const [activeShift, setActiveShift] = useState(null)
   const [loading, setLoading] = useState(true)

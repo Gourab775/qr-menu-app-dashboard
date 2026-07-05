@@ -4,11 +4,13 @@ import { useAuth } from '../contexts/AuthContext'
 import { formatOrderDateTime } from '../utils/formatDateTime'
 import * as orderStore from '../services/orderStore'
 import { IconClock, IconSearch, IconClipboard } from '../components/Icons'
+import { useFormatCurrency } from '../hooks/useFormatCurrency'
 import '../PopupApp.css'
 import './LiveOrdersPage.css'
 
 function LiveOrdersPage({ restaurantId }) {
   const { session } = useAuth()
+  const formatCurrency = useFormatCurrency()
   const [orders, setOrders] = useState(() => orderStore.getPending())
   const [pastOrders, setPastOrders] = useState(() => orderStore.getPast())
   const [waiterCalls, setWaiterCalls] = useState([])
@@ -252,7 +254,7 @@ function LiveOrdersPage({ restaurantId }) {
                           <div key={i} className="popup-item">
                             <span className="popup-item-name">{item?.name || 'Item'}</span>
                             <span className="popup-item-qty">x{item?.quantity != null ? item.quantity : 1}</span>
-                            <span className="popup-item-price">₹{((item?.price ?? 0) * (item?.quantity ?? 1)).toFixed(0)}</span>
+                            <span className="popup-item-price">{formatCurrency((item?.price ?? 0) * (item?.quantity ?? 1))}</span>
                           </div>
                         )) : (
                           <div className="popup-item">
@@ -268,7 +270,7 @@ function LiveOrdersPage({ restaurantId }) {
                       )}
                       <div className="popup-total-row">
                         <span className="popup-total-label">Total</span>
-                        <span className="popup-total-amount">₹{totalPrice}</span>
+                        <span className="popup-total-amount">{formatCurrency(totalPrice)}</span>
                       </div>
                       <div className="popup-card-footer">
                         <button className="popup-decline-btn" onClick={() => handleDecline(orderId, orderCode)}>Decline</button>
@@ -351,13 +353,13 @@ function LiveOrdersPage({ restaurantId }) {
                           <div key={i} className="popup-item">
                             <span className="popup-item-name">{item.name || 'Item'}</span>
                             <span className="popup-item-qty">x{item.quantity ?? 1}</span>
-                            <span className="popup-item-price">₹{((item.price ?? 0) * (item.quantity ?? 1)).toFixed(0)}</span>
+                            <span className="popup-item-price">{formatCurrency((item.price ?? 0) * (item.quantity ?? 1))}</span>
                           </div>
                         ))}
                       </div>
                       <div className="popup-total-row">
                         <span className="popup-total-label">Total</span>
-                        <span className="popup-total-amount">₹{order.total_price?.toFixed(0) || '0'}</span>
+                        <span className="popup-total-amount">{formatCurrency(order.total_price)}</span>
                       </div>
                     </div>
                   )

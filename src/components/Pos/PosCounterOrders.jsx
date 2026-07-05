@@ -3,12 +3,9 @@ import { supabase } from '../../lib/supabase'
 import { fetchWithTimeout } from '../../lib/apiUtils'
 import { IconClipboard, IconSearch, IconPrinter } from '../../components/Icons'
 import { formatOrderDateTime } from '../../utils/formatDateTime'
+import { useFormatCurrency } from '../../hooks/useFormatCurrency'
 
 const API_TIMEOUT = 30000
-
-function formatCurrency(v) {
-  return '\u20B9' + (Math.round(v) || 0).toLocaleString('en-IN')
-}
 
 const STATUS_LABELS = {
   kot_generated: 'KOT',
@@ -22,6 +19,7 @@ const STATUS_LABELS = {
 }
 
 export default function PosCounterOrders({ restaurantId }) {
+  const formatCurrency = useFormatCurrency()
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)

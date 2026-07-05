@@ -3,6 +3,7 @@ import { supabase } from './lib/supabase'
 import { useAuth } from './contexts/AuthContext'
 import { formatOrderDateTime } from './utils/formatDateTime'
 import * as orderStore from './services/orderStore'
+import { useFormatCurrency } from './hooks/useFormatCurrency'
 import './PopupApp.css'
 
 const ORDER_SOUNDS = [
@@ -21,6 +22,7 @@ const WAITER_SOUNDS = [
 
 function PopupApp() {
   const { session, profile, loading: authLoading, initialized, restaurantId, userDataLoading } = useAuth()
+  const formatCurrency = useFormatCurrency()
   const [orders, setOrders] = useState(() => orderStore.getPending())
   const [pastOrders, setPastOrders] = useState(() => orderStore.getPast())
   const [waiterCalls, setWaiterCalls] = useState([])
@@ -593,7 +595,7 @@ function PopupApp() {
                             <div key={i} className="popup-item">
                               <span className="popup-item-name">{item?.name || 'Item'}</span>
                               <span className="popup-item-qty">x{item?.quantity != null ? item.quantity : 1}</span>
-                              <span className="popup-item-price">₹{((item?.price ?? 0) * (item?.quantity ?? 1)).toFixed(0)}</span>
+                              <span className="popup-item-price">{formatCurrency((item?.price ?? 0) * (item?.quantity ?? 1))}</span>
                             </div>
                           )) : (
                             <div className="popup-item">
@@ -609,7 +611,7 @@ function PopupApp() {
                         )}
                         <div className="popup-total-row">
                           <span className="popup-total-label">Total</span>
-                          <span className="popup-total-amount">₹{totalPrice}</span>
+                          <span className="popup-total-amount">{formatCurrency(totalPrice)}</span>
                         </div>
                         <div className="popup-card-footer">
                           <button className="popup-decline-btn" onClick={() => handleDecline(orderId, orderCode)}>Decline</button>
@@ -704,13 +706,13 @@ function PopupApp() {
                             <div key={i} className="popup-item">
                               <span className="popup-item-name">{item.name || 'Item'}</span>
                               <span className="popup-item-qty">x{item.quantity ?? 1}</span>
-                              <span className="popup-item-price">₹{((item.price ?? 0) * (item.quantity ?? 1)).toFixed(0)}</span>
+                              <span className="popup-item-price">{formatCurrency((item.price ?? 0) * (item.quantity ?? 1))}</span>
                             </div>
                           ))}
                         </div>
                         <div className="popup-total-row">
                           <span className="popup-total-label">Total</span>
-                          <span className="popup-total-amount">₹{order.total_price?.toFixed(0) || '0'}</span>
+                          <span className="popup-total-amount">{formatCurrency(order.total_price)}</span>
                         </div>
                       </div>
                     )

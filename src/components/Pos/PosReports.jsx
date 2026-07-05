@@ -2,12 +2,9 @@ import { useState, useEffect, useRef, useMemo } from 'react'
 import { supabase } from '../../lib/supabase'
 import { fetchWithTimeout } from '../../lib/apiUtils'
 import { IconBarChart, IconCalendar } from '../../components/Icons'
+import { useFormatCurrency } from '../../hooks/useFormatCurrency'
 
 const API_TIMEOUT = 30000
-
-function formatCurrency(v) {
-  return '\u20B9' + (Math.round(v) || 0).toLocaleString('en-IN')
-}
 
 const PERIODS = [
   { id: 'today', label: 'Today' },
@@ -44,6 +41,7 @@ function getPeriodRange(periodId) {
 }
 
 export default function PosReports({ restaurantId }) {
+  const formatCurrency = useFormatCurrency()
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)

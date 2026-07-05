@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
 import { fetchWithTimeout } from '../../lib/apiUtils'
 import { IconSearch, IconPlus, IconTable, IconSplit, IconMove, IconLayers } from '../Icons'
+import { useFormatCurrency } from '../../hooks/useFormatCurrency'
 
 const API_TIMEOUT = 30000
 
@@ -23,11 +24,8 @@ const STATUS_CLASSES = {
   reserved: 'table-status-reserved',
 }
 
-function formatCurrency(v) {
-  return '\u20B9' + (Math.round(v) || 0).toLocaleString('en-IN')
-}
-
 export default function PosTableMap({ restaurantId, onSelectTable }) {
+  const formatCurrency = useFormatCurrency()
   const [tables, setTables] = useState([])
   const [tableStatuses, setTableStatuses] = useState({})
   const [sections] = useState(() => {
