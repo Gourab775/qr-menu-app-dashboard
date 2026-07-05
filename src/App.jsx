@@ -14,7 +14,7 @@ import { formatDateTime, formatOrderDateTime } from './utils/formatDateTime'
 import * as orderStore from './services/orderStore'
 
 import { IconStore, IconSearch, IconUtensils, IconBellRing, IconBell, IconBarChart, IconFolder, IconTarget, IconClipboard, IconTable, IconSettings, IconLock, IconShoppingBag } from './components/Icons'
-import { PLANS, getPlanFeatures, hasFeature, getDefaultTab } from './constants/plans'
+import { PLANS, getPlanFeatures, hasFeature, getDefaultTab, PLAN_LABELS } from './constants/plans'
 import './App.css'
 import './theme.css'
 
@@ -1077,7 +1077,7 @@ function App() {
                 <p className="profile-role">{userRole.charAt(0).toUpperCase() + userRole.slice(1)}</p>
                 <p className="profile-plan">
                   <span className={`plan-badge plan-badge--${currentPlan}`}>
-                    {currentPlan === 'basic' ? 'Basic Plan' : 'Plus Plan'}
+                    {PLAN_LABELS[currentPlan] || 'Plus Plan'}
                   </span>
                 </p>
               </div>
@@ -1097,7 +1097,7 @@ function App() {
               <h2>Feature Not Available</h2>
               <p>This feature is not available on your current plan. Upgrade to Plus to access it.</p>
               {activeTab === 'analytics' && <p className="restricted-detail">Analytics, reports, and performance insights are Plus features.</p>}
-              {activeTab === 'pos' && <p className="restricted-detail">POS billing and counter management are Plus features.</p>}
+              {activeTab === 'pos' && <p className="restricted-detail">POS billing and counter management are Pro features.</p>}
               {activeTab === 'live-orders' && <p className="restricted-detail">Online ordering and order management are Plus features.</p>}
               {activeTab === 'past-orders' && <p className="restricted-detail">Order history and past orders are Plus features.</p>}
             </div>

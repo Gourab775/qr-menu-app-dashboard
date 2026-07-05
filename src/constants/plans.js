@@ -13,6 +13,20 @@ export const PLANS = {
   plus: {
     features: [
       'analytics',
+      'menu_items',
+      'categories',
+      'featured',
+      'live_orders',
+      'past_orders',
+      'tables',
+      'waiter_calls',
+      'settings',
+    ],
+    defaultTab: 'analytics',
+  },
+  pro: {
+    features: [
+      'analytics',
       'pos',
       'menu_items',
       'categories',
@@ -30,6 +44,7 @@ export const PLANS = {
 export const PLAN_LABELS = {
   basic: 'Basic Plan',
   plus: 'Plus Plan',
+  pro: 'Pro Plan',
 }
 
 export function getPlanFeatures(plan) {
