@@ -10,7 +10,7 @@ create table if not exists public.restaurant_taxes (
   name text not null,
   tax_percentage numeric(5,2) not null default 0,
   tax_type text not null default 'percentage',
-  is_active boolean not null default true,
+  is_enabled boolean not null default true,
   display_order integer not null default 0,
   created_at timestamp with time zone not null default now(),
   updated_at timestamp with time zone not null default now(),

@@ -510,7 +510,7 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
       tax_percentage: Math.round(pct * 100) / 100,
       tax_type: newTaxType,
       restaurant_id: currentRestId,
-      is_active: true,
+      is_enabled: true,
       display_order: maxOrder + 1,
       created_at: new Date().toISOString()
     }
@@ -576,11 +576,11 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
   }
 
   const handleToggleTax = async (id, currentActive) => {
-    setTaxes(prev => prev.map(t => t.id === id ? { ...t, is_active: !currentActive } : t))
+    setTaxes(prev => prev.map(t => t.id === id ? { ...t, is_enabled: !currentActive } : t))
     try {
       const { error } = await supabase
         .from('restaurant_taxes')
-        .update({ is_active: !currentActive })
+        .update({ is_enabled: !currentActive })
         .eq('id', id)
         .eq('restaurant_id', currentRestId)
       if (error) throw error
@@ -592,7 +592,7 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
       console.log('error.details:', err?.details);
       console.log('error.hint:', err?.hint);
 
-      const payload = { is_active: !currentActive }
+      const payload = { is_enabled: !currentActive }
       const filters = { id, restaurant_id: currentRestId }
       const tax = taxes.find(t => t.id === id)
       console.log('update payload:', payload);
@@ -601,7 +601,7 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
       console.log('tax id:', id);
       console.log('authenticated user id:', session?.user?.id);
 
-      setTaxes(prev => prev.map(t => t.id === id ? { ...t, is_active: currentActive } : t))
+      setTaxes(prev => prev.map(t => t.id === id ? { ...t, is_enabled: currentActive } : t))
       showToast('Failed to update tax', 'error')
     }
   }
@@ -1482,7 +1482,7 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
       )
     }
     if (showModal === 'taxes') {
-      const activeCount = taxes.filter(t => t.is_active).length
+      const activeCount = taxes.filter(t => t.is_enabled).length
       return (
         <div className="modal-overlay" onClick={closeModal}>
           <div className="settings-modal mc-modal" style={{ maxWidth: '560px' }} onClick={e => e.stopPropagation()}>
@@ -1573,11 +1573,11 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
                             </div>
                             <div className="mc-item-actions">
                               <button
-                                className={`mc-btn ${tax.is_active ? 'mc-btn-active' : 'mc-btn-inactive'}`}
-                                onClick={() => handleToggleTax(tax.id, tax.is_active)}
-                                title={tax.is_active ? 'Click to disable' : 'Click to enable'}
+                                className={`mc-btn ${tax.is_enabled ? 'mc-btn-active' : 'mc-btn-inactive'}`}
+                                onClick={() => handleToggleTax(tax.id, tax.is_enabled)}
+                                title={tax.is_enabled ? 'Click to disable' : 'Click to enable'}
                               >
-                                {tax.is_active ? 'Enabled' : 'Disabled'}
+                                {tax.is_enabled ? 'Enabled' : 'Disabled'}
                               </button>
                             </div>
                           </div>
