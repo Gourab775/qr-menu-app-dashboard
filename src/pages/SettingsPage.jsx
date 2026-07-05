@@ -228,7 +228,7 @@ Limitation of Liability
 
 export default function SettingsPage({ preferences, setPreferences, onToast, restaurantId }) {
   const { signOut, role, session } = useAuth()
-  const { restaurantConfig, refreshRestaurantConfig, loading: restaurantLoading } = useRestaurant()
+  const { restaurantConfig, refreshRestaurantConfig, loading: restaurantLoading, taxes: contextTaxes, refreshTaxes } = useRestaurant()
   const isSuperAdmin = role === 'admin'
   const [saving, setSaving] = useState(false)
   const [showModal, setShowModal] = useState(null)
@@ -248,6 +248,16 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
   const [editingWrtId, setEditingWrtId] = useState(null)
   const [editWrtName, setEditWrtName] = useState('')
   const [deleteWrtTarget, setDeleteWrtTarget] = useState(null)
+
+  const [taxes, setTaxes] = useState([])
+  const [newTaxName, setNewTaxName] = useState('')
+  const [newTaxPercentage, setNewTaxPercentage] = useState('')
+  const [newTaxType, setNewTaxType] = useState('percentage')
+  const [editingTaxId, setEditingTaxId] = useState(null)
+  const [editTaxName, setEditTaxName] = useState('')
+  const [editTaxPercentage, setEditTaxPercentage] = useState('')
+  const [editTaxType, setEditTaxType] = useState('percentage')
+  const [deleteTaxTarget, setDeleteTaxTarget] = useState(null)
 
   const mountedRef = useRef(false)
   const abortControllerRef = useRef(null)
@@ -489,6 +499,164 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
     }
   }
 
+  const handleAddTax = async () => {
+    if (typeof newTaxName !== 'string' || !newTaxName.trim()) return
+    const pct = parseFloat(newTaxPercentage)
+    if (isNaN(pct) || pct < 0 || pct > 100) return
+    const maxOrder = taxes.reduce((max, t) => Math.max(max, t.display_order || 0), 0)
+    const optimistic = {
+      id: 'temp-' + Date.now(),
+      name: newTaxName.trim(),
+      tax_percentage: Math.round(pct * 100) / 100,
+      tax_type: newTaxType,
+      restaurant_id: currentRestId,
+      is_active: true,
+      display_order: maxOrder + 1,
+      created_at: new Date().toISOString()
+    }
+    setTaxes(prev => [...prev, optimistic])
+    setNewTaxName('')
+    setNewTaxPercentage('')
+    setNewTaxType('percentage')
+    try {
+      const { data, error } = await supabase
+        .from('restaurant_taxes')
+        .insert({
+          name: newTaxName.trim(),
+          tax_percentage: Math.round(pct * 100) / 100,
+          tax_type: newTaxType,
+          restaurant_id: currentRestId,
+          display_order: maxOrder + 1
+        })
+        .select()
+        .single()
+      if (error) throw error
+      if (data) {
+        setTaxes(prev => prev.map(t => t.id === optimistic.id ? data : t))
+      }
+      showToast('Tax added')
+    } catch (err) {
+      setTaxes(prev => prev.filter(t => t.id !== optimistic.id))
+      showToast('Failed to add tax', 'error')
+    }
+  }
+
+  const handleSaveTaxEdit = async (id) => {
+    if (typeof editTaxName !== 'string' || !editTaxName.trim()) return
+    const pct = parseFloat(editTaxPercentage)
+    if (isNaN(pct) || pct < 0 || pct > 100) return
+    const prev = taxes.find(t => t.id === id)
+    const updated = {
+      ...prev,
+      name: editTaxName.trim(),
+      tax_percentage: Math.round(pct * 100) / 100,
+      tax_type: editTaxType,
+    }
+    setTaxes(prev => prev.map(t => t.id === id ? updated : t))
+    setEditingTaxId(null)
+    setEditTaxName('')
+    setEditTaxPercentage('')
+    setEditTaxType('percentage')
+    try {
+      const { error } = await supabase
+        .from('restaurant_taxes')
+        .update({
+          name: editTaxName.trim(),
+          tax_percentage: Math.round(pct * 100) / 100,
+          tax_type: editTaxType,
+        })
+        .eq('id', id)
+        .eq('restaurant_id', currentRestId)
+      if (error) throw error
+      showToast('Tax updated')
+    } catch (err) {
+      if (prev) setTaxes(prev => prev.map(t => t.id === id ? prev : t))
+      showToast('Failed to update tax', 'error')
+    }
+  }
+
+  const handleToggleTax = async (id, currentActive) => {
+    setTaxes(prev => prev.map(t => t.id === id ? { ...t, is_active: !currentActive } : t))
+    try {
+      const { error } = await supabase
+        .from('restaurant_taxes')
+        .update({ is_active: !currentActive })
+        .eq('id', id)
+        .eq('restaurant_id', currentRestId)
+      if (error) throw error
+      showToast(!currentActive ? 'Tax enabled' : 'Tax disabled')
+    } catch (err) {
+      setTaxes(prev => prev.map(t => t.id === id ? { ...t, is_active: currentActive } : t))
+      showToast('Failed to update tax', 'error')
+    }
+  }
+
+  const handleDeleteTax = async (id) => {
+    const prev = taxes.find(t => t.id === id)
+    setTaxes(prev => prev.filter(t => t.id !== id))
+    setDeleteTaxTarget(null)
+    try {
+      const { error } = await supabase
+        .from('restaurant_taxes')
+        .delete()
+        .eq('id', id)
+        .eq('restaurant_id', currentRestId)
+      if (error) throw error
+      showToast('Tax deleted')
+    } catch (err) {
+      if (prev) setTaxes(prev => [...prev, prev])
+      showToast('Failed to delete tax', 'error')
+    }
+  }
+
+  const handleMoveTaxUp = async (index) => {
+    if (index <= 0) return
+    const items = [...taxes]
+    const temp = items[index]
+    items[index] = { ...items[index - 1], display_order: items[index].display_order }
+    items[index - 1] = { ...temp, display_order: items[index - 1].display_order }
+    setTaxes(items)
+    try {
+      await supabase
+        .from('restaurant_taxes')
+        .update({ display_order: items[index].display_order })
+        .eq('id', items[index].id)
+        .eq('restaurant_id', currentRestId)
+      await supabase
+        .from('restaurant_taxes')
+        .update({ display_order: items[index - 1].display_order })
+        .eq('id', items[index - 1].id)
+        .eq('restaurant_id', currentRestId)
+    } catch (err) {
+      refreshTaxes()
+      showToast('Failed to reorder', 'error')
+    }
+  }
+
+  const handleMoveTaxDown = async (index) => {
+    if (index >= taxes.length - 1) return
+    const items = [...taxes]
+    const temp = items[index]
+    items[index] = { ...items[index + 1], display_order: items[index].display_order }
+    items[index + 1] = { ...temp, display_order: items[index + 1].display_order }
+    setTaxes(items)
+    try {
+      await supabase
+        .from('restaurant_taxes')
+        .update({ display_order: items[index].display_order })
+        .eq('id', items[index].id)
+        .eq('restaurant_id', currentRestId)
+      await supabase
+        .from('restaurant_taxes')
+        .update({ display_order: items[index + 1].display_order })
+        .eq('id', items[index + 1].id)
+        .eq('restaurant_id', currentRestId)
+    } catch (err) {
+      refreshTaxes()
+      showToast('Failed to reorder', 'error')
+    }
+  }
+
   const updatePreference = async (key, value) => {
     const newPrefs = { ...preferences, [key]: value }
     if (key === 'orderNotifications' && !value) {
@@ -547,7 +715,9 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
     setShowModal(modalName)
     setHelpTopic(null)
     
-    if (modalName === 'business') {
+    if (modalName === 'taxes') {
+      setTaxes([...contextTaxes])
+    } else if (modalName === 'business') {
       setFormData({
         name: restaurantConfig?.name || '',
         slug: restaurantConfig?.slug || '',
@@ -584,6 +754,14 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
     setEditWrtName('')
     setNewWrtName('')
     setDeleteWrtTarget(null)
+    setEditingTaxId(null)
+    setEditTaxName('')
+    setEditTaxPercentage('')
+    setEditTaxType('percentage')
+    setNewTaxName('')
+    setNewTaxPercentage('')
+    setNewTaxType('percentage')
+    setDeleteTaxTarget(null)
   }
 
   const handleLogout = async (forceLogout = false) => {
@@ -1288,6 +1466,138 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
         </div>
       )
     }
+    if (showModal === 'taxes') {
+      const activeCount = taxes.filter(t => t.is_active).length
+      return (
+        <div className="modal-overlay" onClick={closeModal}>
+          <div className="settings-modal mc-modal" style={{ maxWidth: '560px' }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Taxes</h3>
+              <button className="modal-close" onClick={closeModal}>×</button>
+            </div>
+            <div className="mc-content">
+              <div className="mc-add-row" style={{ flexWrap: 'wrap' }}>
+                <input
+                  type="text"
+                  value={newTaxName}
+                  onChange={e => setNewTaxName(e.target.value)}
+                  placeholder="Tax name (e.g. GST)..."
+                  style={{ minWidth: '140px', flex: '2' }}
+                  onKeyDown={e => e.key === 'Enter' && handleAddTax()}
+                />
+                <input
+                  type="number"
+                  value={newTaxPercentage}
+                  onChange={e => setNewTaxPercentage(e.target.value)}
+                  placeholder="%"
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  style={{ minWidth: '70px', flex: '1', maxWidth: '90px' }}
+                  onKeyDown={e => e.key === 'Enter' && handleAddTax()}
+                />
+                <select
+                  value={newTaxType}
+                  onChange={e => setNewTaxType(e.target.value)}
+                  style={{ minWidth: '110px', flex: '1', padding: '10px 12px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', color: 'var(--text)', fontSize: '14px', cursor: 'pointer' }}
+                >
+                  <option value="percentage">Percentage</option>
+                  <option value="fixed">Fixed</option>
+                </select>
+                <button className="save-btn" onClick={handleAddTax} disabled={typeof newTaxName !== 'string' || !newTaxName.trim() || isNaN(parseFloat(newTaxPercentage)) || parseFloat(newTaxPercentage) < 0 || parseFloat(newTaxPercentage) > 100}>
+                  + Add
+                </button>
+              </div>
+              {taxes.length === 0 ? (
+                <div className="mc-empty"><p>No taxes configured. Add one above.</p></div>
+              ) : (
+                <div className="mc-list" style={{ maxHeight: '400px' }}>
+                  {taxes.map((tax, idx) => (
+                    <div key={tax.id} className="mc-item" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '8px' }}>
+                      {editingTaxId === tax.id ? (
+                        <div className="mc-edit-row" style={{ flexWrap: 'wrap' }}>
+                          <input
+                            type="text"
+                            value={editTaxName}
+                            onChange={e => setEditTaxName(e.target.value)}
+                            style={{ flex: '2', minWidth: '120px' }}
+                            onKeyDown={e => e.key === 'Enter' && handleSaveTaxEdit(tax.id)}
+                            autoFocus
+                          />
+                          <input
+                            type="number"
+                            value={editTaxPercentage}
+                            onChange={e => setEditTaxPercentage(e.target.value)}
+                            min="0"
+                            max="100"
+                            step="0.01"
+                            style={{ flex: '1', minWidth: '60px', maxWidth: '80px' }}
+                            onKeyDown={e => e.key === 'Enter' && handleSaveTaxEdit(tax.id)}
+                          />
+                          <select
+                            value={editTaxType}
+                            onChange={e => setEditTaxType(e.target.value)}
+                            style={{ flex: '1', minWidth: '100px', padding: '8px 10px', background: 'var(--bg)', border: '1px solid var(--primary)', borderRadius: 'var(--radius-sm)', color: 'var(--text)', fontSize: '13px', cursor: 'pointer' }}
+                          >
+                            <option value="percentage">Percentage</option>
+                            <option value="fixed">Fixed</option>
+                          </select>
+                          <button className="mc-btn mc-btn-save" onClick={() => handleSaveTaxEdit(tax.id)}>Save</button>
+                          <button className="mc-btn mc-btn-cancel" onClick={() => setEditingTaxId(null)}>Cancel</button>
+                        </div>
+                      ) : (
+                        <>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', width: '100%' }}>
+                            <div className="mc-item-info">
+                              <span className="mc-item-name">{tax.name}</span>
+                              <span style={{ display: 'flex', gap: '8px', alignItems: 'center', fontSize: '12px', color: 'var(--text-muted)' }}>
+                                <span>{tax.tax_percentage}%</span>
+                                <span style={{ opacity: 0.3 }}>|</span>
+                                <span style={{ textTransform: 'capitalize' }}>{tax.tax_type}</span>
+                              </span>
+                            </div>
+                            <div className="mc-item-actions">
+                              <button
+                                className={`mc-btn ${tax.is_active ? 'mc-btn-active' : 'mc-btn-inactive'}`}
+                                onClick={() => handleToggleTax(tax.id, tax.is_active)}
+                                title={tax.is_active ? 'Click to disable' : 'Click to enable'}
+                              >
+                                {tax.is_active ? 'Enabled' : 'Disabled'}
+                              </button>
+                            </div>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', width: '100%' }}>
+                            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Order: {tax.display_order || idx + 1}</span>
+                            <div className="mc-item-actions">
+                              <button className="mc-btn mc-btn-edit" onClick={() => { setEditingTaxId(tax.id); setEditTaxName(tax.name); setEditTaxPercentage(String(tax.tax_percentage)); setEditTaxType(tax.tax_type) }}>Edit</button>
+                              <button className="mc-btn mc-btn-up" onClick={() => handleMoveTaxUp(idx)} disabled={idx === 0}>↑</button>
+                              <button className="mc-btn mc-btn-down" onClick={() => handleMoveTaxDown(idx)} disabled={idx >= taxes.length - 1}>↓</button>
+                              <button className="mc-btn mc-btn-delete" onClick={() => setDeleteTaxTarget(tax)}>Delete</button>
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+          {deleteTaxTarget && (
+            <div className="mc-confirm-overlay" onClick={() => setDeleteTaxTarget(null)}>
+              <div className="mc-confirm-box" onClick={e => e.stopPropagation()}>
+                <h4>Delete "{deleteTaxTarget.name}"?</h4>
+                <p>This action cannot be undone. Existing orders using this tax will keep their data.</p>
+                <div className="modal-actions">
+                  <button className="cancel-btn" onClick={() => setDeleteTaxTarget(null)}>Cancel</button>
+                  <button className="delete-btn" onClick={() => handleDeleteTax(deleteTaxTarget.id)}>Delete</button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )
+    }
     if (showModal === 'currency') {
       const currentConfig = COUNTRY_CONFIGS.find(c => c.country_code === formData.country_code) || COUNTRY_CONFIGS[0]
       return (
@@ -1388,6 +1698,12 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
       items: [
         { icon: <IconFolder size={20} />, label: 'Main Categories', description: 'Menu, Hookah, Drinks', onClick: () => openModal('maincategories') },
         { icon: <IconBell size={20} />, label: 'Waiter Request Types', description: 'Manage waiter options', onClick: () => openModal('waiterrequesttypes') }
+      ]
+    },
+    {
+      title: 'Taxes',
+      items: [
+        { icon: <IconDollarSign size={20} />, label: 'Taxes', description: 'Manage GST, VAT, Service Charge & more', onClick: () => openModal('taxes') }
       ]
     },
     {
