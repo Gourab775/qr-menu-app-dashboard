@@ -14,7 +14,7 @@ import { formatDateTime, formatOrderDateTime } from './utils/formatDateTime'
 import * as orderStore from './services/orderStore'
 
 import { IconStore, IconSearch, IconUtensils, IconBellRing, IconBell, IconBarChart, IconFolder, IconTarget, IconClipboard, IconTable, IconSettings, IconLock, IconShoppingBag } from './components/Icons'
-import { PLANS, getPlanFeatures, hasFeature, getDefaultTab, PLAN_LABELS } from './constants/plans'
+import { hasFeature, getDefaultTab, PLAN_LABELS } from './constants/plans'
 import './App.css'
 import './theme.css'
 
@@ -35,9 +35,7 @@ function tabToFeature(tab) {
 }
 
 function App() {
-  const { session, profile, loading: authLoading, initialized, signOut, role, restaurantId, plan, userDataLoading } = useAuth()
-  const [restaurantSlug, setRestaurantSlug] = useState('')
-  const [restaurantName, setRestaurantName] = useState('')
+  const { session, profile, loading: authLoading, initialized, signOut, role, restaurantId, plan, userDataLoading, restaurantSlug, restaurantName } = useAuth()
   const [orders, setOrders] = useState([])
   const [pastOrders, setPastOrders] = useState([])
   const [waiterCalls, setWaiterCalls] = useState([])
@@ -288,8 +286,6 @@ function App() {
       setShowProfile(false)
       await signOut()
 
-      setRestaurantSlug('')
-      setRestaurantName('')
       setOrders([])
       setPastOrders([])
       setMenuItems([])
@@ -315,11 +311,7 @@ function App() {
     const doLoad = async () => {
       setMenuLoading(true)
       try {
-        const [restResult, catResult] = await Promise.all([
-          fetchWithTimeout(
-            supabase.from('restaurants').select('name, slug').eq('id', restaurantId).maybeSingle(),
-            API_TIMEOUT
-          ),
+        const [catResult] = await Promise.all([
           fetchWithTimeout(
             supabase.from('categories').select('id, name, image, sort_order').eq('restaurant_id', restaurantId).order('sort_order', { ascending: true }),
             API_TIMEOUT
@@ -327,11 +319,6 @@ function App() {
         ])
 
         if (!isMountedRef.current || controller.signal.aborted) return
-
-        if (restResult?.data) {
-          setRestaurantName(restResult.data.name || '')
-          setRestaurantSlug(restResult.data.slug || '')
-        }
 
         if (catResult?.data) {
           setCategories(catResult.data || [])
