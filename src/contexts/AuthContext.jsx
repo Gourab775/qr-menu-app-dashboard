@@ -115,7 +115,7 @@ export function AuthProvider({ children }) {
       try {
         const { data: restData, error: restErr } = await supabase
           .from('restaurants')
-          .select('id, name, slug, plan, country_code, currency_code, currency_symbol, locale, contact_number, logo, created_at, updated_at')
+          .select('id, name, slug, plan, country_code, currency_code, currency_symbol, locale, contact_number, logo, created_at')
           .eq('id', rid)
           .maybeSingle()
         if (restErr) {
@@ -293,7 +293,7 @@ export function AuthProvider({ children }) {
     try {
       const { data: restData, error: restErr } = await supabase
         .from('restaurants')
-        .select('id, name, slug, plan, country_code, currency_code, currency_symbol, locale, contact_number, logo, created_at, updated_at')
+        .select('id, name, slug, plan, country_code, currency_code, currency_symbol, locale, contact_number, logo, created_at')
         .eq('id', rid)
         .maybeSingle()
       if (restErr) {

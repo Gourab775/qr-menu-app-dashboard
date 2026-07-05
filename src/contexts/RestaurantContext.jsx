@@ -18,7 +18,6 @@ function buildConfig(restaurant) {
     contact_number: restaurant.contact_number || '',
     logo: restaurant.logo || '',
     created_at: restaurant.created_at,
-    updated_at: restaurant.updated_at,
   }
 }
 
