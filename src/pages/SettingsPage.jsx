@@ -264,6 +264,13 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
 
   const currentRestId = restaurantId
 
+  useEffect(() => {
+    if (currentRestId) {
+      loadMainCategories()
+      loadWaiterRequestTypes()
+    }
+  }, [currentRestId])
+
   const showToast = (message, type = 'success') => {
     if (onToast) {
       onToast(message, type)
@@ -730,7 +737,11 @@ export default function SettingsPage({ preferences, setPreferences, onToast, res
     setShowModal(modalName)
     setHelpTopic(null)
     
-    if (modalName === 'taxes') {
+    if (modalName === 'maincategories') {
+      loadMainCategories()
+    } else if (modalName === 'waiterrequesttypes') {
+      loadWaiterRequestTypes()
+    } else if (modalName === 'taxes') {
       setTaxes([...contextTaxes])
     } else if (modalName === 'business') {
       setFormData({
