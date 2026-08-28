@@ -1,5 +1,6 @@
 {
   "name": "qr-menu-dashboard",
+  "description": "Operations and analytics dashboard for QR restaurant ordering with real-time orders and Electron desktop support",
   "private": true,
   "version": "1.0.0",
   "type": "module",
