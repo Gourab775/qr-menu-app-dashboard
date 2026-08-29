@@ -1,6 +1,6 @@
-# QR Menu Dashboard — Operations & Analytics
+﻿# QR Menu Dashboard — Operations & Analytics
 
-Live Demo: https://qr-menu-app-dashboard.vercel.app
+Live Demo: https://flavorbite-dashboard.vercel.app
 
 Category: Hospitality Operations · Analytics & Management
 
@@ -117,10 +117,10 @@ npm run dist         # Electron build → dist-electron/ (NSIS installer)
 
 ### GitHub Pages
 
-1. Set `base` in `vite.config.js` if needed for `https://qr-menu-app-dashboard.vercel.app/`.
+1. Set `base` in `vite.config.js` if needed for `https://flavorbite-dashboard.vercel.app/`.
 2. Build and publish `dist/` via Actions or `gh-pages`.
 
-Live demo at `https://qr-menu-app-dashboard.vercel.app`.
+Live demo at `https://flavorbite-dashboard.vercel.app`.
 
 ### Desktop (Electron)
 
