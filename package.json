@@ -1,55 +1,55 @@
-{
-  "name": "qr-menu-dashboard",
-  "description": "Operations and analytics dashboard for QR restaurant ordering with real-time orders and Electron desktop support",
-  "private": true,
-  "version": "1.0.0",
-  "type": "module",
-  "main": "electron/main.cjs",
-  "packageManager": "npm@10",
-  "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview",
-    "electron": "electron .",
-    "dist": "electron-builder --win"
-  },
-  "dependencies": {
-    "@supabase/supabase-js": "^2.39.0",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "recharts": "^3.8.1"
-  },
-  "devDependencies": {
-    "@types/react": "^18.2.43",
-    "@types/react-dom": "^18.2.17",
-    "@vitejs/plugin-react": "^4.2.1",
-    "electron": "^33.4.11",
-    "electron-builder": "^25.1.8",
-    "vite": "^5.0.8"
-  },
-  "build": {
-    "appId": "com.qrmenu.dashboard",
-    "productName": "QR Menu Dashboard",
-    "directories": {
-      "output": "dist-electron"
-    },
-    "files": [
-      "electron/**/*",
-      "assets/**/*"
-    ],
-    "win": {
-      "target": "nsis",
-      "icon": "assets/icon.png",
-      "artifactName": "${productName}-Setup-${version}.${ext}",
-      "sign": false,
-      "signAndEditExecutable": false
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
-      "shortcutName": "QR Menu Dashboard"
-    }
-  }
+﻿{
+    "name":  "flavorbite-dashboard",
+    "description":  "Operations and analytics dashboard for QR restaurant ordering with real-time orders and Electron desktop support",
+    "private":  true,
+    "version":  "1.0.0",
+    "type":  "module",
+    "main":  "electron/main.cjs",
+    "packageManager":  "npm@10",
+    "scripts":  {
+                    "dev":  "vite",
+                    "build":  "vite build",
+                    "preview":  "vite preview",
+                    "electron":  "electron .",
+                    "dist":  "electron-builder --win"
+                },
+    "dependencies":  {
+                         "@supabase/supabase-js":  "^2.39.0",
+                         "react":  "^18.2.0",
+                         "react-dom":  "^18.2.0",
+                         "recharts":  "^3.8.1"
+                     },
+    "devDependencies":  {
+                            "@types/react":  "^18.2.43",
+                            "@types/react-dom":  "^18.2.17",
+                            "@vitejs/plugin-react":  "^4.2.1",
+                            "electron":  "^33.4.11",
+                            "electron-builder":  "^25.1.8",
+                            "vite":  "^5.0.8"
+                        },
+    "build":  {
+                  "appId":  "com.qrmenu.dashboard",
+                  "productName":  "QR Menu Dashboard",
+                  "directories":  {
+                                      "output":  "dist-electron"
+                                  },
+                  "files":  [
+                                "electron/**/*",
+                                "assets/**/*"
+                            ],
+                  "win":  {
+                              "target":  "nsis",
+                              "icon":  "assets/icon.png",
+                              "artifactName":  "${productName}-Setup-${version}.${ext}",
+                              "sign":  false,
+                              "signAndEditExecutable":  false
+                          },
+                  "nsis":  {
+                               "oneClick":  false,
+                               "allowToChangeInstallationDirectory":  true,
+                               "createDesktopShortcut":  true,
+                               "createStartMenuShortcut":  true,
+                               "shortcutName":  "QR Menu Dashboard"
+                           }
+              }
 }
